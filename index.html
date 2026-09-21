@@ -32,9 +32,9 @@ function todaySeed(){const d=new Date();return d.getFullYear()*10000+(d.getMonth
 
 // ================= SAVE =================
 const SKEY='hopscraper_save_v1';
-function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},endBest:0,daily:{d:'',h:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,touch:1,gfx:'auto'}}}
+function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,touch:1,gfx:'auto'}}}
 let S=defSave();
-function loadSave(){try{const r=localStorage.getItem(SKEY);if(r){const o=JSON.parse(r),d=defSave();S=Object.assign(d,o);for(const k of['st','own','eq','set','daily'])S[k]=Object.assign(defSave()[k],o[k]||{});S.lv=o.lv||{};S.hard=o.hard||{};S.ach=o.ach||{};S.course=o.course||{};}}catch(e){}}
+function loadSave(){try{const r=localStorage.getItem(SKEY);if(r){const o=JSON.parse(r),d=defSave();S=Object.assign(d,o);for(const k of['st','own','eq','set','daily'])S[k]=Object.assign(defSave()[k],o[k]||{});S.lv=o.lv||{};S.hard=o.hard||{};S.ach=o.ach||{};S.notes=o.notes||{};S.course=o.course||{};}}catch(e){}}
 function save(){try{localStorage.setItem(SKEY,JSON.stringify(S))}catch(e){}}
 loadSave();applyGfx();
 
@@ -141,32 +141,45 @@ cv.addEventListener('mousedown',e=>{if(performance.now()-lastTouch<800)return;mp
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 // ================= TOUCH (mobile mode) =================
-// left side: floating joystick that appears where you touch and follows your thumb. right side: tap to jump (hold = higher)
+// left side: floating joystick where you touch, follows your thumb. right side: tap to jump (hold = higher).
+// Every touch event rebuilds state from the browser's real list of fingers, so a lost "finger up" can never leave you stuck.
 const PB={x:VW-38,y:84,r:22},STR=62,DZ=14;
-const tp=new Map();let STK=null;
+const tp=new Map();let STK=null,uiTouch=null,tapBlock=0;
 function touchOn(){return !!S.set.touch}
 function tpos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*VW,y:(e.clientY-r.top)/r.height*VH}}
-function playing(){return SCR===SCREENS.play&&G&&G.player}
+function playing(){return SCR===SCREENS.play&&G&&G.player&&!G.won}
+function tReset(){tp.clear();STK=null;uiTouch=null;for(const k of['L','R','D','J'])keys[k]=false}
 function tsync(){let L=false,R=false,D=false,J=false;
  for(const v of tp.values())if(v=='jump')J=true;
  if(STK){const dx=STK.kx-STK.bx,dy=STK.ky-STK.by;if(dx<-DZ)L=true;if(dx>DZ)R=true;if(dy>STR*0.55&&dy>Math.abs(dx))D=true}
  for(const[k,v]of[['L',L],['R',R],['D',D],['J',J]]){if(v&&!keys[k])pressed[k]=true;keys[k]=v}}
-cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();lastTouch=performance.now();audioInit();const p=tpos(e);
- if(touchOn()&&playing()){try{cv.setPointerCapture(e.pointerId)}catch(_){}
-  if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;return}
-  if(p.x<VW*0.45&&!STK){STK={id:e.pointerId,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(e.pointerId,'stick')}else tp.set(e.pointerId,'jump');
-  tsync();return}
- mouse.x=p.x;mouse.y=p.y;mouse.click=true;mouse.moved=true;pressed.ANY=true},{passive:false});
-cv.addEventListener('pointermove',e=>{if(!STK||STK.id!==e.pointerId)return;e.preventDefault();const p=tpos(e);STK.kx=p.x;STK.ky=p.y;
- const dx=p.x-STK.bx,dy=p.y-STK.by,d=Math.hypot(dx,dy);if(d>STR){STK.bx=p.x-dx/d*STR;STK.by=p.y-dy/d*STR}tsync()},{passive:false});
-function tend(e){if(!tp.has(e.pointerId))return;tp.delete(e.pointerId);if(STK&&STK.id===e.pointerId)STK=null;tsync()}
-cv.addEventListener('pointerup',tend);cv.addEventListener('pointercancel',tend);
+function tReconcile(list){const live=new Set();for(let i=0;i<list.length;i++)live.add(list[i].identifier);
+ for(const id of[...tp.keys()])if(!live.has(id))tp.delete(id);if(STK&&!live.has(STK.id))STK=null;if(uiTouch&&!live.has(uiTouch.id))uiTouch=null}
+cv.addEventListener('touchstart',e=>{e.preventDefault();lastTouch=performance.now();audioInit();tReconcile(e.touches);
+ for(const t of e.changedTouches){const p=tpos(t);
+  if(touchOn()&&playing()){
+   if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;continue}
+   if(p.x<VW*0.45&&!STK){STK={id:t.identifier,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(t.identifier,'stick')}else tp.set(t.identifier,'jump')}
+  else if(!uiTouch){uiTouch={id:t.identifier,x:p.x,y:p.y,moved:false};mouse.x=p.x;mouse.y=p.y;mouse.moved=true}}
+ tsync()},{passive:false});
+cv.addEventListener('touchmove',e=>{e.preventDefault();lastTouch=performance.now();tReconcile(e.touches);
+ for(const t of e.changedTouches){const p=tpos(t);
+  if(STK&&STK.id===t.identifier){STK.kx=p.x;STK.ky=p.y;const dx=p.x-STK.bx,dy=p.y-STK.by,d=Math.hypot(dx,dy);if(d>STR){STK.bx=p.x-dx/d*STR;STK.by=p.y-dy/d*STR}}
+  if(uiTouch&&uiTouch.id===t.identifier&&Math.hypot(p.x-uiTouch.x,p.y-uiTouch.y)>22)uiTouch.moved=true}
+ tsync()},{passive:false});
+function tEnd(e){e.preventDefault();lastTouch=performance.now();
+ for(const t of e.changedTouches)if(uiTouch&&uiTouch.id===t.identifier){const p=tpos(t);
+  // menus fire on finger UP, only if the finger stayed put and the screen didn't just change
+  if(e.type=='touchend'&&!uiTouch.moved&&performance.now()>tapBlock){mouse.x=p.x;mouse.y=p.y;mouse.click=true;pressed.ANY=true}uiTouch=null}
+ tReconcile(e.touches);tsync()}
+cv.addEventListener('touchend',tEnd,{passive:false});cv.addEventListener('touchcancel',tEnd,{passive:false});
+addEventListener('blur',tReset);document.addEventListener('visibilitychange',()=>{if(document.hidden)tReset()});addEventListener('pagehide',tReset);
 function drawTouch(){ctx.save();
  if(STK){ctx.globalAlpha=0.22;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(STK.bx,STK.by,STR,0,7);ctx.fill();
   ctx.globalAlpha=0.5;ctx.strokeStyle='#ffffff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(STK.bx,STK.by,STR,0,7);ctx.stroke();
   const dx=STK.kx-STK.bx,dy=STK.ky-STK.by,d=Math.hypot(dx,dy),k=d>STR?STR/d:1;
   ctx.globalAlpha=0.75;ctx.beginPath();ctx.arc(STK.bx+dx*k,STK.by+dy*k,26,0,7);ctx.fill()}
- else if(G&&G.t<6){ctx.globalAlpha=0.16*clamp(6-G.t,0,1);ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(130,430,STR,0,7);ctx.fill();ctx.globalAlpha*=2.5;txt('drag to move',130,430,15,'#ffffff','center',false);txt('tap to jump',VW-150,430,15,'#ffffff','center',false)}
+ else if(G&&G.mode=='story'&&G.idx==0&&G.t<7){ctx.globalAlpha=0.16*clamp(7-G.t,0,1);ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(130,430,STR,0,7);ctx.fill();ctx.globalAlpha=0.4*clamp(7-G.t,0,1);txt('drag to move',130,430,15,'#ffffff','center',false);txt('tap to jump',VW-150,430,15,'#ffffff','center',false)}
  ctx.globalAlpha=0.45;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(PB.x,PB.y,PB.r,0,7);ctx.fill();
  ctx.globalAlpha=0.9;ctx.fillStyle='#1d1a2e';ctx.fillRect(PB.x-7,PB.y-8,5,16);ctx.fillRect(PB.x+2,PB.y-8,5,16);ctx.restore()}
 function drawRotate(){ctx.fillStyle='#0e0b1c';ctx.fillRect(0,0,VW,VH);txt('Turn your phone sideways',VW/2,VH/2-30,60,'#ffffff');txt('Hopscraper plays in landscape',VW/2,VH/2+45,34,'#ffd45e')}
@@ -192,6 +205,7 @@ const ITEMS=[
  {id:'c_rainbow',cat:'c',n:'Rainbow',col:'rainbow',ach:'top'},
  {id:'c_void',cat:'c',n:'Void',col:'#1a0630',ach:'nightmare'},
  {id:'c_ice',cat:'c',n:'Frost',col:'#bff4ff',ach:'mountain'},
+ {id:'c_paper',cat:'c',n:"Gerald's Paper",col:'#fff3cf',ach:'notes'},
  {id:'h_none',cat:'h',n:'No Hat',cost:0},
  {id:'h_cap',cat:'h',n:'Cap',cost:10},
  {id:'h_party',cat:'h',n:'Party Hat',world:1},
@@ -212,6 +226,57 @@ const ITEMS=[
  {id:'t_rainbow',cat:'t',n:'Rainbow',ach:'top'},
 ];
 const WREW=['c_sky','h_party','t_spark','t_fire'];
+// one note hidden in every story level. first few help, then it turns into a story.
+const NOTES=[
+ "Hey, new square! You can jump 2 more times in mid-air. Trust me. -G",
+ "Touching a wall gives your air jumps back. Walls are friends. -G",
+ "Spikes are NOT friends. I learned this 14 times. -G",
+ "Down drops you through thin platforms. You're welcome. -G",
+ "Gems buy hats. Hats don't make you faster. You'll feel faster though.",
+ "Day 3 of climbing. Still no idea who built this tower.",
+ "Touched a flag. Felt important. Would recommend.",
+ "Why are there saws?? Who needs this many saws??",
+ "Asked a spike for directions. It didn't answer. Rude.",
+ "Someone scratched DON'T LOOK DOWN on the wall. I looked down.",
+ "The lava is warm. Too warm. Do not recommend.",
+ "Some of these notes are older than me. A few are in MY handwriting.",
+ "Bounce pads: 10/10. Would bounce again.",
+ "Tried to eat a gem. Not food. Just shiny rocks.",
+ "The walls hum at night. Like they're... breathing?",
+ "Met a circle. It rolled away. Circles never stay.",
+ "Every block in this tower has a tiny face carved into it.",
+ "The faces look like squares. Like US.",
+ "Crumble blocks sound sad when they break. I say sorry to each one.",
+ "Halfway up. My legs hurt. I don't have legs. Still hurts.",
+ "Found a note that just says 'keep going.' I didn't write it. Or did I?",
+ "The lasers blink in a pattern. I think it spells H-O-P.",
+ "Theory: squares who give up turn into blocks. That's how the tower grows.",
+ "So every block I stand on used to be a square. Thanks, guys.",
+ "Don't give up. I REALLY don't want to become a stair.",
+ "I can hear music up top. Bad music. But music.",
+ "Dropped my hat somewhere back there. It's yours if you find it.",
+ "The blocks below are cheering. Or that's the wind. Probably the wind.",
+ "Almost there. If I don't make it, tell my trail I loved it.",
+ "I can see the top. There's a door. And a pen.",
+ "Why is it ALWAYS saws at the end?",
+ "Past the worst of it. Writing fast. The lava's coming.",
+ "You made it. The pen up here is for you. Leave a note for the next square. That's how this works. -Gerald, the first square"];
+function notesFound(){let n=0;for(let i=0;i<NOTES.length;i++)if(S.notes[i])n++;return n}
+// a note sits a few steps from the spawn, on the way to the exit, on a spot you can walk to
+function placeNote(L){const g=L.g,sx=L.start.x,sy=L.start.y,dir=L.exit.x>=sx?1:-1;
+ const empty=(x,y)=>x>0&&y>0&&x<L.W-1&&y<L.H-1&&g[y][x]=='.',floor=(x,y)=>y<L.H&&'#=XcC'.indexOf(g[y][x])>=0;
+ for(const d of[4,3,5,2,6]){let ok=true;for(let k=1;k<=d;k++){const x=sx+dir*k;if(!empty(x,sy)||!floor(x,sy+1)){ok=false;break}}if(ok)return{x:(sx+dir*d)*TS+12,y:sy*TS+10}}
+ for(const d of[3,2,4]){const x=sx-dir*d;let ok=true;for(let k=1;k<=d;k++){const xx=sx-dir*k;if(!empty(xx,sy)||!floor(xx,sy+1)){ok=false;break}}if(ok)return{x:x*TS+12,y:sy*TS+10}}
+ if(empty(sx,sy-2)&&empty(sx,sy-1))return{x:sx*TS+12,y:(sy-2)*TS+12};return{x:sx*TS+12,y:sy*TS+10}}
+function drawNote(n,t){const b=Math.sin(t*2.5)*3,r=Math.sin(t*1.7)*0.12;ctx.save();ctx.translate(n.x,n.y+b);ctx.globalAlpha=0.3;ctx.fillStyle='#fff6d6';ctx.beginPath();ctx.arc(0,0,15+Math.sin(t*4)*1.5,0,7);ctx.fill();ctx.globalAlpha=1;ctx.rotate(r);
+ ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(-8,-9,18,21);ctx.fillStyle='#fff3cf';ctx.fillRect(-10,-11,18,21);ctx.fillStyle='#e9d9a6';ctx.beginPath();ctx.moveTo(4,10);ctx.lineTo(8,6);ctx.lineTo(8,10);ctx.fill();
+ ctx.strokeStyle='#8a7a55';ctx.lineWidth=1.4;for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(-7,-6+i*4.5);ctx.lineTo(i==3?0:5,-6+i*4.5);ctx.stroke()}ctx.restore()}
+function wrapText(str,maxW,size){ctx.font=`bold ${size}px ${FONT}`;const w=str.split(' '),lines=[];let cur='';for(const x of w){const t2=cur?cur+' '+x:x;if(ctx.measureText(t2).width>maxW&&cur){lines.push(cur);cur=x}else cur=t2}if(cur)lines.push(cur);return lines}
+function drawNoteCard(){const ns=G.noteShow;if(!ns)return;const age=gtime-ns.t0;if(age>7.5){G.noteShow=null;return}
+ const k=age<0.3?ease(age/0.3):age>7?1-(age-7)/0.5:1;const lines=wrapText(NOTES[ns.i],520,17),h=46+lines.length*24,y=96-(1-k)*40;
+ ctx.globalAlpha=clamp(k,0,1);ctx.fillStyle='rgba(0,0,0,.3)';rr(VW/2-290+4,y+5,580,h,10);ctx.fill();ctx.fillStyle='#fff3cf';rr(VW/2-290,y,580,h,10);ctx.fill();
+ txt('NOTE '+(ns.i+1)+' / '+NOTES.length,VW/2-270,y+20,13,'#a08a55','left',false);txt(notesFound()+' found',VW/2+270,y+20,13,'#a08a55','right',false);
+ lines.forEach((l,i)=>txt(l,VW/2,y+46+i*24,17,'#3a3020','center',false));ctx.globalAlpha=1}
 const ACH=[
  {id:'first',n:'First Hop',d:'Beat your first level'},
  {id:'fly500',n:'Frequent Flyer',d:'Jump 500 times'},
@@ -236,6 +301,7 @@ const ACH=[
  {id:'demon',n:'Speed Demon',d:'Marathon in under 12 minutes'},
  {id:'ironman',n:'Iron Square',d:'Finish the Hard Marathon'},
  {id:'shop',n:'Dressed Up',d:'Buy something in the shop'},
+ {id:'notes',n:'Pen Pal',d:'Find all 33 hidden notes'},
 ];
 
 // Level format: r = rects [char,x,y,w,h]. Legend: # solid  = one-way  X crumble  D door  ^ v < > spikes
@@ -496,11 +562,22 @@ function themeOf(){if(!G)return WORLDS[0];if(G.mode=='endless'||G.mode=='daily')
 function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,keyGot:false,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0},o)}
 function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspeed');
  const mods=hard?(window.FORCEMODS||modsOf(i)):[];const M=new Set(mods);
- const L=buildLevel(def,{mirror:M.has('mirror'),noChecks:hard});
+ const L=buildLevel(def,{mirror:M.has('mirror'),noChecks:hard});if(mode=='story'&&!S.notes[i]&&NOTES[i])L.note=Object.assign(placeNote(L),{got:false});
  if(M.has('lasers'))injectLasers(L,3);if(M.has('saws'))injectSaws(L,4);
  G=newG({mode,idx:i,L,intro:(mode=='speed'||mode=='hspeed')?1.4:2.6,spd:hard?1.25:1,riseMul:1,
   tipT:(def.tip&&mode!='speed'&&mode!='hspeed')?8:0,mods:M,gs:M.has('flip')?-1:1});
  spawn();updCam(0,true);musicPlay(WORLDS[def.wd].song);go('play')}
+// TUTORIAL: one long level that shows every good and bad thing, with a sign for each part
+const TUT={wd:0,n:'Tutorial',W:112,H:22,t:60,s:[3,18],e:[108,18],k:[[33,18]],key:[84,18],g:[[40,5],[52,11],[64,6]],
+ r:[['#',1,19,110,2],['#',11,17,2,2],['#',18,12,2,7],['^',25,18,5,1],['#',38,8,1,8],['#',42,8,1,11],['=',46,15,4,1],['=',50,12,4,1],
+  ['B',64,19,1,1],['~',69,19,8,2],['X',70,17,6,1],['#',90,1,1,11],['D',90,12,1,7],['#',96,1,1,12],['l',96,13,1,6],['C',101,19,5,1]],
+ m:[['saw',58,9,58,18,2.2]],
+ signs:[[1,9,'Arrows or A/D to move.','Drag anywhere on the left side to move.'],[10,14,'Jump over the wall. SPACE, W or Up.','Tap the right side to jump over the wall.'],
+  [15,21,'Too tall? Jump again in mid-air. You get 2 extra jumps.',null],[22,30,'Spikes hurt. Jump over them.',null],[31,35,'Flags save your spot. Die and you come back here.',null],
+  [36,44,'Walls give your air jumps back. Bounce between them to climb up.',null],[45,54,'Thin platforms: jump up through them. Press Down to drop.','Thin platforms: jump up through them. Drag down to drop.'],
+  [55,61,'Saws hurt. Wait for it to move, then go.',null],[62,66,'Bounce pads launch you way up. Try it!',null],[67,79,'Lava = instant ouch. Cracked blocks fall after you step on them.',null],
+  [80,91,'Grab the key to open the gold door.',null],[92,99,'Lasers blink. Go when they turn off.',null],[100,105,'Arrow floors push you along.',null],[106,111,"That's it! Touch the door to finish.",null]]};
+function startTutorial(){const L=buildLevel(TUT);G=newG({mode:'tut',idx:-1,L,intro:0,tipT:0});spawn();updCam(0,true);musicPlay(0);go('play')}
 function startEndless(daily){const seed=daily?todaySeed():(Math.random()*1e9|0);const def=genEndless(seed);const L=buildLevel(def,{skipBlocked:true});
  G=newG({mode:daily?'daily':'endless',idx:-1,L,lavaY:(L.start.y+7)*TS,tipT:6});
  spawn();updCam(0,true);musicPlay(6);go('play')}
@@ -564,7 +641,7 @@ function startCourse(i){const def=makeCourse(i),L=buildLevel(def,{skipBlocked:tr
 function medalOf(i,t){if(!t)return -1;const par=courseTimes(i);return t<=par[0]?2:t<=par[1]?1:t<=par[2]?0:-1}
 function medalName(m){return m==2?'GOLD':m==1?'SILVER':m==0?'BRONZE':'no medal'}
 function medalCol(m){return m==2?'#ffd45e':m==1?'#d8dbe6':m==0?'#d08b4e':'#8a87a0'}
-function restartLevel(){if(G.mode=='endless'||G.mode=='daily')return startEndless(G.mode=='daily');if(G.mode=='course')return startCourse(G.idx);if(G.mode=='speed'||G.mode=='hspeed'){SPD.total+=G.time;SPD.deaths+=G.deaths;return startLevel(G.idx,G.mode)}startLevel(G.idx,G.mode)}
+function restartLevel(){if(G.mode=='tut')return startTutorial();if(G.mode=='endless'||G.mode=='daily')return startEndless(G.mode=='daily');if(G.mode=='course')return startCourse(G.idx);if(G.mode=='speed'||G.mode=='hspeed'){SPD.total+=G.time;SPD.deaths+=G.deaths;return startLevel(G.idx,G.mode)}startLevel(G.idx,G.mode)}
 function spawn(){const L=G.L,s=G.checkpoint||L.start;
  G.player={x:s.x*TS+4,y:s.y*TS+TS-16,w:16,h:16,vx:0,vy:0,onG:false,coy:0,buf:0,face:L.mir?-1:1,sx:1.4,sy:0.6,wall:0,lock:0,lockDir:0,dead:false,bnc:false,inN:false,trT:0,aj:AIRJ,ajFx:0};
  if(L.rise&&!L.rise.endless){G.lavaY=L.H*TS+TS;G.riseT=0}
@@ -660,6 +737,7 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  if(hurt(L,p))return die();
  const pcx=p.x+8,pcy=p.y+8;
  for(const gm of L.gems)if(!gm.got&&Math.abs(gm.x-pcx)<17&&Math.abs(gm.y-pcy)<17){gm.got=true;G.gemsRun++;sfx('gem');burst(gm.x,gm.y,'#5ff4ff',14);burst(gm.x,gm.y,'#ffffff',6)}
+ if(L.note&&!L.note.got&&Math.abs(L.note.x-pcx)<20&&Math.abs(L.note.y-pcy)<22){L.note.got=true;S.notes[G.idx]=1;save();G.noteShow={i:G.idx,t0:gtime};sfx('check');burst(L.note.x,L.note.y,'#fff3cf',16);if(notesFound()>=NOTES.length)grant('notes')}
  if(L.key&&!L.key.got&&Math.abs(L.key.x-pcx)<18&&Math.abs(L.key.y-pcy)<18){L.key.got=true;G.keyGot=true;sfx('key');burst(L.key.x,L.key.y,'#ffd45e',24);if(S.set.shake)G.shake=4}
  for(const c of L.checks)if(!c.on&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-10&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkpoint={x:c.x,y:c.y};sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}
  if(L.exit.y>0&&Math.abs(L.exit.x*TS+12-pcx)<14&&Math.abs(L.exit.y*TS+10-pcy)<18)return win();
@@ -728,6 +806,7 @@ function endEndless(){const r={h:G.height,gems:G.gemsRun,daily:G.mode=='daily',b
  else{if(r.h>S.endBest){S.endBest=r.h;r.best=true}r.bestV=S.endBest}
  if(r.h>=100)grant('climb');if(r.h>=250)grant('mountain');checkAch();save();go('over',r)}
 function onWinDone(){
+ if(G.mode=='tut'){const first=!S.tut;S.tut=1;if(first){S.bank+=5;S.earned+=5}save();toast('Tutorial complete!',first?'+5 gems. Now go climb.':'Nice refresher.','ach');return go('modes')}
  if(G.mode=='course'){const i=G.idx,rec=S.course[i]||(S.course[i]={t:0});const r={i,t:G.time,deaths:G.deaths,best:false,gems:G.gemsRun};
   if(!rec.t||G.time<rec.t){rec.t=G.time;r.best=true}
   S.bank+=G.gemsRun;S.earned+=G.gemsRun;r.medal=medalOf(i,rec.t);S.st.clears++;checkAch();save();return go('cdone',r)}
@@ -841,7 +920,8 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
   case'l':case'L':drawLaser(L,x,y,c,px,py);break;
   case'B':{const bt=L.bt[y*L.W+x];const k=bt!=null&&G.t-bt<0.25?1-(G.t-bt)/0.25:0;const top=py+13+k*5;ctx.fillStyle='#39364a';ctx.fillRect(px+2,py+20,20,4);ctx.strokeStyle='#bfc3d1';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px+6,py+20);ctx.lineTo(px+18,top+4+(16-top+py)*0.33);ctx.lineTo(px+6,top+4+(16-top+py)*0.66);ctx.lineTo(px+18,top+4);ctx.stroke();ctx.fillStyle='#ff5470';rr(px+1,top-2,22,6,3);ctx.fill();ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(px+4,top-1,10,2);break}
   }}
- for(const gm of L.gems){if(gm.got)continue;if(gm.x<G.cam.x-30||gm.x>G.cam.x+VW+30||gm.y<G.cam.y-30||gm.y>G.cam.y+VH+30)continue;const b=Math.sin(t*3+gm.x)*3;ctx.globalAlpha=0.35;ctx.fillStyle='#5ff4ff';ctx.beginPath();ctx.arc(gm.x,gm.y+b,12+Math.sin(t*5)*1.5,0,7);ctx.fill();ctx.globalAlpha=1;gemShape(gm.x,gm.y+b,9,'#5ff4ff')}
+ for(const gm of L.gems){if(gm.got)continue;if(gm.x<G.cam.x-30||gm.x>G.cam.x+VW+30||gm.y<G.cam.y-30||gm.y>G.cam.y+VH+30)continue;const b=Math.sin(t*3+gm.x)*3;const own=G.mode=='story'&&S.lv[G.idx]&&S.lv[G.idx].g&&S.lv[G.idx].g[gm.i],gc=own?'#aab0bf':'#5ff4ff';ctx.globalAlpha=own?0.18:0.35;ctx.fillStyle=gc;ctx.beginPath();ctx.arc(gm.x,gm.y+b,12+Math.sin(t*5)*1.5,0,7);ctx.fill();ctx.globalAlpha=own?0.75:1;gemShape(gm.x,gm.y+b,9,gc);ctx.globalAlpha=1}
+ if(L.note&&!L.note.got)drawNote(L.note,t);
  if(L.key&&!L.key.got){const b=Math.sin(t*3)*3;ctx.globalAlpha=0.35;ctx.fillStyle='#ffd45e';ctx.beginPath();ctx.arc(L.key.x,L.key.y+b,14,0,7);ctx.fill();ctx.globalAlpha=1;keyIcon(L.key.x,L.key.y+b,14)}
  for(const c of L.checks){const px=c.x*TS,py=c.y*TS;ctx.fillStyle='#3a3548';ctx.fillRect(px+5,py-10,3,34);ctx.fillStyle=c.on?th.acc:'#b9b6c6';ctx.beginPath();const w=Math.sin(t*6)*(c.on?3:1);ctx.moveTo(px+8,py-10);ctx.lineTo(px+22,py-5+w);ctx.lineTo(px+8,py);ctx.closePath();ctx.fill()}
  if(L.exit.y>0){const px=L.exit.x*TS,py=L.exit.y*TS,a=th.acc;ctx.save();ctx.shadowColor=a;ctx.shadowBlur=18;ctx.fillStyle='#16122a';rr(px,py-12,24,36,11);ctx.fill();ctx.restore();
@@ -945,6 +1025,8 @@ function drawHUD(){const L=G.L,md=G.mode;
  if(md=='endless'||md=='daily'){hudPill(12,10,230,40);txt(G.height+'m',30,31,26,'#fff','left');txt(md=='daily'?'DAILY':'BEST '+S.endBest+'m',128,31,15,'#ffd45e','left');
   hudPill(VW-140,10,128,40);gemShape(VW-116,30,9,'#5ff4ff');txt('x '+G.gemsRun,VW-98,31,20,'#fff','left');
   const dist=Math.max(0,Math.floor((G.lavaY-(G.player.y+16))/TS));hudPill(VW/2-90,12,180,30);txt('LAVA '+dist+'m below',VW/2,27,15,dist<5?'#ff6b4a':'#ffd2b0')}
+ else if(md=='tut'){hudPill(12,10,170,40);txt('TUTORIAL',30,31,18,'#ffd45e','left');const px=G.player.x/TS,sg=G.L.def.signs.find(q=>px>=q[0]&&px<q[1]+1);
+  if(sg){const tx=(touchOn()&&sg[3])?sg[3]:sg[2];ctx.font=`bold 18px ${FONT}`;const w=ctx.measureText(tx).width+40;hudPill(VW/2-w/2,58,w,36);txt(tx,VW/2,77,18,'#ffffff','center',false)}}
  else{const isC=md=='course';const lab=isC?'COURSE':md=='speed'?'MARATHON':md=='hspeed'?('HARD RUN · '+modLabel(G.idx)):md=='hard'?('HARD · '+modLabel(G.idx)):lvLabel(G.idx);const nm=isC?COURSES[G.idx].n:LEVELS[G.idx].n;ctx.font=`bold 18px ${FONT}`;const lw=ctx.measureText(lab).width,nw=ctx.measureText(nm).width;hudPill(12,10,Math.max(340,lw+nw+42),40);txt(lab,26,31,18,md=='hard'?'#ff5c6c':(md=='speed'||isC)?'#ffd45e':'#ffffff','left');txt(nm,26+lw+14,31,18,'#e8e6f5','left');
   if(isC){const b=(S.course[G.idx]||{}).t;hudPill(VW-300,10,288,40);txt(fmtT(G.time),VW-230,31,24,'#fff','center');txt(b?'best '+fmtT(b):'no time yet',VW-100,31,15,'#ffd45e','center');
    const dist=Math.round((G.player.x/TS)/(L.W-6)*100);hudPill(VW/2-80,12,160,26);ctx.fillStyle='rgba(255,255,255,.25)';rr(VW/2-68,21,136,8,4);ctx.fill();ctx.fillStyle='#ffd45e';rr(VW/2-68,21,clamp(136*dist/100,0,136),8,4);ctx.fill();return}
@@ -954,6 +1036,7 @@ function drawHUD(){const L=G.L,md=G.mode;
   if(L.key){ctx.globalAlpha=L.key.got?1:0.35;keyIcon(VW-330,30,14);ctx.globalAlpha=1}}
  if(!S.set.music)txt('music off (M)',VW-60,58,12,'rgba(255,255,255,.55)');
  if(G.tipT>0){const d=LEVELS[G.idx]||{};const tip=(md=='endless'||md=='daily')?'Climb as high as you can. The lava never stops.':(touchOn()&&d.tipM?d.tipM:d.tip);if(tip){ctx.globalAlpha=clamp(G.tipT,0,1);ctx.font=`bold 15px ${FONT}`;const w=ctx.measureText(tip).width+34;hudPill(VW/2-w/2,56,w,30);txt(tip,VW/2,72,15,'#fff','center',false);ctx.globalAlpha=1}}
+ drawNoteCard();
  if(G.intro>0){const k=G.intro>2?ease((2.4-G.intro)/0.4):G.intro<0.4?G.intro/0.4:1;ctx.globalAlpha=clamp(k,0,1);const x=VW/2+(1-k)*-200;
   const en=md=='endless'||md=='daily';const big=en?(md=='daily'?'DAILY CLIMB':'ENDLESS'):md=='course'?COURSES[G.idx].n:lvLabel(G.idx);let sub=en?(md=='daily'?'Same tower for everyone today':'How high can you go?'):md=='course'?'GO GO GO':LEVELS[G.idx].n;
   const hardMod=(md=='hard'||md=='hspeed');if(hardMod)sub=LEVELS[G.idx].n;
@@ -990,7 +1073,7 @@ function confetti(n){for(let i=0;i<n;i++){const l=rnd(2,4);FX.push({x:rnd(0,VW),
 
 // ================= SCREENS =================
 let SCR=null,fadeA=1,gtime=0;
-function go(name,arg){SCR=SCREENS[name];UI.selId=null;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;if(SCR.enter)SCR.enter(arg)}
+function go(name,arg){tReset();tapBlock=performance.now()+220;SCR=SCREENS[name];UI.selId=null;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;if(SCR.enter)SCR.enter(arg)}
 function backBtn(){button('back',20,18,110,42,'< Back',{fs:18})}
 function header(s,y,col){txt(s,VW/2,y||52,40,col||'#fff')}
 const SCREENS={};
@@ -1008,16 +1091,19 @@ SCREENS.title={enter(){musicPlay(0);this.t=0},
 SCREENS.menu={enter(){musicPlay(0);this.vy=0;this.y=0},
  update(dt){uiNav(this);if(pressed.DEV)go(S.dev?'settings':'pin');this.vy+=1400*dt;this.y+=this.vy*dt;if(this.y>0){this.y=0;this.vy=-rnd(300,560)}if(Math.random()<dt*0.8&&this.y<-20&&this.vy>0){this.vy=-380;sfx('air')}},
  draw(){drawBG(WORLDS[2],gtime*20,0,gtime);txt('HOPSCRAPER',80,82,58,'#ffffff','left');txt('how high can a square go?',84,128,18,'#1e2a52','left',false);
-  [['play','Play'],['modes','Modes'],['shop','Shop'],['trophies','Trophies'],['settings','Settings'],['credits','Credits']].forEach((it,i)=>button(it[0],80,160+i*58,300,46,it[1],{fs:22}));
+  button('play',80,164,300,78,'PLAY',{fs:40,bg:'#7bdc3b',col:'#ffd45e'});
+  button('shop',80,258,146,54,'Shop',{fs:22});button('trophies',234,258,146,54,'Trophies',{fs:20});
+  button('settings',80,322,146,54,'Settings',{fs:20});button('tutorial',234,322,146,54,'Tutorial',{fs:20});
+  button('credits',80,396,110,34,'Credits',{fs:15});
   ctx.fillStyle='rgba(15,12,30,.35)';rr(530,150,360,330,24);ctx.fill();
   const bx=710,by=400;ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.ellipse(bx,by+4,Math.max(20,50+this.y*0.1),8,0,0,7);ctx.fill();
   drawSq(bx,by+this.y,64,gtime,{face:1,lx:Math.sin(gtime)*0.8,ly:clamp(this.vy/800,-1,1),sy:this.y>-2?0.9:1.05,sx:this.y>-2?1.1:0.96});
   txt('★ '+totalStars()+' / '+NL*3,560,190,24,'#ffd45e','left');gemShape(790,190,10,'#5ff4ff');txt(''+S.bank,807,191,24,'#fff','left');
   txt('Trophies '+Object.keys(S.ach).length+'/'+ACH.length,710,450,16,'#fff');
-  button('device',VW-230,18,210,42,touchOn()?'Mobile  (tap to switch)':'Computer  (tap to switch)',{fs:15});
+  button('device',VW-196,18,176,38,touchOn()?'Controls: Mobile':'Controls: Computer',{fs:15});
   if(!touchOn())txt('M = music on/off     ESC = back',VW/2,VH-20,14,'rgba(255,255,255,.75)');
   if(S.dev){ctx.fillStyle='rgba(123,220,59,.9)';rr(VW-120,VH-46,100,26,13);ctx.fill();txt('DEV MODE',VW-70,VH-33,14,'#10240a',undefined,false)}},
- onBtn(id){if(id=='device'){S.set.touch=S.set.touch?0:1;save();toast(S.set.touch?'Mobile mode':'Computer mode',S.set.touch?'On-screen buttons while playing':'Keyboard controls','info');return}if(id=='play')go('levels');else go(id)}};
+ onBtn(id){if(id=='device'){S.set.touch=S.set.touch?0:1;save();toast(S.set.touch?'Mobile mode':'Computer mode',S.set.touch?'On-screen buttons while playing':'Keyboard controls','info');return}if(id=='tutorial')return startTutorial();if(id=='play')return S.tut?go('modes'):startTutorial();go(id)}};
 
 SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;let tab=a.tab!=null?a.tab:(this.hard?this.lastH:this.last);
   if(tab==null){tab=0;for(let w=0;w<5;w++)if(this.tabOk(w))tab=w}this.tab=tab;if(!this.tabOk(this.tab))this.tab=0;
@@ -1060,7 +1146,7 @@ SCREENS.pause={enter(){},
   button('resume',VW/2-140,210,280,52,'Resume');button('restart',VW/2-140,276,280,52,'Restart  (R)');button('quit',VW/2-140,342,280,52,en?'End Run':'Quit');
   txt(touchOn()?'Drag on the left to move (drag down to drop). Tap the right side to jump.':'Move: Arrows/WASD   Jump: SPACE / W / Up   Drop: Down   Music: M',VW/2,440,15,'#fff',undefined,false)},
  onBtn(id){if(id=='resume'){SCR=SCREENS.play;return}if(id=='restart')return restartLevel();
-  if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:wdOf(G.idx)})}};
+  if(G.mode=='tut')return go('menu');if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:wdOf(G.idx)})}};
 
 SCREENS.courses={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('modes')},
  draw(){drawBG(WORLDS[1],gtime*20,0,gtime);backBtn();header('SPEED COURSES');txt('One long level. No checkpoints. Beat the clock.',VW/2,84,15,'#3b3752',undefined,false);
@@ -1253,10 +1339,20 @@ SCREENS.credits={enter(){this.t=0;FX.length=0;musicPlay(7)},
   button('back2',VW/2-90,VH-40,180,34,'Menu',{fs:16})},
  onBtn(){go('menu')}};
 
-SCREENS.trophies={enter(){},update(){uiNav(this);if(pressed.ESC)go('menu')},onBtn(){go('menu')},
+SCREENS.trophies={enter(){},update(){uiNav(this);if(pressed.ESC)go('menu')},onBtn(id){if(id=='notes')return go('notes');go('menu')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('TROPHIES  '+Object.keys(S.ach).length+'/'+ACH.length);
-  ACH.forEach((a,i)=>{const x=i<11?60:500,y=96+(i%11)*38,got=!!S.ach[a.id];ctx.fillStyle=got?'rgba(255,212,94,.18)':'rgba(15,12,30,.4)';rr(x,y,400,32,10);ctx.fill();
+  button('notes',VW-200,18,180,42,'Notes '+notesFound()+'/'+NOTES.length,{fs:17,bg:'#fff3cf'});
+  ACH.forEach((a,i)=>{const x=i<12?60:500,y=90+(i%12)*37,got=!!S.ach[a.id];ctx.fillStyle=got?'rgba(255,212,94,.18)':'rgba(15,12,30,.4)';rr(x,y,400,31,10);ctx.fill();
    star5(x+20,y+16,11,got?'#ffd45e':'rgba(255,255,255,.2)',got?'#b8860b':null,2);txt(a.n,x+40,y+16,15,got?'#ffd45e':'#b9b6c6','left',false);txt(a.d,x+392,y+16,13,got?'#fff':'#8a87a0','right',false)})}};
+
+SCREENS.notes={enter(){this.pg=0},update(){uiNav(this);if(pressed.ESC)go('trophies')},
+ onBtn(id){if(id=='back')return go('trophies');if(id=='prev')this.pg=Math.max(0,this.pg-1);if(id=='next')this.pg=Math.min(Math.ceil(NOTES.length/6)-1,this.pg+1)},
+ draw(){drawBG(WORLDS[1],gtime*20,0,gtime);backBtn();header('NOTES  '+notesFound()+'/'+NOTES.length);const np=Math.ceil(NOTES.length/6);
+  for(let j=0;j<6;j++){const i=this.pg*6+j;if(i>=NOTES.length)break;const got=!!S.notes[i],y=92+j*64;ctx.fillStyle=got?'#fff3cf':'rgba(15,12,30,.45)';rr(VW/2-360,y,720,56,10);ctx.fill();
+   txt('#'+(i+1),VW/2-340,y+28,16,got?'#a08a55':'#8a87a0','left',false);
+   if(got){const ln=wrapText(NOTES[i],610,15);ln.slice(0,2).forEach((l,k)=>txt(l,VW/2-290,y+(ln.length>1?17+k*21:28),15,'#3a3020','left',false))}else txt('Not found yet. Hidden somewhere in level '+lvLabel(i)+'.',VW/2-290,y+28,15,'#8a87a0','left',false)}
+  if(this.pg>0)button('prev',VW/2-230,VH-54,140,40,'< Prev',{fs:18});if(this.pg<np-1)button('next',VW/2+90,VH-54,140,40,'Next >',{fs:18});
+  txt((this.pg+1)+' / '+np,VW/2,VH-34,16,'#fff')}};
 
 SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(pressed.ESC)go('menu')},
  draw(){drawBG(WORLDS[0],gtime*20,0,gtime);backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
@@ -1282,6 +1378,7 @@ function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now
  if(pressed.MUTE){S.set.music=S.set.music?0:1;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
  SCR.update(dt);updToasts(dt);
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
+ if(!playing()&&(STK||tp.size))tReset();
  UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
  if(touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
