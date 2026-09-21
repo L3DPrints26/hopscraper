@@ -140,28 +140,32 @@ cv.addEventListener('mousedown',e=>{mpos(e);audioInit();mouse.click=true;pressed
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 // ================= TOUCH (mobile mode) =================
-const TB=[{k:'L',x:78,y:470,r:46},{k:'R',x:190,y:470,r:46},{k:'D',x:768,y:488,r:34},{k:'J',x:876,y:456,r:58}];
-const PB={x:VW-38,y:84,r:22};
-const tp=new Map();
+// left side: floating joystick that appears where you touch and follows your thumb. right side: tap to jump (hold = higher)
+const PB={x:VW-38,y:84,r:22},STR=62,DZ=14;
+const tp=new Map();let STK=null;
 function touchOn(){return !!S.set.touch}
 function tpos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*VW,y:(e.clientY-r.top)/r.height*VH}}
 function playing(){return SCR===SCREENS.play&&G&&G.player}
-function tbAt(p){let best=null,bd=1e9;for(const b of TB){const d=Math.hypot(p.x-b.x,p.y-b.y);if(d<b.r*1.4&&d<bd){bd=d;best=b.k}}return best}
-function tsync(){const on={};for(const v of tp.values())if(v)on[v]=1;for(const b of TB){if(on[b.k]&&!keys[b.k])pressed[b.k]=true;keys[b.k]=!!on[b.k]}}
+function tsync(){let L=false,R=false,D=false,J=false;
+ for(const v of tp.values())if(v=='jump')J=true;
+ if(STK){const dx=STK.kx-STK.bx,dy=STK.ky-STK.by;if(dx<-DZ)L=true;if(dx>DZ)R=true;if(dy>STR*0.55&&dy>Math.abs(dx))D=true}
+ for(const[k,v]of[['L',L],['R',R],['D',D],['J',J]]){if(v&&!keys[k])pressed[k]=true;keys[k]=v}}
 cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();audioInit();const p=tpos(e);
- if(touchOn()&&playing()){if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;return}tp.set(e.pointerId,tbAt(p));tsync();try{cv.setPointerCapture(e.pointerId)}catch(_){}return}
+ if(touchOn()&&playing()){try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;return}
+  if(p.x<VW*0.45&&!STK){STK={id:e.pointerId,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(e.pointerId,'stick')}else tp.set(e.pointerId,'jump');
+  tsync();return}
  mouse.x=p.x;mouse.y=p.y;mouse.click=true;mouse.moved=true;pressed.ANY=true},{passive:false});
-cv.addEventListener('pointermove',e=>{if(!tp.has(e.pointerId))return;e.preventDefault();tp.set(e.pointerId,tbAt(tpos(e)));tsync()},{passive:false});
-function tend(e){if(!tp.has(e.pointerId))return;tp.delete(e.pointerId);tsync()}
+cv.addEventListener('pointermove',e=>{if(!STK||STK.id!==e.pointerId)return;e.preventDefault();const p=tpos(e);STK.kx=p.x;STK.ky=p.y;
+ const dx=p.x-STK.bx,dy=p.y-STK.by,d=Math.hypot(dx,dy);if(d>STR){STK.bx=p.x-dx/d*STR;STK.by=p.y-dy/d*STR}tsync()},{passive:false});
+function tend(e){if(!tp.has(e.pointerId))return;tp.delete(e.pointerId);if(STK&&STK.id===e.pointerId)STK=null;tsync()}
 cv.addEventListener('pointerup',tend);cv.addEventListener('pointercancel',tend);
 function drawTouch(){ctx.save();
- for(const b of TB){const on=keys[b.k],s=b.r*0.36;ctx.globalAlpha=on?0.55:0.26;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill();
-  ctx.globalAlpha=on?0.95:0.7;ctx.fillStyle='#1d1a2e';ctx.beginPath();
-  if(b.k=='L'){ctx.moveTo(b.x-s,b.y);ctx.lineTo(b.x+s*0.7,b.y-s);ctx.lineTo(b.x+s*0.7,b.y+s)}
-  else if(b.k=='R'){ctx.moveTo(b.x+s,b.y);ctx.lineTo(b.x-s*0.7,b.y-s);ctx.lineTo(b.x-s*0.7,b.y+s)}
-  else if(b.k=='D'){ctx.moveTo(b.x,b.y+s);ctx.lineTo(b.x-s,b.y-s*0.7);ctx.lineTo(b.x+s,b.y-s*0.7)}
-  else{ctx.moveTo(b.x,b.y-s);ctx.lineTo(b.x-s,b.y+s*0.7);ctx.lineTo(b.x+s,b.y+s*0.7)}
-  ctx.closePath();ctx.fill()}
+ if(STK){ctx.globalAlpha=0.22;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(STK.bx,STK.by,STR,0,7);ctx.fill();
+  ctx.globalAlpha=0.5;ctx.strokeStyle='#ffffff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(STK.bx,STK.by,STR,0,7);ctx.stroke();
+  const dx=STK.kx-STK.bx,dy=STK.ky-STK.by,d=Math.hypot(dx,dy),k=d>STR?STR/d:1;
+  ctx.globalAlpha=0.75;ctx.beginPath();ctx.arc(STK.bx+dx*k,STK.by+dy*k,26,0,7);ctx.fill()}
+ else if(G&&G.t<6){ctx.globalAlpha=0.16*clamp(6-G.t,0,1);ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(130,430,STR,0,7);ctx.fill();ctx.globalAlpha*=2.5;txt('drag to move',130,430,15,'#ffffff','center',false);txt('tap to jump',VW-150,430,15,'#ffffff','center',false)}
  ctx.globalAlpha=0.45;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(PB.x,PB.y,PB.r,0,7);ctx.fill();
  ctx.globalAlpha=0.9;ctx.fillStyle='#1d1a2e';ctx.fillRect(PB.x-7,PB.y-8,5,16);ctx.fillRect(PB.x+2,PB.y-8,5,16);ctx.restore()}
 function drawRotate(){ctx.fillStyle='#0e0b1c';ctx.fillRect(0,0,VW,VH);txt('Turn your phone sideways',VW/2,VH/2-30,60,'#ffffff');txt('Hopscraper plays in landscape',VW/2,VH/2+45,34,'#ffd45e')}
@@ -237,7 +241,7 @@ const ACH=[
 // ~ lava  l L lasers (take turns)  N no-air-jump zone  B bounce pad. m = movers ['saw',x1,y1,x2,y2,speed] / ['orb',cx,cy,r,count,speed]
 const LEVELS=[
 // ---------- WORLD 1: GREEN FIELDS ----------
-{wd:0,n:'First Hops',t:8,s:[2,18],e:[36,18],g:[[12,15],[21,9],[29,16]],tip:'Arrows / WASD to move.  SPACE to jump.  You get 2 extra jumps in mid-air (the dots above your head).',tipM:'Arrow buttons to move.  Big button to jump.  You get 2 extra jumps in mid-air (the dots above your head).',
+{wd:0,n:'First Hops',t:8,s:[2,18],e:[36,18],g:[[12,15],[21,9],[29,16]],tip:'Arrows / WASD to move.  SPACE to jump.  You get 2 extra jumps in mid-air (the dots above your head).',tipM:'Drag on the left side to move.  Tap the right side to jump.  You get 2 extra jumps in mid-air (the dots above your head).',
  r:[['#',1,19,38,2],['.',10,19,5,1],['^',10,20,5,1],['#',20,13,3,6],['.',27,19,5,1],['^',27,20,5,1]]},
 {wd:0,n:'Skyward',W:24,H:34,t:14,s:[3,30],e:[6,5],g:[[20,26],[2,12],[20,4]],tip:'Hold jump for bigger hops. Your air jumps refill when you land OR touch a wall.',
  r:[['#',1,31,22,2],['#',6,26,5,1],['#',14,22,6,1],['#',3,18,6,1],['#',12,14,5,1],['#',17,9,5,1],['#',4,6,6,1],['>',1,20,1,6],['<',22,10,1,8]]},
@@ -1053,7 +1057,7 @@ SCREENS.pause={enter(){},
  update(){uiNav(this);if(pressed.ESC)this.onBtn('resume')},
  draw(){drawWorld();drawHUD();ctx.fillStyle='rgba(12,10,26,.6)';ctx.fillRect(0,0,VW,VH);header('PAUSED',150);const en=G.mode=='endless'||G.mode=='daily';
   button('resume',VW/2-140,210,280,52,'Resume');button('restart',VW/2-140,276,280,52,'Restart  (R)');button('quit',VW/2-140,342,280,52,en?'End Run':'Quit');
-  txt(touchOn()?'Left/right buttons to move, big button to jump, small button to drop':'Move: Arrows/WASD   Jump: SPACE / W / Up   Drop: Down   Music: M',VW/2,440,15,'#fff',undefined,false)},
+  txt(touchOn()?'Drag on the left to move (drag down to drop). Tap the right side to jump.':'Move: Arrows/WASD   Jump: SPACE / W / Up   Drop: Down   Music: M',VW/2,440,15,'#fff',undefined,false)},
  onBtn(id){if(id=='resume'){SCR=SCREENS.play;return}if(id=='restart')return restartLevel();
   if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:wdOf(G.idx)})}};
 
