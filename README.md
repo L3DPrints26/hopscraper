@@ -37,5 +37,5 @@ Every level was verified beatable by a physics bot that plays each one with the 
 
 ## Credits
 
-Developed by **Lucas Lupton** — design, level design, direction and testing.
+Developed independently — design, level design, direction and testing.
 Built with code assistance from Claude (Anthropic), under the developer's direction.

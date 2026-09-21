@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>HOPSCRAPER</title>
 <style>
 html,body{margin:0;height:100%;background:#0e0b1c;overflow:hidden;user-select:none;-webkit-user-select:none}
-canvas{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);outline:none;cursor:default}
+canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);outline:none;cursor:default}
 </style>
 </head>
 <body>
@@ -18,8 +18,11 @@ const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
 function withCtx(g,fn){const o=ctx;ctx=g;try{fn()}finally{ctx=o}}
 const SPR=new Map();
-let KS=1,QUAL=1,fpsEma=0.016,slowT=0;
-function fit(){const d=Math.min(window.devicePixelRatio||1,1.5),s=Math.min(innerWidth/VW,innerHeight/VH),cw=Math.floor(VW*s),ch=Math.floor(VH*s);cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.max(1,Math.floor(cw*d));cv.height=Math.max(1,Math.floor(ch*d));KS=cv.width/VW;}
+let KS=1,QUAL=1,fpsEma=0.016,slowT=0,AUTOLV=0;
+// graphics: auto / high / bal / perf. perf renders at lower resolution, which is what actually helps slow laptops
+function gfxLevel(){try{const g=S.set.gfx||'auto';return g=='high'?0:g=='bal'?1:g=='perf'?2:AUTOLV}catch(e){return 0}}
+function applyGfx(){const l=gfxLevel();QUAL=l<2?1:0;SPR.delete('vig0');SPR.delete('vig1');fit();fpsEma=0.016;slowT=0}
+function fit(){const d=Math.min(window.devicePixelRatio||1,[1.5,1,0.7][gfxLevel()]),s=Math.min(innerWidth/VW,innerHeight/VH),cw=Math.floor(VW*s),ch=Math.floor(VH*s);cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.max(1,Math.floor(cw*d));cv.height=Math.max(1,Math.floor(ch*d));KS=cv.width/VW;}
 addEventListener('resize',fit);fit();
 const rnd=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,ease=t=>1-Math.pow(1-clamp(t,0,1),3);
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -29,11 +32,11 @@ function todaySeed(){const d=new Date();return d.getFullYear()*10000+(d.getMonth
 
 // ================= SAVE =================
 const SKEY='hopscraper_save_v1';
-function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},endBest:0,daily:{d:'',h:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1}}}
+function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},endBest:0,daily:{d:'',h:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,touch:1,gfx:'auto'}}}
 let S=defSave();
 function loadSave(){try{const r=localStorage.getItem(SKEY);if(r){const o=JSON.parse(r),d=defSave();S=Object.assign(d,o);for(const k of['st','own','eq','set','daily'])S[k]=Object.assign(defSave()[k],o[k]||{});S.lv=o.lv||{};S.hard=o.hard||{};S.ach=o.ach||{};S.course=o.course||{};}}catch(e){}}
 function save(){try{localStorage.setItem(SKEY,JSON.stringify(S))}catch(e){}}
-loadSave();
+loadSave();applyGfx();
 
 // ================= AUDIO =================
 let AC=null,master=null,musGain=null,sfxGain=null;
@@ -136,6 +139,33 @@ cv.addEventListener('mousemove',e=>{mpos(e);mouse.moved=true});
 cv.addEventListener('mousedown',e=>{mpos(e);audioInit();mouse.click=true;pressed.ANY=true;cv.focus()});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
+// ================= TOUCH (mobile mode) =================
+const TB=[{k:'L',x:78,y:470,r:46},{k:'R',x:190,y:470,r:46},{k:'D',x:768,y:488,r:34},{k:'J',x:876,y:456,r:58}];
+const PB={x:VW-38,y:84,r:22};
+const tp=new Map();
+function touchOn(){return !!S.set.touch}
+function tpos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*VW,y:(e.clientY-r.top)/r.height*VH}}
+function playing(){return SCR===SCREENS.play&&G&&G.player}
+function tbAt(p){let best=null,bd=1e9;for(const b of TB){const d=Math.hypot(p.x-b.x,p.y-b.y);if(d<b.r*1.4&&d<bd){bd=d;best=b.k}}return best}
+function tsync(){const on={};for(const v of tp.values())if(v)on[v]=1;for(const b of TB){if(on[b.k]&&!keys[b.k])pressed[b.k]=true;keys[b.k]=!!on[b.k]}}
+cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();audioInit();const p=tpos(e);
+ if(touchOn()&&playing()){if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;return}tp.set(e.pointerId,tbAt(p));tsync();try{cv.setPointerCapture(e.pointerId)}catch(_){}return}
+ mouse.x=p.x;mouse.y=p.y;mouse.click=true;mouse.moved=true;pressed.ANY=true},{passive:false});
+cv.addEventListener('pointermove',e=>{if(!tp.has(e.pointerId))return;e.preventDefault();tp.set(e.pointerId,tbAt(tpos(e)));tsync()},{passive:false});
+function tend(e){if(!tp.has(e.pointerId))return;tp.delete(e.pointerId);tsync()}
+cv.addEventListener('pointerup',tend);cv.addEventListener('pointercancel',tend);
+function drawTouch(){ctx.save();
+ for(const b of TB){const on=keys[b.k],s=b.r*0.36;ctx.globalAlpha=on?0.55:0.26;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill();
+  ctx.globalAlpha=on?0.95:0.7;ctx.fillStyle='#1d1a2e';ctx.beginPath();
+  if(b.k=='L'){ctx.moveTo(b.x-s,b.y);ctx.lineTo(b.x+s*0.7,b.y-s);ctx.lineTo(b.x+s*0.7,b.y+s)}
+  else if(b.k=='R'){ctx.moveTo(b.x+s,b.y);ctx.lineTo(b.x-s*0.7,b.y-s);ctx.lineTo(b.x-s*0.7,b.y+s)}
+  else if(b.k=='D'){ctx.moveTo(b.x,b.y+s);ctx.lineTo(b.x-s,b.y-s*0.7);ctx.lineTo(b.x+s,b.y-s*0.7)}
+  else{ctx.moveTo(b.x,b.y-s);ctx.lineTo(b.x-s,b.y+s*0.7);ctx.lineTo(b.x+s,b.y+s*0.7)}
+  ctx.closePath();ctx.fill()}
+ ctx.globalAlpha=0.45;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(PB.x,PB.y,PB.r,0,7);ctx.fill();
+ ctx.globalAlpha=0.9;ctx.fillStyle='#1d1a2e';ctx.fillRect(PB.x-7,PB.y-8,5,16);ctx.fillRect(PB.x+2,PB.y-8,5,16);ctx.restore()}
+function drawRotate(){ctx.fillStyle='#0e0b1c';ctx.fillRect(0,0,VW,VH);txt('Turn your phone sideways',VW/2,VH/2-30,60,'#ffffff');txt('Hopscraper plays in landscape',VW/2,VH/2+45,34,'#ffd45e')}
+
 // ================= DATA =================
 const WORLDS=[
  {n:'Green Fields',bg:['#bdf0cd','#5cbf92'],far:'#8fdcb0',mid:'#6ac795',tile:'#35505f',top:'#8ff0ab',acc:'#1fae63',song:1,deco:0},
@@ -207,7 +237,7 @@ const ACH=[
 // ~ lava  l L lasers (take turns)  N no-air-jump zone  B bounce pad. m = movers ['saw',x1,y1,x2,y2,speed] / ['orb',cx,cy,r,count,speed]
 const LEVELS=[
 // ---------- WORLD 1: GREEN FIELDS ----------
-{wd:0,n:'First Hops',t:8,s:[2,18],e:[36,18],g:[[12,15],[21,9],[29,16]],tip:'Arrows / WASD to move.  SPACE to jump.  You get 2 extra jumps in mid-air (the dots above your head).',
+{wd:0,n:'First Hops',t:8,s:[2,18],e:[36,18],g:[[12,15],[21,9],[29,16]],tip:'Arrows / WASD to move.  SPACE to jump.  You get 2 extra jumps in mid-air (the dots above your head).',tipM:'Arrow buttons to move.  Big button to jump.  You get 2 extra jumps in mid-air (the dots above your head).',
  r:[['#',1,19,38,2],['.',10,19,5,1],['^',10,20,5,1],['#',20,13,3,6],['.',27,19,5,1],['^',27,20,5,1]]},
 {wd:0,n:'Skyward',W:24,H:34,t:14,s:[3,30],e:[6,5],g:[[20,26],[2,12],[20,4]],tip:'Hold jump for bigger hops. Your air jumps refill when you land OR touch a wall.',
  r:[['#',1,31,22,2],['#',6,26,5,1],['#',14,22,6,1],['#',3,18,6,1],['#',12,14,5,1],['#',17,9,5,1],['#',4,6,6,1],['>',1,20,1,6],['<',22,10,1,8]]},
@@ -463,7 +493,7 @@ function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspee
  const mods=hard?(window.FORCEMODS||modsOf(i)):[];const M=new Set(mods);
  const L=buildLevel(def,{mirror:M.has('mirror'),noChecks:hard});
  if(M.has('lasers'))injectLasers(L,3);if(M.has('saws'))injectSaws(L,4);
- G=newG({mode,idx:i,L,intro:(mode=='speed'||mode=='hspeed')?1.4:2.6,spd:hard?1.3:1,riseMul:hard?1.2:1,
+ G=newG({mode,idx:i,L,intro:(mode=='speed'||mode=='hspeed')?1.4:2.6,spd:hard?1.25:1,riseMul:1,
   tipT:(def.tip&&mode!='speed'&&mode!='hspeed')?8:0,mods:M,gs:M.has('flip')?-1:1});
  spawn();updCam(0,true);musicPlay(WORLDS[def.wd].song);go('play')}
 function startEndless(daily){const seed=daily?todaySeed():(Math.random()*1e9|0);const def=genEndless(seed);const L=buildLevel(def,{skipBlocked:true});
@@ -476,25 +506,37 @@ const MODD={mirror:'flipped left to right',inv:'left is right',moon:'floaty and 
  ice:'zero grip',nojump:'no air jumps at all',lasers:'extra laser curtains',saws:'extra saws',
  chaos:'gravity keeps changing',flip:'gravity points up',walljump:'you can only jump off walls'};
 // combos, hardest first - the assignment table below is verified beatable
-const COMBOS=[['walljump','mirror'],['walljump'],['flip','inv'],['nojump','mirror'],['flip','mirror'],
- ['ice','inv'],['ice','flip'],['ice','mirror'],['chaos','inv'],['heavy','inv'],['lasers','inv'],
- ['saws','mirror'],['moon','inv'],['inv','mirror'],['flip'],['chaos','mirror'],['heavy','mirror'],
- ['lasers','mirror'],['saws','inv'],['moon','mirror'],['ice'],['inv'],['mirror']];
+const COMBOS=[['walljump','lasers'],['walljump'],['flip','saws'],['flip','ice'],['flip'],
+ ['ice','lasers'],['ice','saws'],['heavy','saws'],['chaos','lasers'],['moon','saws'],['nojump','lasers'],
+ ['nojump','saws'],['ice','inv'],['lasers','inv'],['saws','mirror'],['chaos','inv'],['heavy','inv'],
+ ['moon','inv'],['ice','mirror'],['lasers','mirror'],['saws','inv'],['ice'],['lasers'],['saws'],
+ ['chaos'],['heavy'],['moon'],['inv','mirror'],['nojump'],['mirror'],['inv']];
 // verified beatable by the physics bot with only ONE air jump
-let HARDSET=[['nojump','mirror'],['flip','inv'],['nojump','mirror'],['nojump','mirror'],['nojump','mirror'],
- ['ice','mirror'],['ice','inv'],['ice','inv'],['ice','inv'],['walljump','mirror'],['ice','inv'],['ice','mirror'],
- ['ice','mirror'],['ice','mirror'],['chaos','inv'],['lasers','inv'],['walljump','mirror'],['inv','mirror'],
- ['walljump','mirror'],['saws','mirror'],['saws','mirror'],['lasers','inv'],['saws','mirror'],['saws','mirror'],
- ['chaos','inv'],['mirror'],['lasers','inv'],['lasers','inv'],['chaos','inv'],['inv','mirror'],['moon','inv'],
- ['mirror'],['ice','inv']];
+let HARDSET=[['flip','saws'],['ice','lasers'],['ice','lasers'],['ice','lasers'],['flip','saws'],
+ ['ice','saws'],['ice','saws'],['ice','saws'],['flip','ice'],['flip','saws'],['heavy','saws'],['flip','ice'],
+ ['ice','inv'],['lasers','inv'],['lasers','inv'],['lasers','inv'],['flip'],['ice','saws'],['saws','mirror'],
+ ['flip'],['ice','saws'],['lasers','mirror'],['saws','mirror'],['ice','saws'],['chaos','lasers'],['saws','mirror'],
+ ['lasers','mirror'],['ice','lasers'],['chaos','inv'],['saws','mirror'],['chaos','inv'],['ice','lasers'],['ice','saws']];
 function modsOf(i){if(HARDSET&&HARDSET[i])return HARDSET[i];return ['mirror']}
 function modLabel(i){return modsOf(i).map(k=>MODN[k]).join(' + ')}
 function modDesc(i){return modsOf(i).map(k=>MODD[k]).join(', ')}
 function modOK(i,k){const d=LEVELS[i],r=d.r,has=ch=>r.some(q=>q[0]==ch);
- const tricky=has('B')||has('N')||has('=')||!!d.rise;
+ const W=d.W||40,H=d.H||22,tricky=has('B')||has('N')||has('=')||!!d.rise;
+ // does the level contain a real chimney? two facing walls, 2-6 tiles apart, at least 6 tall
+ const shaft=(()=>{if(d._shaft!=null)return d._shaft;const L=buildLevel(d);let best=0;
+  const sol=(x,y)=>{const c=L.g[y][x];return c=='#'||c=='D'};
+  for(let x=1;x<L.W-3;x++)for(let w=2;w<=6&&x+w+1<L.W;w++){let run=0;
+   for(let y=1;y<L.H-1;y++){let ok=sol(x,y)&&sol(x+w+1,y);for(let k=1;k<=w&&ok;k++)if(sol(x+k,y))ok=false;
+    if(ok){run++;if(run>best)best=run}else run=0}}
+  return d._shaft=best})();
+ if(k=='walljump'||k=='nojump'){
+  if(has('N')||d.rise||(k=='nojump'&&H>26)||H>40)return false;
+  if((d.m||[]).some(m=>m[0]=='saw'&&Math.max(m[2],m[4])>=H-4))return false; // saw sweeping the floor and you cannot jump it
+  return k=='nojump'?true:shaft>=7}
  if(k=='lasers')return !has('l')&&!has('L');
  if(k=='saws')return (d.m||[]).length<5&&!has('~');
- if(k=='flip')return !tricky&&!has('~')&&!has('X')&&!has('D')&&!(d.m||[]).some(m=>m[0]=='plat');
+ // upside down only makes sense on a flat level whose start AND exit sit on the main floor
+ if(k=='flip')return !has('B')&&!has('N')&&!d.rise&&!has('~')&&!has('X')&&!has('D')&&H<=24&&d.s[1]>=H-5&&d.e[1]>=H-5&&!(d.m||[]).some(m=>m[0]=='plat');
  if(k=='moon'||k=='heavy'||k=='chaos')return !tricky;
  return true}
 function comboOK(i,c){return c.every(k=>modOK(i,k))}
@@ -898,7 +940,7 @@ function drawHUD(){const L=G.L,md=G.mode;
  if(md=='endless'||md=='daily'){hudPill(12,10,230,40);txt(G.height+'m',30,31,26,'#fff','left');txt(md=='daily'?'DAILY':'BEST '+S.endBest+'m',128,31,15,'#ffd45e','left');
   hudPill(VW-140,10,128,40);gemShape(VW-116,30,9,'#5ff4ff');txt('x '+G.gemsRun,VW-98,31,20,'#fff','left');
   const dist=Math.max(0,Math.floor((G.lavaY-(G.player.y+16))/TS));hudPill(VW/2-90,12,180,30);txt('LAVA '+dist+'m below',VW/2,27,15,dist<5?'#ff6b4a':'#ffd2b0')}
- else{const isC=md=='course';const lab=isC?'COURSE':md=='speed'?'MARATHON':md=='hspeed'?('HARD RUN · '+modLabel(G.idx)):md=='hard'?('HARD · '+modLabel(G.idx)):lvLabel(G.idx);hudPill(12,10,340,40);txt(lab,26,31,18,md=='hard'?'#ff5c6c':(md=='speed'||isC)?'#ffd45e':'#ffffff','left');ctx.font=`bold 18px ${FONT}`;const lw=ctx.measureText(lab).width;txt(isC?COURSES[G.idx].n:LEVELS[G.idx].n,26+lw+14,31,18,'#e8e6f5','left');
+ else{const isC=md=='course';const lab=isC?'COURSE':md=='speed'?'MARATHON':md=='hspeed'?('HARD RUN · '+modLabel(G.idx)):md=='hard'?('HARD · '+modLabel(G.idx)):lvLabel(G.idx);const nm=isC?COURSES[G.idx].n:LEVELS[G.idx].n;ctx.font=`bold 18px ${FONT}`;const lw=ctx.measureText(lab).width,nw=ctx.measureText(nm).width;hudPill(12,10,Math.max(340,lw+nw+42),40);txt(lab,26,31,18,md=='hard'?'#ff5c6c':(md=='speed'||isC)?'#ffd45e':'#ffffff','left');txt(nm,26+lw+14,31,18,'#e8e6f5','left');
   if(isC){const b=(S.course[G.idx]||{}).t;hudPill(VW-300,10,288,40);txt(fmtT(G.time),VW-230,31,24,'#fff','center');txt(b?'best '+fmtT(b):'no time yet',VW-100,31,15,'#ffd45e','center');
    const dist=Math.round((G.player.x/TS)/(L.W-6)*100);hudPill(VW/2-80,12,160,26);ctx.fillStyle='rgba(255,255,255,.25)';rr(VW/2-68,21,136,8,4);ctx.fill();ctx.fillStyle='#ffd45e';rr(VW/2-68,21,clamp(136*dist/100,0,136),8,4);ctx.fill();return}
   const tt=(md=='speed'||md=='hspeed')?SPD.total+G.time:G.time;hudPill(VW-300,10,288,40);
@@ -906,7 +948,7 @@ function drawHUD(){const L=G.L,md=G.mode;
   txt(fmtT(tt),VW-150,31,20,'#fff','center');skull(VW-72,31,16,'#fff');txt(''+((md=='speed'||md=='hspeed')?SPD.deaths+G.deaths:G.deaths),VW-56,31,18,'#fff','left');
   if(L.key){ctx.globalAlpha=L.key.got?1:0.35;keyIcon(VW-330,30,14);ctx.globalAlpha=1}}
  if(!S.set.music)txt('music off (M)',VW-60,58,12,'rgba(255,255,255,.55)');
- if(G.tipT>0){const d=LEVELS[G.idx]||{};const tip=(md=='endless'||md=='daily')?'Climb as high as you can. The lava never stops.':d.tip;if(tip){ctx.globalAlpha=clamp(G.tipT,0,1);ctx.font=`bold 15px ${FONT}`;const w=ctx.measureText(tip).width+34;hudPill(VW/2-w/2,56,w,30);txt(tip,VW/2,72,15,'#fff','center',false);ctx.globalAlpha=1}}
+ if(G.tipT>0){const d=LEVELS[G.idx]||{};const tip=(md=='endless'||md=='daily')?'Climb as high as you can. The lava never stops.':(touchOn()&&d.tipM?d.tipM:d.tip);if(tip){ctx.globalAlpha=clamp(G.tipT,0,1);ctx.font=`bold 15px ${FONT}`;const w=ctx.measureText(tip).width+34;hudPill(VW/2-w/2,56,w,30);txt(tip,VW/2,72,15,'#fff','center',false);ctx.globalAlpha=1}}
  if(G.intro>0){const k=G.intro>2?ease((2.4-G.intro)/0.4):G.intro<0.4?G.intro/0.4:1;ctx.globalAlpha=clamp(k,0,1);const x=VW/2+(1-k)*-200;
   const en=md=='endless'||md=='daily';const big=en?(md=='daily'?'DAILY CLIMB':'ENDLESS'):md=='course'?COURSES[G.idx].n:lvLabel(G.idx);let sub=en?(md=='daily'?'Same tower for everyone today':'How high can you go?'):md=='course'?'GO GO GO':LEVELS[G.idx].n;
   const hardMod=(md=='hard'||md=='hspeed');if(hardMod)sub=LEVELS[G.idx].n;
@@ -954,10 +996,9 @@ SCREENS.title={enter(){musicPlay(0);this.t=0},
   ctx.font=`bold 86px ${FONT}`;let tw=0;const ws=[...word].map(ch=>{const w=ctx.measureText(ch).width;tw+=w;return w});let x=VW/2-tw/2;
   [...word].forEach((ch,i)=>{const y=190+Math.sin(t*4-i*0.5)*10;txt(ch,x+ws[i]/2,y,86,cols[i%5]);x+=ws[i]});
   txt('how high can a square go?',VW/2,258,24,'#1f3b2d',undefined,false);
-  txt('a game by Lucas Lupton',VW/2,292,17,'#2c4a3a',undefined,false);
   const px=VW/2+Math.sin(t*1.3)*220,hop=Math.abs(Math.sin(t*5))*60;ctx.fillStyle='#2d4656';ctx.fillRect(0,420,VW,120);ctx.fillStyle='#8ff0ab';ctx.fillRect(0,420,VW,8);
   drawSq(px,420-hop,40,t,{face:Math.cos(t*1.3)>0?1:-1,lx:Math.cos(t*1.3)>0?1:-1});
-  if(Math.sin(t*4)>-0.3)txt('PRESS ANY KEY',VW/2,480,28,'#fff');txt('Arrows / WASD + SPACE',VW/2,516,15,'rgba(255,255,255,.8)')}};
+  if(Math.sin(t*4)>-0.3)txt(touchOn()?'TAP TO START':'PRESS ANY KEY',VW/2,480,28,'#fff');txt(touchOn()?'Mobile controls':'Arrows / WASD + SPACE',VW/2,516,15,'rgba(255,255,255,.8)')}};
 
 SCREENS.menu={enter(){musicPlay(0);this.vy=0;this.y=0},
  update(dt){uiNav(this);if(pressed.DEV)go(S.dev?'settings':'pin');this.vy+=1400*dt;this.y+=this.vy*dt;if(this.y>0){this.y=0;this.vy=-rnd(300,560)}if(Math.random()<dt*0.8&&this.y<-20&&this.vy>0){this.vy=-380;sfx('air')}},
@@ -968,9 +1009,10 @@ SCREENS.menu={enter(){musicPlay(0);this.vy=0;this.y=0},
   drawSq(bx,by+this.y,64,gtime,{face:1,lx:Math.sin(gtime)*0.8,ly:clamp(this.vy/800,-1,1),sy:this.y>-2?0.9:1.05,sx:this.y>-2?1.1:0.96});
   txt('★ '+totalStars()+' / '+NL*3,560,190,24,'#ffd45e','left');gemShape(790,190,10,'#5ff4ff');txt(''+S.bank,807,191,24,'#fff','left');
   txt('Trophies '+Object.keys(S.ach).length+'/'+ACH.length,710,450,16,'#fff');
-  txt('M = music on/off     ESC = back',VW/2,VH-20,14,'rgba(255,255,255,.75)');
+  button('device',VW-230,18,210,42,touchOn()?'Mobile  (tap to switch)':'Computer  (tap to switch)',{fs:15});
+  if(!touchOn())txt('M = music on/off     ESC = back',VW/2,VH-20,14,'rgba(255,255,255,.75)');
   if(S.dev){ctx.fillStyle='rgba(123,220,59,.9)';rr(VW-120,VH-46,100,26,13);ctx.fill();txt('DEV MODE',VW-70,VH-33,14,'#10240a',undefined,false)}},
- onBtn(id){if(id=='play')go('levels');else go(id)}};
+ onBtn(id){if(id=='device'){S.set.touch=S.set.touch?0:1;save();toast(S.set.touch?'Mobile mode':'Computer mode',S.set.touch?'On-screen buttons while playing':'Keyboard controls','info');return}if(id=='play')go('levels');else go(id)}};
 
 SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;let tab=a.tab!=null?a.tab:(this.hard?this.lastH:this.last);
   if(tab==null){tab=0;for(let w=0;w<5;w++)if(this.tabOk(w))tab=w}this.tab=tab;if(!this.tabOk(this.tab))this.tab=0;
@@ -1011,7 +1053,7 @@ SCREENS.pause={enter(){},
  update(){uiNav(this);if(pressed.ESC)this.onBtn('resume')},
  draw(){drawWorld();drawHUD();ctx.fillStyle='rgba(12,10,26,.6)';ctx.fillRect(0,0,VW,VH);header('PAUSED',150);const en=G.mode=='endless'||G.mode=='daily';
   button('resume',VW/2-140,210,280,52,'Resume');button('restart',VW/2-140,276,280,52,'Restart  (R)');button('quit',VW/2-140,342,280,52,en?'End Run':'Quit');
-  txt('Move: Arrows/WASD   Jump: SPACE / W / Up   Drop: Down   Music: M',VW/2,440,15,'#fff',undefined,false)},
+  txt(touchOn()?'Left/right buttons to move, big button to jump, small button to drop':'Move: Arrows/WASD   Jump: SPACE / W / Up   Drop: Down   Music: M',VW/2,440,15,'#fff',undefined,false)},
  onBtn(id){if(id=='resume'){SCR=SCREENS.play;return}if(id=='restart')return restartLevel();
   if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:wdOf(G.idx)})}};
 
@@ -1194,7 +1236,7 @@ SCREENS.credits={enter(){this.t=0;FX.length=0;musicPlay(7)},
  draw(){drawBG(WORLDS[4],gtime*18,0,gtime);drawParts(FX);backBtn();
   txt('HOPSCRAPER',VW/2,74,52,'#ffd45e');
   ctx.fillStyle='rgba(18,14,40,.82)';rr(VW/2-330,116,660,300,22);ctx.fill();ctx.strokeStyle='#ffd45e';ctx.lineWidth=2;rr(VW/2-330,116,660,300,22);ctx.stroke();
-  txt('DEVELOPER',VW/2,156,17,'#b9b6c6');txt('Lucas Lupton',VW/2,192,40,'#ffffff');
+  txt('DEVELOPER',VW/2,156,17,'#b9b6c6');txt('Indie Developer',VW/2,192,40,'#ffffff');
   txt('Design, level design, direction, testing',VW/2,224,15,'#d8d5ea',undefined,false);
   ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(VW/2-260,248);ctx.lineTo(VW/2+260,248);ctx.stroke();
   txt('BUILT WITH',VW/2,274,15,'#b9b6c6');txt('Claude  (Anthropic)',VW/2,302,24,'#8dd3ff');
@@ -1212,12 +1254,15 @@ SCREENS.trophies={enter(){},update(){uiNav(this);if(pressed.ESC)go('menu')},onBt
 
 SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(pressed.ESC)go('menu')},
  draw(){drawBG(WORLDS[0],gtime*20,0,gtime);backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
-  button('music',VW/2-180,110,360,50,'Music: '+on(S.set.music));button('sfx',VW/2-180,172,360,50,'Sound FX: '+on(S.set.sfx));button('shake',VW/2-180,234,360,50,'Screen Shake: '+on(S.set.shake));
-  button('reset',VW/2-180,296,360,44,this.conf?'Press again to ERASE everything':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?17:20});
-  button('dev',VW/2-180,348,360,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
-  ['Move: Arrows / A D      Jump: SPACE / W / Up (again in mid-air!)','Drop through platforms: Down      Restart: R      Pause: ESC      Music: M','Progress saves automatically in this browser.'].forEach((l,i)=>txt(l,VW/2,410+i*28,15,'#1f3b2d',undefined,false))},
+  const GN={auto:'Auto',high:'High Quality',bal:'Balanced',perf:'Performance'};
+  button('music',VW/2-180,96,360,44,'Music: '+on(S.set.music));button('sfx',VW/2-180,148,360,44,'Sound FX: '+on(S.set.sfx));button('shake',VW/2-180,200,360,44,'Screen Shake: '+on(S.set.shake));
+  button('gfx',VW/2-180,252,360,44,'Graphics: '+GN[S.set.gfx||'auto'],{fs:20});
+  button('reset',VW/2-180,304,360,44,this.conf?'Press again to ERASE everything':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?17:20});
+  button('dev',VW/2-180,356,360,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
+  (S.set.gfx=='perf'||(!S.set.gfx||S.set.gfx=='auto')&&AUTOLV==2?['Performance: lower resolution, fewer effects. Best for slow laptops.']:S.set.gfx=='high'?['High Quality: sharpest picture. Can lag on slow laptops.']:S.set.gfx=='bal'?['Balanced: slightly softer picture, runs smoother.']:['Auto: starts sharp, lowers itself if the game starts lagging.']).concat(touchOn()?['Mobile mode is on (switch it from the main menu).','Progress saves automatically on this device.']:['Move: Arrows / A D   Jump: SPACE / W / Up   Drop: Down   Pause: ESC','Progress saves automatically in this browser.']).forEach((l,i)=>txt(l,VW/2,420+i*26,15,'#1f3b2d',undefined,false))},
  onBtn(id){if(id=='back')return go('menu');
   if(id=='dev'){if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
+  if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='music')S.set.music=S.set.music?0:1;if(id=='sfx')S.set.sfx=S.set.sfx?0:1;if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='reset'){if(!this.conf){this.conf=1;return}S=defSave();this.conf=0;toast('Save erased','Fresh start!','info')}else this.conf=0;applyVol();save()}};
 
@@ -1226,13 +1271,14 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&SCR===SCRE
 let last=performance.now();
 function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now;gtime+=dt;
  fpsEma=fpsEma*0.92+dt*0.08;
- if(QUAL){if(fpsEma>0.027){slowT+=dt;if(slowT>2.5){QUAL=0;SPR.delete('vig0');SPR.delete('vig1');toast('Low graphics mode','Turned on so it runs smooth','info')}}else slowT=Math.max(0,slowT-dt*0.5)}
+ if((S.set.gfx||'auto')=='auto'&&AUTOLV<2&&SCR===SCREENS.play){if(fpsEma>0.027){slowT+=dt;if(slowT>2.5){AUTOLV++;applyGfx();toast('Graphics lowered','Auto keeps it smooth. Change in Settings','info')}}else slowT=Math.max(0,slowT-dt*0.5)}
  try{
  if(pressed.MUTE){S.set.music=S.set.music?0:1;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
  SCR.update(dt);updToasts(dt);
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
- UI.list=[];SCR.draw();UI.prev=UI.list;drawToasts();
+ UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
+ if(touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
  }catch(e){console.error(e)}
  for(const k in pressed)delete pressed[k];mouse.click=false;
  requestAnimationFrame(frame)}
