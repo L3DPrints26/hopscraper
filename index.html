@@ -126,17 +126,18 @@ function musTick(){if(!AC||mus.song<0)return;const s=SONGS[mus.song],st=60/s.bpm
 // ================= INPUT =================
 const keys={},pressed={};
 const KM={ArrowLeft:'L',KeyA:'L',ArrowRight:'R',KeyD:'R',ArrowUp:'U',KeyW:'U',ArrowDown:'D',KeyS:'D',Space:'J',KeyZ:'J',KeyK:'J',KeyJ:'J',Enter:'OK',NumpadEnter:'OK',Escape:'ESC',KeyP:'ESC',KeyR:'RST',KeyM:'MUTE',Backspace:'ESC'};
-let typedDigit=null;
+let typedDigit=null,typedDel=false,lastTouch=0;
 addEventListener('keydown',e=>{audioInit();const k=KM[e.code];if(k){if(!keys[k])pressed[k]=true;keys[k]=true;e.preventDefault()}
- if(/^(Digit|Numpad)[0-9]$/.test(e.code))typedDigit=e.code.slice(-1);
+ if(!e.repeat&&/^(Digit|Numpad)[0-9]$/.test(e.code))typedDigit=e.code.slice(-1);
+ if(!e.repeat&&e.code=='Backspace')typedDel=true;
  if(e.code=='Backquote')pressed.DEV=true;
  pressed.ANY=true});
 addEventListener('keyup',e=>{const k=KM[e.code];if(k){keys[k]=false;e.preventDefault()}});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
 const mouse={x:-99,y:-99,click:false,moved:false};
 function mpos(e){const r=cv.getBoundingClientRect();mouse.x=(e.clientX-r.left)/r.width*VW;mouse.y=(e.clientY-r.top)/r.height*VH}
-cv.addEventListener('mousemove',e=>{mpos(e);mouse.moved=true});
-cv.addEventListener('mousedown',e=>{mpos(e);audioInit();mouse.click=true;pressed.ANY=true;cv.focus()});
+cv.addEventListener('mousemove',e=>{if(performance.now()-lastTouch<800)return;mpos(e);mouse.moved=true});
+cv.addEventListener('mousedown',e=>{if(performance.now()-lastTouch<800)return;mpos(e);audioInit();mouse.click=true;pressed.ANY=true;cv.focus()});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 // ================= TOUCH (mobile mode) =================
@@ -150,7 +151,7 @@ function tsync(){let L=false,R=false,D=false,J=false;
  for(const v of tp.values())if(v=='jump')J=true;
  if(STK){const dx=STK.kx-STK.bx,dy=STK.ky-STK.by;if(dx<-DZ)L=true;if(dx>DZ)R=true;if(dy>STR*0.55&&dy>Math.abs(dx))D=true}
  for(const[k,v]of[['L',L],['R',R],['D',D],['J',J]]){if(v&&!keys[k])pressed[k]=true;keys[k]=v}}
-cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();audioInit();const p=tpos(e);
+cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();lastTouch=performance.now();audioInit();const p=tpos(e);
  if(touchOn()&&playing()){try{cv.setPointerCapture(e.pointerId)}catch(_){}
   if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;return}
   if(p.x<VW*0.45&&!STK){STK={id:e.pointerId,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(e.pointerId,'stick')}else tp.set(e.pointerId,'jump');
@@ -1212,10 +1213,11 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.msg='';this.mt=0;FX.length=0;m
   if(it.cost&&S.bank>=it.cost){S.bank-=it.cost;S.own[it.id]=1;S.eq[it.cat]=it.id;sfx('buy');grant('shop');save();this.msg='Bought '+it.n+'!';this.mt=1.5;return}
   sfx('no');this.msg=it.cost?'Not enough gems':'Locked';this.mt=1.2}};
 
-SCREENS.pin={enter(){this.buf='';this.bad=0;this.ok=0;musicPlay(0)},
+SCREENS.pin={enter(){typedDigit=null;typedDel=false;this.buf='';this.bad=0;this.ok=0;musicPlay(0)},
  update(dt){if(this.ok>0){this.ok-=dt;if(this.ok<=0){S.dev=1;save();toast('DEV MODE ON','Every level unlocked','ach');go('menu')}return}
   if(this.bad>0)this.bad-=dt;
   if(typedDigit!=null){if(this.buf.length<4){this.buf+=typedDigit;sfx('click')}typedDigit=null;if(this.buf.length==4)this.check()}
+  if(typedDel){typedDel=false;if(this.buf.length){this.buf=this.buf.slice(0,-1);sfx('click')}return}
   uiNav(this);if(pressed.ESC)go('settings')},
  check(){if(this.buf=='5852'){sfx('ach');this.ok=0.9}else{sfx('no');this.bad=0.6;this.buf='';if(S.set.shake)this.shake=6}},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('DEV MODE');
@@ -1284,7 +1286,7 @@ function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
  if(touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
  }catch(e){console.error(e)}
- for(const k in pressed)delete pressed[k];mouse.click=false;
+ for(const k in pressed)delete pressed[k];mouse.click=false;typedDigit=null;typedDel=false;
  requestAnimationFrame(frame)}
 go('title');requestAnimationFrame(frame);
 </script>
