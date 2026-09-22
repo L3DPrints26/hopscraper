@@ -22,7 +22,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-104000'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-110500'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -175,6 +175,12 @@ function mpos(e){const r=cv.getBoundingClientRect();mouse.x=(e.clientX-r.left)/r
 cv.addEventListener('mousemove',e=>{if(performance.now()-lastTouch<800)return;mpos(e);mouse.moved=true});
 cv.addEventListener('mousedown',e=>{if(performance.now()-lastTouch<800)return;mpos(e);audioInit();mouse.click=true;pressed.ANY=true;cv.focus()});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
+// raw pointer (mouse, finger or pencil) in game coords, for drag interactions like the menu toy
+const PTR={x:-99,y:-99,down:false,was:false,id:null};
+cv.addEventListener('pointerdown',e=>{const p=tpos(e);PTR.x=p.x;PTR.y=p.y;PTR.down=true;PTR.id=e.pointerId});
+addEventListener('pointermove',e=>{if(PTR.down&&e.pointerId!==PTR.id)return;const p=tpos(e);PTR.x=p.x;PTR.y=p.y});
+for(const ev of['pointerup','pointercancel'])addEventListener(ev,e=>{if(e.pointerId===PTR.id){PTR.down=false;PTR.id=null}});
+addEventListener('blur',()=>{PTR.down=false;PTR.id=null});
 
 // ================= TOUCH (mobile mode) =================
 // left side: floating joystick where you touch, follows your thumb. right side: tap to jump (hold = higher).
@@ -1775,8 +1781,24 @@ SCREENS.title={enter(){musicPlay(0);this.t=0;this.pt=gtime;const hp=gtime/TITLE_
   txt(touchOn()?'TAP TO START':'PRESS ANY KEY',VW/2,478,26,'#fff');
   txt(touchOn()?'Mobile controls':'Arrows / WASD + SPACE',VW/2,512,15,'rgba(255,255,255,.8)')}};
 
-SCREENS.menu={enter(){musicPlay(0);this.vy=0;this.y=0;dailyTix();clubDaily()},
- update(dt){uiNav(this);if(pressed.DEV)go(S.dev?'settings':'pin');this.vy+=1400*dt;this.y+=this.vy*dt;if(this.y>0){this.y=0;this.vy=-rnd(260,380)}if(Math.random()<dt*0.8&&this.y<-20&&this.vy>0&&this.y>-50){this.vy=-300;sfx('air')}},
+SCREENS.menu={enter(){musicPlay(0);if(!this.b)this.b={x:710,y:404,vx:0,vy:0,a:0,va:0,g:false,ox:0,oy:0,sq:0,idle:1.5};dailyTix();clubDaily()},
+ update(dt){uiNav(this);if(pressed.DEV)go(S.dev?'settings':'pin');this.toy(Math.min(dt,1/30))},
+ // the square in the side panel is a toy: grab it (mouse or finger), drag it around, fling it off the walls.
+ // Box = the panel below the Prize Wheel button; he = half-extent of the (possibly rotated) square. Silent on purpose.
+ toy(dt){const b=this.b,he=28*(Math.abs(Math.cos(b.a))+Math.abs(Math.sin(b.a))),L=530+he,R=890-he,T=258+he,F=432-he;
+  if(PTR.down&&!PTR.was&&!b.g&&Math.abs(PTR.x-b.x)<42&&Math.abs(PTR.y-b.y)<42){b.g=true;b.ox=b.x-PTR.x;b.oy=b.y-PTR.y;b.va=0}
+  PTR.was=PTR.down;if(b.g&&!PTR.down)b.g=false;
+  if(b.g){const tx=clamp(PTR.x+b.ox,L,R),ty=clamp(PTR.y+b.oy,T,F);b.vx+=((tx-b.x)/dt-b.vx)*0.5;b.vy+=((ty-b.y)/dt-b.vy)*0.5;b.x=tx;b.y=ty;
+   b.a+=(clamp(b.vx/1200,-0.5,0.5)-b.a)*Math.min(1,10*dt);b.idle=3;b.sq*=Math.max(0,1-10*dt);return}
+  b.vx=clamp(b.vx,-2600,2600);b.vy=clamp(b.vy,-2600,2600);b.vy+=1800*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.a+=b.va*dt;
+  if(b.x<L){b.x=L;b.va-=b.vy*0.004;b.vx=-b.vx*0.6}else if(b.x>R){b.x=R;b.va+=b.vy*0.004;b.vx=-b.vx*0.6}
+  if(b.y<T){b.y=T;b.vy=-b.vy*0.5}
+  if(b.y>F){b.y=F;if(b.vy>150){b.sq=Math.min(0.28,b.vy/2600);b.vy=-b.vy*0.42;b.va+=b.vx*0.006}else b.vy=0}
+  const rest=b.y>=F-0.5&&Math.abs(b.vy)<1;
+  if(rest){b.vx*=Math.max(0,1-7*dt);const k=Math.PI/2,ta=Math.round(b.a/k)*k;b.va+=((ta-b.a)*90-b.va*12)*dt;
+   if(Math.abs(b.vx)<5&&Math.abs(b.va)<0.3&&(b.idle-=dt)<0){b.vy=-rnd(300,400);b.idle=rnd(2,4)}}
+  else b.va*=1-0.8*dt;
+  b.sq*=Math.max(0,1-10*dt)},
  draw(){drawBG(WORLDS[2],gtime*20,0,gtime);txt('HOPSCRAPER',80,82,58,'#ffffff','left');txt('how high can a square go?',84,128,18,'#1e2a52','left',false);
   if(S.club){ctx.fillStyle='#ffd45e';rr(80,96,92,24,12);ctx.fill();crownIcon(96,108,9);txt('CLUB',108,109,14,'#3a1470','left',false)}
   button('play',80,164,300,78,'PLAY',{fs:40,bg:'#7bdc3b',col:'#ffd45e'});
@@ -1784,8 +1806,9 @@ SCREENS.menu={enter(){musicPlay(0);this.vy=0;this.y=0;dailyTix();clubDaily()},
   button('settings',80,322,146,54,'Settings',{fs:20});button('tutorial',234,322,146,54,'Tutorial',{fs:20});
   button('credits',80,396,110,34,'Credits',{fs:15});
   ctx.fillStyle='rgba(15,12,30,.35)';rr(530,150,360,340,24);ctx.fill();
-  const bx=710,by=432;ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.ellipse(bx,by+4,Math.max(20,50+this.y*0.1),8,0,0,7);ctx.fill();
-  drawSq(bx,by+this.y,56,gtime,{face:1,lx:Math.sin(gtime)*0.8,ly:clamp(this.vy/800,-1,1),sy:this.y>-2?0.9:1.05,sx:this.y>-2?1.1:0.96});
+  const b=this.b,up=432-28-b.y;ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.ellipse(b.x,436,Math.max(16,44-up*0.12),8,0,0,7);ctx.fill();
+  ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.a);if(b.g)ctx.scale(1.06,1.06);
+  drawSq(0,28,56,gtime,{face:1,lx:clamp((PTR.x-b.x)/160,-1,1),ly:clamp((PTR.y-b.y)/160,-1,1),sx:1+b.sq,sy:1-b.sq});ctx.restore();
   txt('★ '+totalStars()+' / '+LEVELS.length*3,556,182,22,'#ffd45e','left');gemShape(716,182,10,'#5ff4ff');txt(curTxt(S.bank),732,183,22,'#fff','left');coinIcon(800,182,10,gtime*2);txt(curTxt(S.coins),816,183,22,'#fff','left');
   const sp=S.dev||S.tix>0;button('wheel',550,204,320,48,'',{bg:sp?'#ffe9a8':'#ffffff',draw:(w,h,sel)=>{tixIcon(-128,0,13);txt('Prize Wheel',-104,1,20,'#1d1a2e','left',false);
    txt(sp?'x'+curTxt(S.tix)+(S.tix==1?' ticket':' tickets'):'no tickets',146,1,15,sp?'#c2185b':'#6d6982','right',false);if(sp&&!sel){ctx.globalAlpha=0.5+0.5*Math.sin(gtime*5);ctx.strokeStyle='#ff8fd8';ctx.lineWidth=3;rr(-w/2,-h/2,w,h,12);ctx.stroke();ctx.globalAlpha=1}}});
