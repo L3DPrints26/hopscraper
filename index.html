@@ -22,7 +22,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-150000'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-153000'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -37,10 +37,11 @@ addEventListener('resize',fit);fit();
 const rnd=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,ease=t=>1-Math.pow(1-clamp(t,0,1),3);
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function fmtT(t){if(!isFinite(t)||!t||t<=0)return'--:--';const m=Math.floor(t/60),s=t-m*60;return m+':'+(s<10?'0':'')+s.toFixed(2)}
-function todayStr(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()}
-function todaySeed(){const d=new Date();return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate()}
-// ---- daily refresh countdown (to next LOCAL midnight, matching todayStr/todaySeed) ----
-function msToMidnight(){const d=new Date();const n=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,0,0,0,0);return Math.max(0,n-d)}
+// daily day boundary is UTC so every player gets the same Daily Climb tower on the same day
+function todayStr(){const d=new Date();return d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)+'-'+d.getUTCDate()}
+function todaySeed(){const d=new Date();return d.getUTCFullYear()*10000+(d.getUTCMonth()+1)*100+d.getUTCDate()}
+// ---- daily refresh countdown (to next UTC midnight, matching todayStr/todaySeed) ----
+function msToMidnight(){const d=new Date();const n=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()+1,0,0,0,0);return Math.max(0,n-d.getTime())}
 function fmtCountdown(ms){if(!isFinite(ms)||ms<0)ms=0;const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
  if(h>0)return h+'h '+m+'m';if(m>0)return m+'m '+sc+'s';return sc+'s'}
 // cached so hot draw loops don't rebuild the string every frame; recomputes once per real second
@@ -484,9 +485,10 @@ function storeSections(){const cardsFor=ps=>ps.map(p=>({id:'pr_'+PRODUCTS.indexO
   {id:'bundles',label:'Bundles',cards:cardsFor(PRODUCTS.filter(p=>bonusFlagOf(p)||((p.once||p.cards)&&!p.items)))},
   {id:'packs',label:'Cosmetic Packs',cards:PACKS.map(pk=>({id:'pk_'+pk.id,k:pk})).concat(cardsFor(PRODUCTS.filter(p=>p.items&&!bonusFlagOf(p))))}]}
 function prodOwned(pr){if(pr.type=='sub')return clubOn();const bf=bonusFlagOf(pr);if(bf)return pr.items?(!!S[bf]&&pr.items.every(id=>S.own[id])):!!S[bf];if(pr.items)return pr.items.every(id=>S.own[id]);if(pr.chaos)return !!S.chaos;if(pr.cards)return false;return !!pr.once&&(pr.dbl?!!S.dbl:pr.item?!!S.own[pr.item]:false)}
-// real-money Store tab + Restore only exist in the iOS app (web: hidden, except in Dev Mode). The More Worlds showcase is
-// the one exception: it always lists the paid bonus worlds, and on the web its Buy button explains they're App Store only.
-function storeOn(){return !!window.HopNative||!!S.dev}
+// Owner decision: the web build shows the exact same Store / More Worlds / Restore UI as the app. storeOn() is kept as
+// the single switch; without window.HopNative, Buy/Restore just toast "Purchases open in the app" (see noNativeBuy).
+function storeOn(){return true}
+function noNativeBuy(){sfx('no');toast('Purchases open in the app','Get Hopscraper on the App Store','info')}
 // open a web page (Terms / Privacy): the iOS wrapper's browser if it has one, else a new tab
 function openURL(u){try{if(window.HopNative&&HopNative.openURL){HopNative.openURL(u);return}}catch(e){}try{window.open(u,'_blank','noopener')}catch(e){}}
 // the iOS wrapper replaces this with a real App Store purchase, then calls grantProduct(id, txId)
@@ -505,6 +507,12 @@ function grantProduct(id,txId,isRestore){const pr=PRODUCTS.find(p=>p.id==id);if(
  save();if(isRestore)toast('Restored',pr.n,'info');else{toast('Thank you!',pr.n+' unlocked','ach');sfx('buy')}return true}
 // a Card Pack only goes through if every card in it still fits under CARD_BUY_MAX (the Store says so instead of wasting it)
 function cardPackRoom(pr){return !pr.cards||Object.keys(pr.cards).every(k=>(S.cards[k]||0)+pr.cards[k]<=CARD_BUY_MAX)}
+// Reset Save wipes progress but KEEPS what was paid for (Coin Doubler, Club, Chaos Pass, bonus worlds, bought/won
+// special items, pack skins, stocked cards, delivered transactions) and the daily/weekly claim markers (no re-farming).
+function resetSave(){const o=S,n=defSave();
+ for(const k of['dbl','club','clubExp','chaos','world6','goldworld','monsterworld','txDone','iap','cards','tixDay','dtix','clubDay','clubMonth','clubSpinWeek'])if(o[k]!=null)n[k]=o[k];
+ for(const it of ITEMS)if((it.iap||it.pack)&&o.own[it.id])n.own[it.id]=1;
+ S=n;fixEq()}
 // prize wheel: order = position on the wheel (clockwise from the top)
 const WHEEL=[{n:'25 coins',k:'c',v:25,w:20,col:'#ffc93c'},{n:'2 gems',k:'g',v:2,w:14,col:'#4dabff'},{n:'50 coins',k:'c',v:50,w:18,col:'#ff8f3c'},{n:'+1 ticket',k:'t',v:1,w:12,col:'#ff8fd8'},
  {n:'100 coins',k:'c',v:100,w:12,col:'#7bdc3b'},{n:'5 gems',k:'g',v:5,w:6,col:'#2ee6c5'},{n:'250 coins',k:'c',v:250,w:5,col:'#ff4d6d'},{n:'Mystery Item',k:'s',v:0,w:6,col:'#9b5de5'}];
@@ -600,6 +608,7 @@ function cardTimeMul(){return cardsAllowed()&&G.cardActive=='slowmo'&&G.cardT>0?
 function useCard(type){if(!cardsAllowed())return false;const p=G.player;if(!p||p.dead||G.won)return false;
  if(!S.cards||!(S.cards[type]>0))return false;
  if(G.cardActive)return false; // one active effect at a time — no stacking
+ G.usedCard=1; // paid help: this run's time won't be ranked (see levelWon)
  if(type=='xjump'){S.cards.xjump--;G.xjumpBonus=(G.xjumpBonus||0)+1;p.aj=(p.aj||0)+1;save();
   toast('Extra Jump!','+1 air jump for this level','ach');sfx('ach');burst(p.x+8,p.y+8,'#ffd45e',14,'puff');return true}
  S.cards[type]--;G.cardActive=type;G.cardT=CARD_DUR[type];save();
@@ -700,8 +709,10 @@ function notesFound(){let n=0;for(let i=0;i<NOTES.length;i++)if(S.notes[i])n++;r
 // a note sits a few steps from the spawn, on the way to the exit, on a spot you can walk to
 function placeNote(L){const g=L.g,sx=L.start.x,sy=L.start.y,dir=L.exit.x>=sx?1:-1;
  const empty=(x,y)=>x>0&&y>0&&x<L.W-1&&y<L.H-1&&g[y][x]=='.',floor=(x,y)=>y<L.H&&'#=XcC'.indexOf(g[y][x])>=0;
- for(const d of[4,3,5,2,6]){let ok=true;for(let k=1;k<=d;k++){const x=sx+dir*k;if(!empty(x,sy)||!floor(x,sy+1)){ok=false;break}}if(ok)return{x:(sx+dir*d)*TS+12,y:sy*TS+10}}
- for(const d of[3,2,4]){const x=sx-dir*d;let ok=true;for(let k=1;k<=d;k++){const xx=sx-dir*k;if(!empty(xx,sy)||!floor(xx,sy+1)){ok=false;break}}if(ok)return{x:x*TS+12,y:sy*TS+10}}
+ // never drop the note on a saw/zombie/rover patrol path (incl. its endpoints) - you'd have to touch the saw to read it
+ const onSaw=(x,y)=>(L.movers||[]).some(m=>(m.t=='saw'||m.t=='zom'||m.t=='rov')&&x*TS+12>Math.min(m.ax,m.bx)-30&&x*TS+12<Math.max(m.ax,m.bx)+30&&y*TS+12>Math.min(m.ay,m.by)-30&&y*TS+12<Math.max(m.ay,m.by)+30);
+ for(const d of[4,3,5,2,6]){let ok=!onSaw(sx+dir*d,sy);for(let k=1;k<=d&&ok;k++){const x=sx+dir*k;if(!empty(x,sy)||!floor(x,sy+1)){ok=false;break}}if(ok)return{x:(sx+dir*d)*TS+12,y:sy*TS+10}}
+ for(const d of[3,2,4]){const x=sx-dir*d;let ok=!onSaw(x,sy);for(let k=1;k<=d&&ok;k++){const xx=sx-dir*k;if(!empty(xx,sy)||!floor(xx,sy+1)){ok=false;break}}if(ok)return{x:x*TS+12,y:sy*TS+10}}
  if(empty(sx,sy-2)&&empty(sx,sy-1))return{x:sx*TS+12,y:(sy-2)*TS+12};return{x:sx*TS+12,y:sy*TS+10}}
 function drawNote(n,t){const b=Math.sin(t*2.5)*3,r=Math.sin(t*1.7)*0.12;ctx.save();ctx.translate(n.x,n.y+b);ctx.globalAlpha=0.3;ctx.fillStyle='#fff6d6';ctx.beginPath();ctx.arc(0,0,15+Math.sin(t*4)*1.5,0,7);ctx.fill();ctx.globalAlpha=1;ctx.rotate(r);
  ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(-8,-9,18,21);ctx.fillStyle='#fff3cf';ctx.fillRect(-10,-11,18,21);ctx.fillStyle='#e9d9a6';ctx.beginPath();ctx.moveTo(4,10);ctx.lineTo(8,6);ctx.lineTo(8,10);ctx.fill();
@@ -760,7 +771,7 @@ const LEVELS=[
  r:[['#',1,31,22,2],['#',6,26,5,1],['#',14,22,6,1],['#',3,18,6,1],['#',12,14,5,1],['#',17,9,5,1],['#',4,6,6,1],['>',1,20,1,6],['<',22,10,1,8]]},
 {wd:0,n:'Pointy Business',t:9,s:[2,18],e:[37,18],g:[[11,15],[20,13],[30,15]],tip:'Spikes are bad. You are a square. Squares hate spikes.',
  r:[['#',1,19,38,2],['^',8,18,6,1],['^',18,18,4,1],['^',27,18,6,1],['#',16,1,8,9],['v',16,10,8,1],['#',27,1,8,11],['v',27,12,8,1]]},
-{wd:0,n:'Pass-Through',t:11,s:[2,18],e:[36,15],g:[[6,5],[26,7],[32,11]],tip:'Jump up through thin platforms. Hold DOWN to drop through them.',
+{wd:0,n:'Pass-Through',t:11,s:[2,18],e:[36,15],g:[[6,5],[26,7],[32,11]],tip:'Jump up through thin platforms. Hold DOWN to drop through them.',tipM:'Jump up through thin platforms. Swipe down on the stick to drop through them.',
  r:[['#',1,19,38,2],['#',20,5,2,14],['=',4,15,6,1],['=',10,11,6,1],['=',4,7,6,1],['^',22,18,12,1],['=',24,9,5,1],['=',30,13,5,1],['#',34,16,4,3]]},
 {wd:0,n:'Nooks',t:14,s:[2,18],e:[36,18],g:[[10,12],[19,8],[29,15]],tip:'Gems hide in little nooks. Grab all of them for a star.',
  r:[['#',1,19,38,2],['#',8,8,4,11],['.',9,12,2,3],['.',8,14,1,1],['#',18,4,4,15],['.',19,6,2,3],['.',20,4,1,2],['^',20,8,1,1],['#',28,10,4,9],['.',29,15,2,2],['.',31,16,1,1],['^',13,18,4,1],['^',23,18,4,1]]},
@@ -838,7 +849,7 @@ const LEVELS=[
  r:[['#',1,19,38,2],['#',30,6,9,1],['#',29,1,1,6],['D',29,3,1,3],['#',6,13,4,1],['#',25,10,4,1],['=',21,15,4,1],['=',26,13,4,1],['=',11,16,4,1],['=',8,10,4,1],['v',6,1,20,1]],
  m:[['saw',5,18,26,18,7],['orb',18,11,4,3,1.8]]},
 // ---------- FINALE ----------
-{wd:4,n:'THE TOP',W:32,H:60,t:48,s:[16,56],e:[27,2],g:[[3,53],[27,42],[11,33],[16,19],[15,8]],rise:{d:4,v:1.35},tip:'This is it. Do not look down.',
+{wd:4,n:'THE TOP',W:32,H:60,t:35,s:[16,56],e:[27,2],g:[[3,53],[27,42],[11,33],[16,19],[15,8]],rise:{d:4,v:1.35},tip:'This is it. Do not look down.',
  r:[['#',1,57,30,2],['^',1,56,5,1],['^',26,56,5,1],['=',6,52,5,1],['=',16,50,5,1],['=',24,52,5,1],
   ['#',1,48,24,1],['v',1,49,24,1],['=',24,45,5,1],['=',12,42,5,1],['l',1,44,30,1],['=',2,42,5,1],
   ['#',7,39,24,1],['v',7,40,24,1],
@@ -848,7 +859,7 @@ const LEVELS=[
   ['#',7,11,24,1],['v',7,12,24,1],['=',12,9,5,1],['L',1,6,30,1],['=',18,6,5,1],['#',24,3,6,1]],
  m:[['saw',2,52,29,52,8],['orb',11,34,2,2,2.2],['saw',2,18,29,18,8],['saw',29,13,2,13,8],
   ['rkt',30,17,'L',2.6,'s',0],['rkt',1,14,'R',2.3,'s',1.1],['rkt',30,8,'L',3.4,'h',1.0,1.1]]},
-// ---------- BONUS WORLD 5: ROCKET YARD (unlocks after THE TOP) ----------
+// ---------- BONUS WORLD 5: ROCKET YARD (played after World 4, before THE TOP - see STORY_ORDER) ----------
 // ['rkt',x,y,dir,period,kind,phase,mul]: launcher block. kind 's' = straight shot, 'h' = homing (follows you, slower than you, dies on walls)
 // mul (optional, default 1): speed/aggro multiplier - scales flight speed for both kinds and turn rate for homing. Omit for the classic 5-1/5-2 feel.
 // pt: portal pairs [x1,y1,x2,y2] (tile you stand in). Walk in one, come out the other. Each end stays a dim, uncolored swirl
@@ -1096,7 +1107,7 @@ function genEndless(seed){const R=mulberry(seed);const W=24,H=5200;const r=[],m=
  while(y>14){const d=(H-9-y)/150;const types=['plat','bar','saws','laser','orb','crum','plat'];if(d>0.6)types.push('nz','bar');if(d>1.4)types.push('bar','saws','orb');
   let tp=types[Math.floor(R()*types.length)];if(tp==last&&R()<0.7)tp=tp=='plat'?'bar':'plat';
   // fairness: a bounce pad throws you ~13 tiles up and you can't stop it, so keep ceilings (bars, no-jump zones) out of the next 2 sections
-  if(calm>0){calm--;if(tp=='bar'||tp=='nz')tp='plat'}last=tp;let sh=6;
+  if(calm>0){calm--;if(tp=='bar'||tp=='nz'||tp=='laser'||tp=='saws')tp='plat'}last=tp;let sh=6;
   if(tp=='plat'){sh=5;const n=ri(2,3);for(let i=0;i<n;i++){const w=ri(3,6),x=ri(1,23-w);r.push(['=',x,y-ri(0,3),w,1])}
    if(R()<0.3+d*0.2){const w=ri(3,5),x=ri(1,23-w);r.push(['#',x,y-1,w,1]);r.push(['^',x+1,y-2,w-2,1])}}
   else if(tp=='bar'){sh=7;const yb=y-3,gw=R()<0.3+d*0.15?3:4,gx=ri(1,23-gw);if(gx>1)r.push(['#',1,yb,gx-1,1]);if(gx+gw<23)r.push(['#',gx+gw,yb,23-(gx+gw),1]);
@@ -1126,8 +1137,8 @@ function genEndless(seed){const R=mulberry(seed);const W=24,H=5200;const r=[],m=
 // ================= SPEED COURSES =================
 const COURSES=[
  {n:'Sunny Sprint',sub:'Long run. Keep your speed up.',seed:9101,diff:0,W:230,wd:0},
- {n:'Mill Run',sub:'Conveyors, saws, moving platforms.',seed:9202,diff:1,W:300,wd:1},
- {n:'Circuit Dash',sub:'Phase blocks, lasers, wall shafts.',seed:9303,diff:2,W:380,wd:2},
+ {n:'Mill Run',sub:'Conveyors, saws, crumbling blocks.',seed:9202,diff:1,W:300,wd:1},
+ {n:'Circuit Dash',sub:'Phase blocks, orbs, wall shafts.',seed:9303,diff:2,W:380,wd:2},
  {n:'Magma Mile',sub:'Everything, on fire. Good luck.',seed:9404,diff:3,W:470,wd:3},
 ];
 function courseGold(i){const c=COURSES[i];return Math.round(c.W/8.2)}
@@ -1810,15 +1821,15 @@ function levelWon(){const i=G.idx,def=LEVELS[i];
  S.st.clears++;
  if(G.mode=='story'){const rec=S.lv[i]||(S.lv[i]={done:0,g:[],t:0,fl:0});const old=starsOf(i);res.first=!rec.done;
   G.L.gems.forEach(gm=>{if(gm.got&&!rec.g[gm.i]){rec.g[gm.i]=1;res.newGems++}});
-  if(!rec.t||G.time<rec.t){res.bestT=!!rec.t;rec.t=G.time}
-  if(G.deaths==0){rec.fl=1;grant('flaw')}
+  res.usedCard=!!G.usedCard;if(!res.usedCard&&(!rec.t||G.time<rec.t)){res.bestT=!!rec.t;rec.t=G.time} // Power Card runs: clear + gems count, time/par/flawless/leaderboard don't
+  if(G.deaths==0&&!res.usedCard){rec.fl=1;grant('flaw')}
   rec.done=1;const now=starsOf(i);res.stars=now;res.newStars=now.map((s,k)=>s&&!old[k]?1:0);
   res.bonus=(res.newStars[1]+res.newStars[2])*2;S.bank+=res.newGems+res.bonus;S.earned+=res.newGems+res.bonus;
   if(i==0)grant('first');
   if(res.first&&i==NL+NB-1)grant('rocket');
   if(res.first&&i<NL-1&&i%8==7){res.worldClear=Math.floor(i/8);grant('w'+(res.worldClear+1));const it=WREW[res.worldClear];if(!S.own[it]){S.own[it]=1;res.reward=it}}
   if(i==NL-1&&!S.finale){res.finaleFirst=true;S.finale=1;grant('top');}
-  if(res.bestT||res.first){const w=i>=NL?4:i<NL-1?Math.floor(i/8):-1,wt=worldTime(w);if(wt)submitScore('world'+(w+1),wt)}submitScore('stars',totalStars())}
+  if(!res.usedCard&&(res.bestT||res.first)){const w=i>=NL?4:i<NL-1?Math.floor(i/8):-1,wt=worldTime(w);if(wt)submitScore('world'+(w+1),wt)}submitScore('stars',totalStars())}
  else if(G.mode=='hard'){const rec=S.hard[i]||(S.hard[i]={done:0,t:0});res.first=!rec.done;if(!rec.t||G.time<rec.t){res.bestT=!!rec.t;rec.t=G.time}
   if(res.first){S.bank+=3;S.earned+=3;res.bonus=3}rec.done=1;if(i==NL-1)grant('hard')}
  // coins: pickups + clear reward + par + no falls
@@ -2767,7 +2778,8 @@ SCREENS.clear={enter(r){this.r=r;this.t=0;this.pl=[0,0,0];FX.length=0;if(r.first
   txt(r.mode=='hard'?'HARD CLEAR!':'LEVEL CLEAR!',VW/2,112,40,r.mode=='hard'?'#ff5c6c':'#ffd45e');txt(lvLabel(r.i)+'  ·  '+LEVELS[r.i].n,VW/2,150,18,'#d8d5ea',undefined,false);
   if(r.mode=='story'){const labs=['Finish','All Gems','Par Time'];for(let s=0;s<3;s++){const x=VW/2+(s-1)*100,y=200;const on=this.pl[s]&&r.stars[s];const pk=on?1+Math.max(0,0.5-(t-0.55-s*0.38))*1.2:1;star5(x,y,26*pk,on?'#ffd45e':'rgba(255,255,255,.12)',on?'#b8860b':'rgba(255,255,255,.2)',3);txt(labs[s],x,240,13,on?'#fff':'#8a87a0',undefined,false);if(on&&r.newStars[s])txt('NEW',x+24,176,12,'#7bdc3b',undefined,false)}}
   else skull(VW/2,205,54,'#ff5c6c');
-  const rows=[['Time',fmtT(r.time)+'   (par '+fmtT(r.par)+')',r.bestT?'NEW BEST':(r.time<=r.par?'UNDER PAR':'')],['Falls',''+r.deaths,r.deaths==0?'FLAWLESS':''],['Jumps',''+r.jumps,'']];if(r.mode=='story')rows.push(['Gems',r.gems.filter(Boolean).length+' / '+r.gt,r.newGems?'+'+r.newGems:'']);
+  const rows=[['Time',fmtT(r.time)+'   (par '+fmtT(r.par)+')',r.usedCard?'NOT RANKED':r.bestT?'NEW BEST':(r.time<=r.par?'UNDER PAR':'')],['Falls',''+r.deaths,r.deaths==0&&!r.usedCard?'FLAWLESS':''],['Jumps',''+r.jumps,'']];if(r.mode=='story')rows.push(['Gems',r.gems.filter(Boolean).length+' / '+r.gt,r.newGems?'+'+r.newGems:'']);
+  if(r.usedCard)txt('Power Card used — time not ranked',VW/2,261,14,'#ffb35c',undefined,false);
   rows.forEach((row,i)=>{const y=280+i*30;if(t<1.4+i*0.12)return;txt(row[0],VW/2-200,y,18,'#b9b6c6','left',false);txt(row[1],VW/2-90,y,18,'#fff','left',false);if(row[2])txt(row[2],VW/2+250,y,15,'#7bdc3b','right',false)});
   if(t>1.9){const cs='+'+r.coins+' coins',gs2=r.bonus?'     +'+r.bonus+' bonus gems':'';ctx.font=`bold 18px ${FONT}`;const w1=ctx.measureText(cs).width,w2=gs2?ctx.measureText(gs2).width:0,x0=VW/2-(w1+w2+22)/2;
    coinIcon(x0+9,403,9,gtime*3);txt(cs,x0+22,404,18,'#ffd45e','left',false);if(gs2)txt(gs2,x0+22+w1,404,18,'#5ff4ff','left',false)}
@@ -3158,7 +3170,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    txt(busy?'Good luck...':free?'Club: 1 free spin this week!':last?'Last win: '+last.txt:clubOn()?'Club free spin used. Back next week':'Club members get 1 free spin a week',760,232,15,busy?'#fff':free||last?'#ffd45e':'#d8c8f0',undefined,false);
    if(!blocked){ctx.globalAlpha=0.3+0.25*Math.sin(gtime*4);ctx.fillStyle='#ffe08a';rr(612,250,296,86,18);ctx.fill();ctx.globalAlpha=1;
     button('spin',620,258,280,70,'',{bg:'#ffc93c',col:'#fff1a8',draw:()=>{if(free)txt('FREE SPIN',0,1,30,'#3a1470','center',false);else{txt('SPIN',-40,1,32,'#3a1470','center',false);gemShape(28,0,13,'#20b8c9');txt(''+PWHEEL_COST,46,1,26,'#3a1470','left',false)}}});
-    button('odds',620,342,136,40,'Odds',{fs:17});button('getgems',764,342,136,40,'Get Gems',{fs:17,bg:'#c8f5cf'})}
+    button('odds',620,342,136,40,'Odds',{fs:17});if(storeOn())button('getgems',764,342,136,40,'Get Gems',{fs:17,bg:'#c8f5cf'});else{txt('Earn gems by',832,354,13,'#f0dcff',undefined,false);txt('clearing levels',832,370,13,'#f0dcff',undefined,false)}}
    else ghostBtn(620,258,280,70,busy?'SPINNING...':'SPIN','rgba(255,255,255,.6)','#5d5c6b',28);
    txt('EXCLUSIVE COSMETICS INSIDE',760,408,14,'#ffd45e',undefined,false);const ptot=PWHEEL.reduce((a,s)=>a+s.w,0);
    PWHEEL.forEach((s,j)=>{const ry=432+j*14.5;ctx.fillStyle=s.col;ctx.beginPath();ctx.arc(618,ry,5,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.2;ctx.stroke();
@@ -3182,7 +3194,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    its.forEach((it2,j)=>{const dx=(j-(its.length-1)/2)*76;if(it2.cat=='c')drawSq(dx,-2+bob,58,gtime+j,{c:it2.id,h:'h_none'});else drawItemPreview(it2,dx,-48+bob,52)})}
   else segIcon(p.conv?{k:'g',v:400}:segs[p.seg],0,-30+bob,70);
   const ln=wrapText(p.txt,340,26);ln.slice(0,2).forEach((l,i)=>otxt(l,0,48+i*28-(ln.length>1?12:0),26,'#fff','rgba(20,6,40,.8)'));
-  if(p.sub)txt(p.sub,0,92,15,p.conv?'#ffd45e':'#d8d5ea','center',false);
+  if(p.sub){const sl=wrapText(p.sub,350,15).slice(0,2);sl.forEach((l,i)=>txt(l,0,(sl.length>1?84:92)+i*19,15,p.conv?'#ffd45e':'#d8d5ea','center',false))}
   ctx.restore();
   if(t>0.55)button('collect',VW/2-110,VH/2+134,220,52,'Awesome!',{fs:24,bg:'#7bdc3b',col:'#b6ff7a'})},
  drawModal(){const md=this.modal,prem=this.prem,a=clamp((gtime-md.t0)/0.18,0,1);
@@ -3193,15 +3205,15 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    txt('You have '+curTxt(S.bank)+' gems. You keep whatever you win.',VW/2,y+148,15,'#d8d5ea',undefined,false);
    button('m_yes',x+30,y+182,220,54,'Spin for '+PWHEEL_COST,{fs:22,bg:'#7bdc3b',col:'#b6ff7a'});button('m_no',x+266,y+182,144,54,'Cancel',{fs:20})}
   else if(md.k=='nogems'){txt('Not enough gems',VW/2,y+44,28,'#fff');gemShape(VW/2,y+96,20,'#5ff4ff');
-   txt('A Premium spin costs '+PWHEEL_COST+' gems. You have '+curTxt(S.bank)+'.',VW/2,y+138,16,'#d8d5ea',undefined,false);txt('Get more in the Store.',VW/2,y+160,16,'#ffd45e',undefined,false);
-   button('m_store',x+30,y+186,220,52,'Open Store',{fs:22,bg:'#ffc93c'});button('m_no',x+266,y+186,144,52,'Not now',{fs:20})}
+   txt('A Premium spin costs '+PWHEEL_COST+' gems. You have '+curTxt(S.bank)+'.',VW/2,y+138,16,'#d8d5ea',undefined,false);txt(storeOn()?'Get more in the Store.':'Earn gems by clearing levels and collecting gems.',VW/2,y+160,16,'#ffd45e',undefined,false);
+   if(storeOn())button('m_store',x+30,y+186,220,52,'Open Store',{fs:22,bg:'#ffc93c'});button('m_no',storeOn()?x+266:VW/2-72,y+186,144,52,storeOn()?'Not now':'OK',{fs:20})}
   else{const segs=prem?PWHEEL:WHEEL;let tot=0;for(const s of segs)tot+=s.w;
    txt(prem?'PREMIUM WHEEL ODDS':'PRIZE WHEEL ODDS',VW/2,y+34,24,prem?'#ffd45e':'#fff');
    segs.forEach((s,i)=>{const ry=y+70+i*33;ctx.fillStyle=i%2?'rgba(255,255,255,.04)':'rgba(255,255,255,.09)';rr(x+20,ry-15,w-40,30,8);ctx.fill();
     ctx.fillStyle=s.col;ctx.beginPath();ctx.arc(x+40,ry,8,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.5;ctx.stroke();
     segIcon(s,x+72,ry,20);txt(s.n,x+96,ry+1,15,'#fff','left',false);
     const pc=s.w/tot*100;txt((Math.round(pc*10)/10)+'%',x+w-34,ry+1,16,'#ffd45e','right',false)});
-   const nt=prem?['Every prize here is exclusive to this wheel — never sold, never found elsewhere.','Already own it? Converts to '+PW_REFUND+' gems (Jackpot: +500 gems too). Never a dud.']:['Mystery Item = a wheel-only skin, hat or trail','(150 coins if you already own them all). Tickets are free.'];
+   const nt=prem?['Skins, hats and trails here are exclusive to this wheel.','Own it already? You get '+PW_REFUND+' gems instead (Jackpot +500).']:['Mystery Item = a wheel-only skin, hat or trail','(150 coins if you already own them all). Tickets are free.'];
    nt.forEach((l,i)=>txt(l,VW/2,y+h-96+i*18,13,'#b9b6c6',undefined,false));
    button('m_no',VW/2-80,y+h-60,160,44,'Close',{fs:20})}},
  onBtn(id){if(id=='back'){if(this.modal){this.modal=null;return}return go(this.from=='shop'?'shop':'menu')}
@@ -3287,19 +3299,21 @@ SCREENS.notes={enter(){this.pg=0},update(){uiNav(this);if(pressed.ESC)go('trophi
   if(this.pg>0)button('prev',VW/2-230,VH-54,140,40,'< Prev',{fs:18});if(this.pg<np-1)button('next',VW/2+90,VH-54,140,40,'Next >',{fs:18});
   txt((this.pg+1)+' / '+np,VW/2,VH-34,16,'#fff')}};
 
-SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(pressed.ESC)go('menu')},
+SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(this.conf&&gtime-this.confT>3)this.conf=0;if(pressed.ESC)go('menu')},
  draw(){drawBG(WORLDS[0],gtime*20,0,gtime);backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
   const GN={auto:'Auto',high:'High Quality',bal:'Balanced',perf:'Performance'};
-  button('music',VW/2-180,96,360,44,'Music: '+on(S.set.music));button('sfx',VW/2-180,148,360,44,'Sound FX: '+on(S.set.sfx));button('shake',VW/2-180,200,360,44,'Screen Shake: '+on(S.set.shake));
+  button('music',VW/2-180,96,360,44,'Music: '+on(S.set.music));button('sfx',VW/2-180,148,360,44,'Sound FX: '+on(S.set.sfx));button('shake',VW/2-180,200,176,44,'Shake: '+on(S.set.shake),{fs:18});button('rm',VW/2+4,200,176,44,'Less Motion: '+on(S.set.rm),{fs:17});
   button('gfx',VW/2-180,252,360,44,'Graphics: '+GN[S.set.gfx||'auto'],{fs:20});
-  button('reset',VW/2-180,304,360,44,this.conf?'Press again to ERASE everything':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?17:20});
+  button('reset',VW/2-180,304,360,44,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?15:20});
+  if(UI.selId=='rm')txt('Reduce Flashing & Motion: softer warning flashes, calmer wheel lights, no screen shake.',VW/2,398,13,'#1f3b2d',undefined,false);
   button('dev',VW/2-180,356,360,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
   (S.set.gfx=='perf'||(!S.set.gfx||S.set.gfx=='auto')&&AUTOLV==2?['Performance: lower resolution, fewer effects. Best for slow laptops.']:S.set.gfx=='high'?['High Quality: sharpest picture. Can lag on slow laptops.']:S.set.gfx=='bal'?['Balanced: slightly softer picture, runs smoother.']:['Auto: starts sharp, lowers itself if the game starts lagging.']).concat(touchOn()?['Mobile mode is on (switch it from the main menu).','Progress saves automatically on this device.']:['Move: Arrows / A D   Jump: SPACE / W / Up   Drop: Down   Pause: ESC','Progress saves automatically in this browser.']).forEach((l,i)=>txt(l,VW/2,420+i*26,15,'#1f3b2d',undefined,false))},
  onBtn(id){if(id=='back')return go('menu');
   if(id=='dev'){if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='music')S.set.music=S.set.music?0:1;if(id=='sfx')S.set.sfx=S.set.sfx?0:1;if(id=='shake')S.set.shake=S.set.shake?0:1;
-  if(id=='reset'){if(!this.conf){this.conf=1;return}S=defSave();this.conf=0;toast('Save erased','Fresh start!','info')}else this.conf=0;applyVol();save()}};
+  if(id=='rm')S.set.rm=S.set.rm?0:1;
+  if(id=='reset'){if(!this.conf){this.conf=1;this.confT=gtime;return}resetSave();this.conf=0;toast('Progress erased','Purchases were kept','info')}else this.conf=0;applyVol();save()}};
 
 // ================= STUDIO INTRO (GamerCrafter) =================
 // Plays once at boot: a 3D controller whooshes past the camera, swings back and slams into place,
