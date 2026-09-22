@@ -22,7 +22,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-124500'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-125500'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -1796,10 +1796,10 @@ SCREENS.menu={enter(){musicPlay(0);if(!this.b)this.b={x:710,y:404,vx:0,vy:0,a:0,
  // the square in the side panel is a toy: grab it (mouse or finger), drag it around, fling it off the walls.
  // Box = the panel below the Prize Wheel button; he = half-extent of the (possibly rotated) square. Silent on purpose.
  toy(dt){const b=this.b,he=28*(Math.abs(Math.cos(b.a))+Math.abs(Math.sin(b.a))),L=530+he,R=890-he,T=258+he,F=432-he;
-  if(PTR.down&&!PTR.was&&!b.g&&Math.abs(PTR.x-b.x)<42&&Math.abs(PTR.y-b.y)<42){b.g=true;b.ox=b.x-PTR.x;b.oy=b.y-PTR.y;b.va=0}
+  if(PTR.down&&!PTR.was&&!b.g&&Math.abs(PTR.x-b.x)<42&&Math.abs(PTR.y-b.y)<42){b.g=true;b.ox=b.x-PTR.x;b.oy=b.y-PTR.y;b.va=0;b.ga=b.a}
   PTR.was=PTR.down;if(b.g&&!PTR.down)b.g=false;
   if(b.g){const tx=clamp(PTR.x+b.ox,L,R),ty=clamp(PTR.y+b.oy,T,F);b.vx+=((tx-b.x)/dt-b.vx)*0.5;b.vy+=((ty-b.y)/dt-b.vy)*0.5;b.x=tx;b.y=ty;
-   b.a+=(clamp(b.vx/1200,-0.5,0.5)-b.a)*Math.min(1,10*dt);b.idle=3;b.sq*=Math.max(0,1-10*dt);return}
+   b.a+=((b.ga||0)+clamp(b.vx/1200,-0.5,0.5)-b.a)*Math.min(1,10*dt);b.idle=3;b.sq*=Math.max(0,1-10*dt);return}
   // gravity points down, or wherever the phone is tilted once motion access is on
   const tl=TILT.on&&touchOn(),gx=tl?TILT.gx*1800:0,gy=tl?TILT.gy*1800:1800;
   b.vx=clamp(b.vx,-2600,2600);b.vy=clamp(b.vy,-2600,2600);b.vx+=gx*dt;b.vy+=gy*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.a+=b.va*dt;
