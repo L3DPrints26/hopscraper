@@ -4,7 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>HOPSCRAPER</title>
-<meta name="description" content="A platformer about a square that jumps. 41 levels, speed courses, endless and a daily climb.">
+<meta name="description" content="A platformer about a square that jumps. Dozens of hand-built levels, speed courses, endless mode and a daily climb.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="HOPSCRAPER">
+<meta property="og:description" content="A platformer about a square that jumps. How high can a square go?">
+<meta property="og:image" content="https://l3dprints26.github.io/hopscraper/icon-512.png">
+<meta property="og:url" content="https://l3dprints26.github.io/hopscraper/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="HOPSCRAPER">
+<meta name="twitter:description" content="A platformer about a square that jumps. How high can a square go?">
+<meta name="twitter:image" content="https://l3dprints26.github.io/hopscraper/icon-512.png">
 <meta name="theme-color" content="#0e0b1c">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -19,10 +28,11 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 </style>
 </head>
 <body>
+<noscript><p style="color:#fff;font:18px/1.5 'Trebuchet MS',sans-serif;text-align:center;padding:40px 16px">HOPSCRAPER needs JavaScript to run. Please turn it on and reload the page.</p></noscript>
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-153000'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-154500'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -757,7 +767,7 @@ const ACH=[
  {id:'demon',n:'Speed Demon',d:'Marathon in under 12 minutes'},
  {id:'ironman',n:'Iron Square',d:'Finish the Hard Marathon'},
  {id:'shop',n:'Dressed Up',d:'Buy something in the shop'},
- {id:'notes',n:'Pen Pal',d:'Find all 33 hidden notes'},
+ {id:'notes',n:'Pen Pal',d:'Find all '+NOTES.length+' hidden notes'},
  {id:'rocket',n:'Rocket Scientist',d:'Clear the Rocket Yard'},
 ];
 
@@ -1002,7 +1012,7 @@ const STORY_ORDER=[...Array(NL-1).keys(),...[...Array(NB).keys()].map(k=>NL+k),N
 function nextOf(i){const k=STORY_ORDER.indexOf(i);return k>=0&&k<STORY_ORDER.length-1?STORY_ORDER[k+1]:-1}
 function prevOf(i){const k=STORY_ORDER.indexOf(i);return k>0?STORY_ORDER[k-1]:-1}
 // coin spots per level (tile x,y where you can stand; checked reachable by the physics bot)
-const COINS=[[[38,18],[4,18],[21,12],[15,18],[26,18]],[[21,8],[1,30],[22,30],[4,5],[8,17]],[[35,18],[4,18],[17,18],[26,18],[22,18]],[[38,18],[4,6],[19,18],[21,4],[6,18]],[[38,18],[4,18],[21,3],[22,18],[9,7]],[[68,18],[4,18],[36,18],[54,8],[19,10]],[[34,15],[4,18],[16,6],[23,15],[12,18]],[[38,18],[3,7],[22,1],[13,18],[28,11]],[[34,9],[4,18],[21,18],[31,18],[12,18]],[[35,18],[4,18],[19,18],[26,12],[10,14]],[[35,18],[4,18],[22,14],[15,12],[28,11]],[[35,18],[4,18],[19,10],[25,18],[15,18]],[[10,2],[22,36],[3,24],[19,19],[8,36]],[[67,18],[4,18],[35,18],[47,6],[19,18]],[[39,13],[4,18],[24,14],[11,14]],[[38,18],[4,13],[22,3],[19,18],[30,8]],[[35,18],[4,18],[19,18],[11,7],[30,8]],[[38,11],[3,5],[19,14],[6,18],[29,18]],[[5,18]],[[35,18],[4,18],[19,8],[24,18],[14,18]],[[37,9],[1,6],[18,18],[24,6],[5,18]],[[4,14]],[[13,3],[1,34],[18,34],[10,17],[1,7]],[[38,18],[4,18],[22,6],[17,18],[10,8]],[[35,18],[4,18],[20,14],[12,15],[29,15]],[[16,2],[1,40],[26,26],[3,19],[18,40]],[[10,18],[4,18],[7,18]],[[38,18],[1,3],[23,3],[11,18],[24,18]],[[32,13],[7,13],[19,13],[13,11],[25,11]],[[13,21],[26,36],[7,36],[22,21],[16,36]],[[54,15],[14,14],[32,14],[23,15],[46,14]],[[1,18],[38,5],[22,18],[11,9],[38,18]],[[1,47],[28,51],[13,56],[18,47],[9,47]],[[38,13],[4,18],[21,18],[30,18],[12,18]],[[35,18],[4,18],[19,18],[11,18],[26,18]],[[32,6],[4,18],[21,18],[32,18],[12,18]],[[38,10],[1,18],[18,9],[31,18],[28,9]],[[17,9],[1,30],[22,30],[1,9],[11,21]],[[35,18],[4,18],[19,18],[27,14],[12,18]],[[35,18],[4,18],[21,18],[12,18],[28,18]],[[30,4],[1,24],[23,20],[8,6],[38,24]],
+const COINS=[[[34,18],[4,18],[21,12],[15,18],[26,18]],[[21,8],[1,30],[22,30],[4,5],[8,17]],[[35,18],[4,18],[17,18],[26,18],[22,18]],[[34,15],[4,6],[19,18],[21,4],[6,18]],[[34,18],[4,18],[21,3],[22,18],[9,7]],[[63,18],[4,18],[36,18],[54,8],[19,10]],[[34,15],[4,18],[16,6],[23,15],[12,18]],[[34,14],[3,7],[22,1],[13,18],[28,11]],[[34,9],[4,18],[21,18],[31,18],[12,18]],[[35,18],[4,18],[19,18],[26,12],[10,14]],[[35,18],[4,18],[22,14],[15,12],[28,11]],[[35,18],[4,18],[19,10],[25,18],[15,18]],[[10,2],[22,36],[3,24],[19,19],[8,36]],[[67,18],[4,18],[35,18],[47,6],[19,18]],[[39,13],[4,18],[24,14],[11,14]],[[38,18],[4,13],[22,3],[19,18],[30,8]],[[35,18],[4,18],[19,18],[11,7],[30,8]],[[38,11],[3,5],[19,14],[6,18],[29,18]],[[5,18]],[[35,18],[4,18],[19,8],[24,18],[14,18]],[[37,9],[1,6],[18,18],[24,6],[5,18]],[[4,14]],[[13,3],[1,34],[18,34],[10,17],[1,7]],[[38,18],[4,18],[22,6],[17,18],[10,8]],[[35,18],[4,18],[20,14],[12,15],[29,15]],[[16,2],[1,40],[26,26],[3,19],[18,40]],[[10,18],[4,18],[7,18]],[[38,18],[1,3],[23,3],[11,18],[24,18]],[[32,13],[7,13],[19,13],[13,11],[25,11]],[[13,21],[26,36],[7,36],[22,21],[16,36]],[[54,15],[14,14],[32,14],[23,15],[46,14]],[[1,18],[38,5],[22,18],[11,9],[38,18]],[[1,47],[28,51],[13,56],[18,47],[9,47]],[[38,13],[4,18],[21,18],[30,18],[12,18]],[[35,18],[4,18],[19,18],[11,18],[26,18]],[[32,6],[4,18],[21,18],[32,18],[12,18]],[[38,10],[1,18],[18,9],[31,18],[28,9]],[[17,9],[1,30],[22,30],[1,9],[11,21]],[[35,18],[4,18],[19,18],[27,14],[12,18]],[[35,18],[4,18],[21,18],[12,18],[28,18]],[[30,4],[1,24],[23,20],[8,6],[38,24]],
 [[7,18],[21,18],[27,18],[39,18],[44,18]],[[8,18],[25,18],[35,15],[42,18],[46,13]],
 [[6,18],[22,18],[29,18],[44,14],[9,14]],[[6,20],[21,16],[27,16],[41,16],[47,12]],
 [[8,38],[19,20],[4,29],[8,11],[18,4]],[[6,18],[19,18],[25,18],[40,15],[9,14]],
@@ -1051,7 +1061,8 @@ function buildLevel(def,opt){opt=opt||{};
   // hurt() checks it, life/off-level despawns it. per = seconds between shots once in range, mul = bolt speed multiplier,
   // fph = optional initial fire-timer offset (0..per) so multiple rovers in a level don't all fire in lockstep.
   if(m[0]=='rov'){L.movers.push({t:'rov',ax:MX(m[1])*TS+12,ay:m[2]*TS+12,bx:MX(m[3])*TS+12,by:m[4]*TS+12,sp:m[5]*TS,ph:m[6]||0,
-   per:m[7]||2.2,mul:m[8]||1,ft:m[9]||0,face:1,x:MX(m[1])*TS+12,y:m[2]*TS+12});continue}
+   // a rover patrolling next to the spawn holds fire ~2.5s longer so the first bolt never lands during the intro banner
+   per:m[7]||2.2,mul:m[8]||1,ft:(m[9]||0)-((Math.abs(MX(m[1])-L.start.x)<12&&Math.abs(m[2]-L.start.y)<4)?2.5:0),face:1,x:MX(m[1])*TS+12,y:m[2]*TS+12});continue}
   if(m[0]=='plat'){const w=(m[6]||3)*TS;L.plats.push({ax:(mir?W-1-m[1]-(m[6]||3)+1:m[1])*TS,ay:m[2]*TS+6,bx:(mir?W-1-m[3]-(m[6]||3)+1:m[3])*TS,by:m[4]*TS+6,sp:m[5]*TS,w,h:12,x:0,y:0,dx:0,dy:0});continue}
   // World 8 (Monster Woods) zombie: ['zom',ax,ay,bx,by,sp,ph] - patrols exactly like a 'saw' (same fields, same ping-pong
   // path in updMovers) but with an organic time-warp applied to its stagger instead of the saw's clean mechanical ease -
@@ -1138,7 +1149,7 @@ function genEndless(seed){const R=mulberry(seed);const W=24,H=5200;const r=[],m=
 const COURSES=[
  {n:'Sunny Sprint',sub:'Long run. Keep your speed up.',seed:9101,diff:0,W:230,wd:0},
  {n:'Mill Run',sub:'Conveyors, saws, crumbling blocks.',seed:9202,diff:1,W:300,wd:1},
- {n:'Circuit Dash',sub:'Phase blocks, orbs, wall shafts.',seed:9303,diff:2,W:380,wd:2},
+ {n:'Circuit Dash',sub:'Phase blocks, lava pits, bounce pads.',seed:9303,diff:2,W:380,wd:2},
  {n:'Magma Mile',sub:'Everything, on fire. Good luck.',seed:9404,diff:3,W:470,wd:3},
 ];
 function courseGold(i){const c=COURSES[i];return Math.round(c.W/8.2)}
@@ -1813,8 +1824,10 @@ function grant(id){if(S.ach[id])return;S.ach[id]=1;S.tix++;const a=ACH.find(a=>a
  toast(a.n+'  +1 ticket',its.length?'Unlocked: '+its.map(i=>i.n).join(', '):a.d,'ach');sfx('ach');save()}
 function checkAch(){if(S.st.jumps>=500)grant('fly500');if(S.st.jumps>=5000)grant('fly5k');if(S.st.deaths>=100)grant('die100');if(S.st.deaths>=500)grant('die500');
  if(S.earned>=50)grant('gem50');if(S.earned>=150)grant('gem150');
- let par=0,all=true;for(let i=0;i<LEVELS.length;i++){const s=starsOf(i);if(s[2])par++;if(!(s[0]&&s[1]&&s[2]))all=false}if(par>=10)grant('speedy');if(all)grant('perfect');
- for(let w=0;w<4;w++){let ok=true;for(let i=w*8;i<w*8+8;i++){const s=starsOf(i);if(!(s[0]&&s[1]&&s[2]))ok=false}if(ok)grant('allw')}
+ // Perfectionist = every star in the STORY (Worlds 1-5 + THE TOP) - paid bonus worlds are never required for a trophy
+ let par=0,all=true;for(let i=0;i<LEVELS.length;i++){const s=starsOf(i);if(s[2])par++;if(STORY_ORDER.includes(i)&&!(s[0]&&s[1]&&s[2]))all=false}if(par>=10)grant('speedy');if(all)grant('perfect');
+ // Star Student: any full 8-level world counts - Worlds 1-4, World 5 (Rocket Yard) and every bonus world you own
+ for(const a of[0,8,16,24,NL].concat(BONUS_WORLDS.filter(b=>S[b.flag]||S.dev).map(b=>LEVELS.findIndex(l=>l.wd==b.wd)).filter(x=>x>=0))){let ok=true;for(let i=a;i<a+8&&i<LEVELS.length;i++){const s=starsOf(i);if(!(s[0]&&s[1]&&s[2]))ok=false}if(ok)grant('allw')}
  let h=true;for(let i=0;i<NL;i++)if(!(S.hard[i]&&S.hard[i].done))h=false;if(h)grant('nightmare')}
 function levelWon(){const i=G.idx,def=LEVELS[i];
  const res={i,mode:G.mode,time:G.time,deaths:G.deaths,jumps:G.jumps,par:def.t,gems:G.L.gems.map(g=>g.got),gt:def.g.length,newGems:0,stars:[1,0,0],newStars:[0,0,0],bestT:false,first:false,worldClear:-1,finaleFirst:false,bonus:0,reward:null};
@@ -2492,7 +2505,7 @@ function toast(a,b,ty){toasts.push({a,b,ty,t:0})}
 function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i].t+=dt;if(toasts[i].t>3.6)toasts.splice(i,1)}} // only the 4 visible ones age, the rest wait their turn
 function drawToasts(){toasts.slice(0,4).forEach((o,i)=>{const k=o.t<0.3?ease(o.t/0.3):o.t>3.2?1-(o.t-3.2)/0.4:1;const x=VW-330+(1-k)*360,y=64+i*64;ctx.globalAlpha=clamp(k,0,1);ctx.fillStyle='rgba(20,16,40,.92)';rr(x,y,316,56,12);ctx.fill();ctx.strokeStyle=o.ty=='ach'?'#ffd45e':'#8dd3ff';ctx.lineWidth=2;rr(x,y,316,56,12);ctx.stroke();
  if(o.ty=='ach')star5(x+30,y+28,15,'#ffd45e','#b8860b',2);else{ctx.fillStyle='#8dd3ff';ctx.beginPath();ctx.arc(x+30,y+28,10,0,7);ctx.fill()}
- txt(o.a,x+54,y+19,16,o.ty=='ach'?'#ffd45e':'#fff','left',false);txt(o.b.length>36?o.b.slice(0,35)+'...':o.b,x+54,y+39,13,'#d8d5ea','left',false);ctx.globalAlpha=1})}
+ txt(o.a,x+54,y+19,16,o.ty=='ach'?'#ffd45e':'#fff','left',false);{const bl=wrapText(o.b||'',252,13).slice(0,2);bl.forEach((l,k)=>txt(l,x+54,(bl.length>1?y+34:y+39)+k*15,13,'#d8d5ea','left',false))}ctx.globalAlpha=1})} // subtitle wraps to 2 lines instead of being cut
 function firework(x,y){const hue=rnd(0,360);for(let i=0;i<46;i++){const a=i/46*Math.PI*2,sp=rnd(120,260),l=rnd(0.8,1.4);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l,ml:l,c:`hsl(${hue+rnd(-20,20)},95%,65%)`,s:rnd(2,4),g:160,drag:1.2,sh:'sq'})}sfx('boom')}
 function confetti(n){for(let i=0;i<n;i++){const l=rnd(2,4);FX.push({x:rnd(0,VW),y:rnd(-60,-10),vx:rnd(-40,40),vy:rnd(60,200),l,ml:l,c:`hsl(${rnd(0,360)},90%,62%)`,s:rnd(4,8),g:40,sh:'sq'})}}
 
@@ -2649,13 +2662,13 @@ SCREENS.worlds={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;mus
    if(own||S.dev){if(own)txt('OWNED',x+cw/2,y+184,20,'#7bdc3b');else txt('Unlocked by Dev Mode',x+cw/2,y+184,14,'#7bdc3b',undefined,false);button('wp_'+b.wd,x+20,y+204,cw-40,40,'Play',{fs:20,bg:'#7bdc3b'})}
    if(!own){let yy=own||S.dev?y+262:y+172;bwProducts(b).forEach(p=>{const i=PRODUCTS.indexOf(p);
      txt(p.n,x+14,yy,15,'#fff','left',false);txt(p.p,x+cw-14,yy,16,'#ffd45e','right',false);
-     button('wb_'+i,x+14,yy+12,cw-28,32,window.HopNative?'Buy':'Available in the App Store app',{fs:window.HopNative?18:13,bg:window.HopNative?'#ffd45e':'#e7dcff'});
+     button('wb_'+i,x+14,yy+12,cw-28,32,'Buy',{fs:18,bg:'#ffd45e'});
      const ln=wrapText(bwIncludes(b,p),cw-28,13);ln.slice(0,3).forEach((l,k)=>txt(l,x+14,yy+60+k*16,13,'#d8d5ea','left',false));yy+=60+Math.min(3,ln.length)*16+14})}});
   if(this.mt>0)txt(this.msg,VW/2,VH-18,15,'#ffd45e')},
  onBtn(id){if(id=='back')return go(this.from=='levels'?'levels':'menu');
   if(id.startsWith('wp_')){const wd=+id.slice(3),k=ownedBonusWorlds().findIndex(b=>b.wd==wd);if(k>=0)return go('levels',{tab:5+k});return}
   if(id.startsWith('wb_')){const p=PRODUCTS[+id.slice(3)];if(!p)return;if(prodOwned(p)){this.msg='You already own this';this.mt=1.5;return}
-   if(!buyProduct(p.id)){this.msg='Bonus worlds can be bought in the Hopscraper app on the App Store';this.mt=2.5;sfx('no')}}}};
+   if(!buyProduct(p.id))noNativeBuy()}}};
 SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;let tab=a.tab!=null?a.tab:(this.hard?this.lastH:this.last);
   if(tab==null){tab=0;for(let w=0;w<this.ntab();w++)if(this.tabOk(w))tab=w}if(tab>=this.ntab())tab=0;this.tab=tab;if(!this.tabOk(this.tab))this.tab=0;
   UI.selId=null;const first=this.tf(this.tab);for(let i=first;i<Math.min(LEVELS.length,first+8);i++){if(unlocked(i,this.mode())&&!this.doneLv(i)){UI.selId='lv'+i;break}}if(UI.selId==null)UI.selId='lv'+first;musicPlay(this.hard?4:0)},
@@ -2733,7 +2746,7 @@ SCREENS.courses={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('m
  onBtn(id){if(id=='back')return go('modes');startCourse(+id.slice(1))}};
 
 SCREENS.cdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);if(r.best)confetti(70)},
- update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again')},
+ update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
  draw(){drawWorld();ctx.fillStyle='rgba(12,10,26,.62)';ctx.fillRect(0,0,VW,VH);drawParts(FX);const r=this.r,c=COURSES[r.i],rec=S.course[r.i]||{};
   txt('COURSE COMPLETE',VW/2,80,34,'#ffd45e');txt(c.n,VW/2,118,20,'#d8d5ea',undefined,false);
   txt(fmtT(r.t),VW/2,196,80,'#fff');
@@ -2757,7 +2770,7 @@ SCREENS.chaosPick={enter(a){this.i=a.i;UI.selId=null;musicPlay(0)},
  onBtn(id){if(id=='back')return go('levels',{tab:wdOf(this.i)});if(id.startsWith('m'))return startChaosReplay(this.i,id.slice(1))}};
 
 SCREENS.chaosdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(50)},
- update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again')},
+ update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
  draw(){drawWorld();ctx.fillStyle='rgba(12,10,26,.62)';ctx.fillRect(0,0,VW,VH);drawParts(FX);const r=this.r;
   txt('CHAOS CLEAR!',VW/2,80,34,'#20b8c9');txt(lvLabel(r.i)+'  '+LEVELS[r.i].n,VW/2,118,20,'#d8d5ea',undefined,false);
   if(r.mod)txt(MODN[r.mod],VW/2,160,22,'#ff5c6c');
@@ -2807,20 +2820,20 @@ function drawItemPreview(it,x,y,s){if(!it)return;if(it.cat=='c')drawSq(x,y+s/2,s
   ctx.globalAlpha=1;drawSq(x+s*0.75,y+s/2,s*0.8,gtime,{c:S.eq.c,h:S.eq.h,lx:1})}}
 
 SCREENS.wclear={enter(r){this.r=r;this.t=0;this.fw=0;FX.length=0;musicPlay(7);confetti(120)},
- update(dt){this.t+=dt;this.fw-=dt;if(this.fw<=0){this.fw=rnd(0.35,0.7);firework(rnd(120,VW-120),rnd(80,260))}if(Math.random()<dt*20)confetti(1);updParts(FX,dt);if(this.t>1)uiNav(this)},
+ update(dt){this.t+=dt;this.fw-=dt;if(this.fw<=0){this.fw=rnd(0.35,0.7);firework(rnd(120,VW-120),rnd(80,260))}if(Math.random()<dt*20)confetti(1);updParts(FX,dt);if(this.t>1){uiNav(this);if(pressed.ESC&&SCR===this)this.onBtn()}},
  draw(){const w=clamp(this.r.worldClear|0,0,3),th=WORLDS[w];drawBG(th,gtime*30,0,gtime);drawParts(FX);const k=ease(this.t/0.6);
   ctx.save();ctx.translate(VW/2,120);ctx.scale(0.5+k*0.5,0.5+k*0.5);txt('WORLD CLEAR!',0,0,64,'#ffffff');ctx.restore();
   txt(th.n+' conquered.',VW/2,178,24,'#1d1a2e',undefined,false);
   if(this.t>1.1){const it=ITEMS.find(i=>i.id==(this.r.reward||WREW[w]));const kk=ease((this.t-1.1)/0.4);ctx.save();ctx.translate(VW/2,320);ctx.scale(kk,kk);ctx.fillStyle='rgba(22,18,44,.9)';rr(-170,-100,340,190,20);ctx.fill();ctx.strokeStyle='#ffd45e';ctx.lineWidth=3;rr(-170,-100,340,190,20);ctx.stroke();
    txt('NEW REWARD',0,-74,20,'#ffd45e');drawItemPreview(it,0,-10,46);txt(it.n+(it.cat=='c'?' skin':it.cat=='h'?' hat':' trail'),0,62,20,'#fff');ctx.restore()}
-  if(w<3)txt('Next up: '+WORLDS[w+1].n,VW/2,440,18,'#1d1a2e',undefined,false);else txt('Only one level left. THE TOP.',VW/2,440,18,'#fff',undefined,false);
+  if(w<3)txt('Next up: '+WORLDS[w+1].n,VW/2,440,18,'#1d1a2e',undefined,false);else txt('Next up: '+WORLDS[LEVELS[nextOf(NL-2)]?LEVELS[nextOf(NL-2)].wd:5].n+'. Then THE TOP.',VW/2,440,18,'#fff',undefined,false);
   if(this.t>1)button('go',VW/2-110,462,220,52,'Continue >')},
- onBtn(){go('levels',{tab:this.r.worldClear==3?5:Math.min(4,this.r.worldClear+1)})}};
+ onBtn(){go('levels',{tab:Math.min(4,this.r.worldClear+1)})}}; // tab 4 = World 5 (Rocket Yard), next after World 4
 
 function lerpCol(t){const k=clamp(t/6,0,1);return`rgb(${Math.round(lerp(30,120,k))},${Math.round(lerp(20,60,k))},${Math.round(lerp(80,190,k))})`}
 SCREENS.ending={enter(){this.t=0;this.fw=0;this.cards=0;FX.length=0;musicPlay(7);
-  this.stats=[['Levels cleared',Object.values(S.lv).filter(r=>r.done).length+' / '+NL],['Total jumps',''+S.st.jumps],['Total falls',''+S.st.deaths],['Time played',fmtT(S.st.time)],['Gems earned',''+S.earned],['Stars',totalStars()+' / '+LEVELS.length*3]];
-  this.unl=[['HARD MODE','Mirrored levels, no checkpoints','#ff5c6c'],['MARATHON','All 33 levels. One timer.','#ffd45e'],['CROWN','A hat fit for the top','#ffd700'],['RAINBOW','New skin + trail','#7bdc3b']]},
+  this.stats=[['Levels cleared',STORY_ORDER.filter(i=>S.lv[i]&&S.lv[i].done).length+' / '+STORY_ORDER.length],['Total jumps',''+S.st.jumps],['Total falls',''+S.st.deaths],['Time played',fmtT(S.st.time)],['Gems earned',''+S.earned],['Stars',totalStars()+' / '+LEVELS.length*3]];
+  this.unl=[['HARD MODE','One air jump, no checkpoints','#ff5c6c'],['MARATHON','All '+STORY_ORDER.length+' levels. One timer.','#ffd45e'],['CROWN','A hat fit for the top','#ffd700'],['RAINBOW','New skin + trail','#7bdc3b']]},
  update(dt){this.t+=dt;const t=this.t;this.fw-=dt;if(t>3&&t<16&&this.fw<=0){this.fw=rnd(0.25,0.55);firework(rnd(100,VW-100),rnd(60,300))}updParts(FX,dt);
   if(t>17&&t-17>=this.cards*0.9&&this.cards<this.unl.length){this.cards++;sfx('ach')}
   if(pressed.OK||pressed.J||pressed.ESC||mouse.click){if(t<17)this.t=17;else if(this.cards>=this.unl.length)go('menu')}},
@@ -2837,10 +2850,10 @@ SCREENS.ending={enter(){this.t=0;this.fw=0;this.cards=0;FX.length=0;musicPlay(7)
     else{ctx.translate(VW/2-130+(i-2)*260,390);ctx.scale(k,k);ctx.fillStyle='rgba(22,18,44,.92)';rr(-110,-80,220,160,16);ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=3;rr(-110,-80,220,160,16);ctx.stroke();
      if(i==2)drawSq(0,20,40,gtime,{h:'h_crown'});else drawSq(0,20,40,gtime,{c:'c_rainbow',h:'h_none'});txt(this.unl[i][0],0,-58,20,col);txt(this.unl[i][1],0,56,13,'#fff',undefined,false)}
     ctx.restore()}
-   if(this.cards>=this.unl.length&&Math.sin(gtime*4)>-0.3)txt('Thanks for playing!   Press ENTER',VW/2,VH-24,20,'#fff')}}};
+   if(this.cards>=this.unl.length&&Math.sin(gtime*4)>-0.3)txt(touchOn()?'Thanks for playing!   Tap to continue':'Thanks for playing!   Press ENTER',VW/2,VH-24,20,'#fff')}}};
 
 SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h>0)confetti(80)},
- update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.RST)this.onBtn('again')},
+ update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
  draw(){drawBG(WORLDS[4],gtime*20,this.t*40,gtime);drawParts(FX);const r=this.r,k=ease(this.t/0.5);
   txt(r.daily?'DAILY CLIMB':'ENDLESS',VW/2,70,26,'#b9b6c6');txt('YOU CLIMBED',VW/2,130,30,'#fff');ctx.save();ctx.translate(VW/2,220);ctx.scale(k,k);txt(Math.round(r.h*clamp(this.t,0,1))+'m',0,0,110,'#ffd45e');ctx.restore();
   if(r.best&&r.h>0&&this.t>1)txt('NEW BEST!',VW/2,300,28,'#7bdc3b');else txt('Best: '+r.bestV+'m',VW/2,300,22,'#fff');
@@ -2852,7 +2865,7 @@ SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h
  onBtn(id){if(id=='again')startEndless(this.r.daily);else go('sub',CLIMBS)}};
 
 SCREENS.sdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(100)},
- update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this)},
+ update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);drawParts(FX);const r=this.r;txt(r.hard?'HARD MARATHON COMPLETE':'MARATHON COMPLETE',VW/2,90,38,r.hard?'#ff5c6c':'#ffd45e');txt(fmtT(r.t),VW/2,200,90,'#fff');txt('Falls: '+r.d,VW/2,280,22,'#fff');
   txt(r.best?'NEW RECORD!':'Record: '+fmtT(r.hard?S.hspeedBest:S.speedBest),VW/2,320,24,r.best?'#7bdc3b':'#b9b6c6');if(!r.hard&&r.t<720)txt('Under 12 minutes. SPEED DEMON.',VW/2,356,18,'#ff5c6c');
   if(r.coins){coinIcon(VW/2-70,384,10,gtime*3);txt('+'+r.coins+' coins',VW/2-54,385,20,'#ffd45e','left')}
@@ -2861,11 +2874,11 @@ SCREENS.sdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(100)
 
 SCREENS.modes={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('menu')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('MODES');const f=!!S.finale||!!S.dev,e=worldDone(1),hf=!!S.dev||!!(S.hard[NL-1]&&S.hard[NL-1].done);
-  const M=[['story','STORY','41 levels, 5 worlds, and THE TOP',true,''],
+  const nbw=ownedBonusWorlds().length,M=[['story','STORY',STORY_ORDER.length+' levels, '+Math.round((STORY_ORDER.length-1)/8)+' worlds, and THE TOP'+(nbw?'  (+'+nbw+' bonus)':''),true,''],
    ['courses','SPEED COURSES','4 non-stop courses. Race the clock.',true,''],
    ['climb','CLIMBS','Endless and the daily tower.',e,'Clear World 2 to unlock'],
    ['marathon','MARATHON','Every level in one run. Normal or hard.',f,'Reach THE TOP to unlock'],
-   ['hard','HARD MODE','One air jump. No checkpoints. Brutal modifiers.',f,'Reach THE TOP to unlock']];
+   ['hard','HARD MODE','One air jump. No checkpoints. Faster hazards. A new twist on every level.',f,'Reach THE TOP to unlock']];
   M.forEach((m,i)=>{button(m[0],VW/2-300,104+i*78,600,66,'',{disabled:!m[3],draw:()=>{txt(m[1],-270,-12,26,m[3]?'#1d1a2e':'#5d5c6b','left',false);txt(m[3]?m[2]:m[4],-270,16,15,m[3]?'#3b3752':'#5d5c6b','left',false);
    if(!m[3])lockIcon(250,0,24);else{let rt='';if(m[0]=='climb')rt='Best '+S.endBest+'m';if(m[0]=='marathon')rt='Best '+fmtT(S.speedBest);if(m[0]=='story')rt='★ '+totalStars()+'/'+LEVELS.length*3;if(m[0]=='courses'){let n=0;COURSES.forEach((c,k)=>{if(medalOf(k,(S.course[k]||{}).t)>=0)n++});rt=n+'/4 medals'}if(m[0]=='hard'){let n=0;for(let k=0;k<NL;k++)if(S.hard[k]&&S.hard[k].done)n++;rt=n+'/'+NL}txt(rt,270,0,18,'#1d1a2e','right',false)}}})})},
  onBtn(id){if(id=='back')return go('menu');if(id=='story')return go('levels');if(id=='courses')return go('courses');if(id=='climb')return go('sub',CLIMBS);if(id=='marathon')return go('sub',MARAS);if(id=='hard')return go('levels',{hard:true})}};
@@ -2878,17 +2891,17 @@ SCREENS.sub={enter(cfg){this.cfg=cfg||this.cfg;musicPlay(0)},
   c.items.forEach((it,i)=>{const ok=it.ok();
    button('s'+i,VW/2-300,120+i*96,600,80,'',{disabled:!ok,draw:()=>{
     txt(it.n,-270,-18,26,ok?'#1d1a2e':'#5d5c6b','left',false);
-    txt(ok?it.d:it.lock,-270,12,15,ok?'#3b3752':'#5d5c6b','left',false);
+    txt(ok?(typeof it.d=='function'?it.d():it.d):it.lock,-270,12,15,ok?'#3b3752':'#5d5c6b','left',false);
     if(ok&&it.sub2)txt(it.sub2(),-270,32,12,'#8a2f8a','left',false);
     if(!ok)lockIcon(250,0,24);else if(it.stat)txt(it.stat(),270,0,18,'#1d1a2e','right',false)}})});
   if(c.foot)txt(c.foot,VW/2,VH-26,14,'#c9c6dd',undefined,false)},
  onBtn(id){if(id=='back')return go('modes');const it=this.cfg.items[+id.slice(1)];if(it&&it.ok())it.go()}};
 const CLIMBS={title:'CLIMBS',wd:3,sub:'Go up until the lava gets you.',foot:'Tip: the daily tower is the same for everyone, so compare scores.',items:[
  {n:'ENDLESS',d:'A brand new tower every run. No end.',ok:()=>worldDone(1),lock:'Clear World 2 to unlock',stat:()=>'Best '+S.endBest+'m',go:()=>startEndless(false)},
- {n:'DAILY CLIMB',d:'One tower a day ('+todayStr()+'). Everyone gets the same one.',ok:()=>worldDone(1),lock:'Clear World 2 to unlock',stat:()=>'Today '+(S.daily.d==todayStr()?S.daily.h:0)+'m',sub2:()=>'New tower in '+cdStr(),go:()=>startEndless(true)}]};
+ {n:'DAILY CLIMB',d:()=>'One tower a day ('+todayStr().split('-').map((v,k)=>k?String(v).padStart(2,'0'):v).join('-')+'). Everyone gets the same one.',ok:()=>worldDone(1),lock:'Clear World 2 to unlock',stat:()=>'Today '+(S.daily.d==todayStr()?S.daily.h:0)+'m',sub2:()=>'New tower in '+cdStr(),go:()=>startEndless(true)}]};
 const MARAS={title:'MARATHON',wd:4,sub:'Every level back to back on one timer. No breaks.',foot:'Dying does not stop the clock.',items:[
- {n:'MARATHON',d:'All 33 story levels in one run.',ok:()=>!!S.finale||!!S.dev,lock:'Reach THE TOP to unlock',stat:()=>'Best '+fmtT(S.speedBest),go:()=>startSpeed()},
- {n:'HARD MARATHON',d:'All 33 hard levels, modifiers and all.',ok:()=>!!S.dev||!!(S.hard[NL-1]&&S.hard[NL-1].done),lock:'Clear Hard Mode THE TOP to unlock',stat:()=>'Best '+fmtT(S.hspeedBest),go:()=>startHSpeed()}]};
+ {n:'MARATHON',d:'All '+STORY_ORDER.length+' story levels in one run.',ok:()=>!!S.finale||!!S.dev,lock:'Reach THE TOP to unlock',stat:()=>'Best '+fmtT(S.speedBest),go:()=>startSpeed()},
+ {n:'HARD MARATHON',d:'All '+NL+' hard levels, modifiers and all.',ok:()=>!!S.dev||!!(S.hard[NL-1]&&S.hard[NL-1].done),lock:'Clear Hard Mode THE TOP to unlock',stat:()=>'Best '+fmtT(S.hspeedBest),go:()=>startHSpeed()}]};
 
 // price tag under an item: coins, gems, wheel-only, or lock
 function priceTag(it,x,y,fs){fs=fs||15;const own=!!S.own[it.id],eq=S.eq[it.cat]==it.id;
@@ -3006,8 +3019,8 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=t
    txt(its.length+' skins',740,310,17,'#fff',undefined,false);
    if(packOwned(pk.id))txt('Owned',740,350,24,'#b9b6c6');else{gemShape(716,350,11,'#5ff4ff');txt(''+pk.cost,732,351,26,S.dev||S.bank>=pk.cost?'#7bdc3b':'#ff8a8a','left')}}
   const isSub=pv&&pv.p&&pv.p.type=='sub';
-  if(!isSub){if(this.mt>0)txt(this.msg,740,420,15,'#ffd45e');else if(pv&&pv.p&&!window.HopNative)txt('Real-money items unlock in the App Store version',740,420,13,'rgba(255,255,255,.7)',undefined,false)}
-  if(window.HopNative)button('restore',620,452,240,40,'Restore Purchases',{fs:16})},
+  if(!isSub&&this.mt>0)txt(this.msg,740,420,15,'#ffd45e');
+  button('restore',620,452,240,40,'Restore Purchases',{fs:16})},
  onBtn(id){if(id=='back')return go('menu');if(id=='pick'){const dp=dailyPickItem();if(dp){this.cat=dp.cat;this.sub=subOf(dp);this.pg=0;UI.selId='it_'+dp.id}return}
   if(id.startsWith('tab_')){const nc=id.slice(4);this.cat=nc;this.sub=(SUBCATS[nc]||[['','']])[0][0];this.pg=0;return}
   if(id=='wheel')return go('wheel','shop');if(id=='gopw')return go('wheel',{from:'shop',prem:true});
@@ -3015,12 +3028,12 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=t
   if(id.startsWith('sub_')){this.sub=id.slice(4);this.pg=0;return}
   if(id=='pg_prev'){this.pg=Math.max(0,this.pg-1);return}
   if(id=='pg_next'){this.pg++;return}
-  if(id=='restore'){if(!restorePurchases()){this.msg='Purchases unlock in the App Store version';this.mt=2.5}return}
+  if(id=='restore'){if(!restorePurchases())noNativeBuy();return}
   if(id=='devclub'){setClub(!clubOn());this.msg=clubOn()?'DEV: Club active':'DEV: Club off';this.mt=1.5;return}if(id=='terms')return openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');if(id=='privacy')return openURL('https://l3dprints26.github.io/hopscraper/privacy.html');
   if(id.startsWith('pr_')){const p=PRODUCTS[+id.slice(3)];if(prodOwned(p)){this.msg=p.type=='sub'?'You are already a member':'You already own this';this.mt=1.5;return}
    if(!UI.wasSel){this.msg=touchOn()?'Tap again to buy':'Click again to buy';this.mt=1.5;return}
    if(!cardPackRoom(p)){this.msg='Card stock full (max '+CARD_BUY_MAX+' each). Use some first';this.mt=2.5;sfx('no');return}
-   if(!buyProduct(p.id)){this.msg='Purchases unlock in the App Store version';this.mt=2.5;sfx('no');toast('Coming soon','Unlocks in the App Store version','info')}return}
+   if(!buyProduct(p.id))noNativeBuy();return}
   if(id.startsWith('pk_')){const pk=PACKS.find(p=>'pk_'+p.id==id);if(packOwned(pk.id)){this.msg='You own this pack';this.mt=1.5;return}
    if(!UI.wasSel){this.msg=touchOn()?'Tap again to buy':'Click again to buy';this.mt=1.5;return}
    if(S.dev||S.bank>=pk.cost){if(!S.dev)S.bank-=pk.cost;packItems(pk.id).forEach(it=>S.own[it.id]=1);S.eq.c=packItems(pk.id)[0].id;sfx('buy');confetti(40);grant('shop');save();this.msg='Bought '+pk.n+'!';this.mt=2;return}
@@ -3082,7 +3095,7 @@ function drawWheel(cx,cy,R,segs,rot,prem,hi,mode){const n=segs.length,A=Math.PI*
  // chasing bulbs
  const NB=24,ph=Math.floor(gtime*(mode==1?20:5));
  for(let j=0;j<NB;j++){const a=j/NB*TAU-Math.PI/2,bx=cx+Math.cos(a)*(R+15),by=cy+Math.sin(a)*(R+15);
-  const on=mode==2?Math.floor(gtime*7)%2==0:(((j-ph)%3)+3)%3==0;
+  const on=RM()?j%3==0:mode==2?Math.floor(gtime*7)%2==0:(((j-ph)%3)+3)%3==0;
   if(on){const g=ctx.createRadialGradient(bx,by,0,bx,by,12);g.addColorStop(0,'rgba(255,252,225,1)');g.addColorStop(0.35,prem?'rgba(255,205,80,.75)':'rgba(255,170,220,.6)');g.addColorStop(1,'rgba(255,200,80,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(bx,by,12,0,TAU);ctx.fill();ctx.fillStyle='#fffbe6'}
   else ctx.fillStyle=prem?'#6e4a0c':'#4a3a96';
   ctx.beginPath();ctx.arc(bx,by,4.3,0,TAU);ctx.fill()}
@@ -3270,12 +3283,12 @@ SCREENS.credits={enter(){this.t=0;FX.length=0;musicPlay(7)},
  draw(){drawBG(WORLDS[4],gtime*18,0,gtime);drawParts(FX);backBtn();
   txt('HOPSCRAPER',VW/2,74,52,'#ffd45e');
   ctx.fillStyle='rgba(18,14,40,.82)';rr(VW/2-330,116,660,300,22);ctx.fill();ctx.strokeStyle='#ffd45e';ctx.lineWidth=2;rr(VW/2-330,116,660,300,22);ctx.stroke();
-  txt('DEVELOPER',VW/2,156,17,'#b9b6c6');txt('Indie Developer',VW/2,192,40,'#ffffff');
+  txt('DEVELOPER',VW/2,156,17,'#b9b6c6');txt('GamerCrafter',VW/2,192,40,'#ffffff');
   txt('Design, level design, direction, testing',VW/2,224,15,'#d8d5ea',undefined,false);
   ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(VW/2-260,248);ctx.lineTo(VW/2+260,248);ctx.stroke();
   txt('BUILT WITH',VW/2,274,15,'#b9b6c6');txt('Claude  (Anthropic)',VW/2,302,24,'#8dd3ff');
   txt('Code assistance under the developer’s direction',VW/2,330,14,'#d8d5ea',undefined,false);
-  const st=['33 hand-built levels  ·  4 speed courses  ·  endless mode','Custom physics, synth audio and art, all in one HTML file','Built September 2026'];
+  const st=[LEVELS.length+' hand-built levels  ·  '+COURSES.length+' speed courses  ·  endless mode','Custom physics, synth audio and art, all in one HTML file','Built September 2026'];
   st.forEach((l,i)=>txt(l,VW/2,364+i*22,14,'#9d9ab4',undefined,false));
   drawSq(VW/2,VH-58,44,gtime,{c:'c_dev',h:'h_crown',lx:Math.sin(gtime)});
   button('back2',VW/2-90,VH-40,180,34,'Menu',{fs:16})},
@@ -3312,7 +3325,7 @@ SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(this.conf&&gtime-
   if(id=='dev'){if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='music')S.set.music=S.set.music?0:1;if(id=='sfx')S.set.sfx=S.set.sfx?0:1;if(id=='shake')S.set.shake=S.set.shake?0:1;
-  if(id=='rm')S.set.rm=S.set.rm?0:1;
+  if(id=='rm'){S.set.rm=S.set.rm?0:1;if(S.set.rm)S.set.shake=0}
   if(id=='reset'){if(!this.conf){this.conf=1;this.confT=gtime;return}resetSave();this.conf=0;toast('Progress erased','Purchases were kept','info')}else this.conf=0;applyVol();save()}};
 
 // ================= STUDIO INTRO (GamerCrafter) =================
