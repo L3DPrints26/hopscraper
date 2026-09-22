@@ -6,6 +6,7 @@
 <title>HOPSCRAPER</title>
 <meta name="description" content="A platformer about a square that jumps. 41 levels, speed courses, endless and a daily climb.">
 <meta name="theme-color" content="#0e0b1c">
+<meta name="disabled-adaptations" content="watch">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
@@ -22,7 +23,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-110500'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-113000'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -32,8 +33,18 @@ let KS=1,QUAL=1,fpsEma=0.016,slowT=0,AUTOLV=0;
 // graphics: auto / high / bal / perf. perf renders at lower resolution, which is what actually helps slow laptops
 function gfxLevel(){try{const g=S.set.gfx||'auto';return g=='high'?0:g=='bal'?1:g=='perf'?2:AUTOLV}catch(e){return 0}}
 function applyGfx(){const l=gfxLevel();QUAL=l<2?1:0;SPR.delete('vig0');SPR.delete('vig1');fit();fpsEma=0.016;slowT=0}
-function fit(){const d=Math.min(window.devicePixelRatio||1,[1.5,1,0.7][gfxLevel()]),s=Math.min(innerWidth/VW,innerHeight/VH),cw=Math.floor(VW*s),ch=Math.floor(VH*s);cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.max(1,Math.floor(cw*d));cv.height=Math.max(1,Math.floor(ch*d));KS=cv.width/VW;}
+// Apple Watch (tiny touch screen, or ?watch=1 to test): levels fill the screen (cropped sides) and zoom in on the player,
+// tap anywhere = jump, Digital Crown (page scroll) = move. Menus stay letterboxed so every button is on screen.
+const WATCH=(()=>{try{return/[?&]watch=1/.test(location.search)||((navigator.maxTouchPoints||0)>0&&Math.min(screen.width,screen.height)<=260)}catch(e){return false}})();
+let FITC=0,CRD=0,CRT=-1e9;
+function fit(){const d=Math.min(window.devicePixelRatio||1,[1.5,1,0.7][gfxLevel()]),s=(FITC?Math.max:Math.min)(innerWidth/VW,innerHeight/VH),cw=Math.floor(VW*s),ch=Math.floor(VH*s);cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.max(1,Math.floor(cw*d));cv.height=Math.max(1,Math.floor(ch*d));KS=cv.width/VW;
+ if(WATCH)try{PB.x=FITC?Math.round(VW/2+innerWidth/2/s-30):VW-38}catch(e){}}
 addEventListener('resize',fit);fit();
+// Digital Crown: watchOS turns it into page scrolling, so give the page room to scroll, read which way it moved, and snap back
+if(WATCH){try{const st=document.createElement('style');st.textContent='html,body{overflow-y:scroll!important;height:auto!important}canvas{position:fixed!important}';document.head.appendChild(st);
+ const sp=document.createElement('div');sp.style.cssText='height:40000px;width:1px';document.body.appendChild(sp);const BASE=20000;setTimeout(()=>scrollTo(0,BASE),60);
+ addEventListener('scroll',()=>{const d=scrollY-BASE;if(Math.abs(d)<2)return;CRD=d<0?1:-1;CRT=performance.now();scrollTo(0,BASE)},{passive:true});
+ addEventListener('wheel',e=>{if(!e.deltaY)return;CRD=e.deltaY<0?1:-1;CRT=performance.now()},{passive:true})}catch(e){}}
 const rnd=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,ease=t=>1-Math.pow(1-clamp(t,0,1),3);
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function fmtT(t){if(!isFinite(t)||!t||t<=0)return'--:--';const m=Math.floor(t/60),s=t-m*60;return m+':'+(s<10?'0':'')+s.toFixed(2)}
@@ -206,7 +217,7 @@ cv.addEventListener('touchstart',e=>{e.preventDefault();lastTouch=performance.no
    if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;continue}
    let hitCard=false;for(const cs of cardSlots())if(Math.hypot(p.x-cs.x,p.y-cs.y)<cs.r*1.6){useCard(cs.type);hitCard=true;break}
    if(hitCard)continue;
-   if(p.x<VW*0.45&&!STK){STK={id:t.identifier,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(t.identifier,'stick')}else tp.set(t.identifier,'jump')}
+   if(!WATCH&&p.x<VW*0.45&&!STK){STK={id:t.identifier,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(t.identifier,'stick')}else tp.set(t.identifier,'jump')}
   else if(!uiTouch){uiTouch={id:t.identifier,x:p.x,y:p.y,moved:false};mouse.x=p.x;mouse.y=p.y;mouse.moved=true}}
  tsync()},{passive:false});
 cv.addEventListener('touchmove',e=>{e.preventDefault();lastTouch=performance.now();tReconcile(e.touches);
@@ -1861,7 +1872,8 @@ SCREENS.play={enter(){},
   ambient(dt);updParts(G.parts,dt);if(G.player)updCam(dt);if(G.intro>0)G.intro-=dt;if(G.tipT>0&&G.intro<=0)G.tipT-=dt;G.shake*=Math.pow(0.0005,dt);
   if(G.won){G.winT+=dt;if(G.winT>1.0&&!G.winDone){G.winDone=1;onWinDone();return}}
   if(Math.floor(G.t)!=Math.floor(G.t-dt))checkAch()},
- draw(){drawWorld();drawHUD()}};
+ draw(){if(WATCH){const p=G.player,z=1.6,px=p?p.x+8-G.cam.x:VW/2,py=p?p.y+8-G.cam.y:VH/2;ctx.fillStyle='#0e0b1c';ctx.fillRect(0,0,VW,VH);
+   ctx.save();ctx.translate(VW/2,VH/2);ctx.scale(z,z);ctx.translate(-px,-py);drawWorld();ctx.restore()}else drawWorld();drawHUD()}};
 
 SCREENS.pause={enter(){},
  update(){uiNav(this);if(pressed.ESC)this.onBtn('resume')},
@@ -2554,11 +2566,13 @@ SCREENS.intro={
   const spd=this.st=='gate'?60:this.t<GC_TI?300+2300*Math.min(1,this.t/0.9):40+2300*Math.exp(-(this.t-GC_TI)*5);
   for(const s of GC_ST){s.pz=s.z;s.z-=spd*dt;if(s.z<30)Object.assign(s,gcNewStar(3000))}
   if(this.st=='gate'){if(hit&&this.want<0)this.want=this.gt;if(this.want>=0&&((AC&&AC.state==='running')||this.gt-this.want>0.4))this.begin();return}
-  this.t+=dt;if(!this.bus&&this.t<0.15&&this.skip<0)this.snd();if(this.bus&&AC.state==='running'){const at=AC.currentTime-this.at;this.t+=(at-this.t)*0.1}
+  this.t+=dt;if(!this.bus&&this.t<(this.re?0.4:0.15)&&this.skip<0)this.snd();if(this.bus&&AC.state==='running'){const at=AC.currentTime-this.at;this.t+=(at-this.t)*0.1}
   if(!this.hit&&this.t>=GC_TI){this.hit=true;for(let i=0;i<60;i++){const a=Math.random()*Math.PI*2,v=200+Math.random()*520;
    GC_SP.push({x:VW/2,y:200,vx:Math.cos(a)*v,vy:Math.sin(a)*v*0.7-120,l:0.5+Math.random()*0.55,m:0,c:['#ffd27a','#ffffff','#1db58f','#ffb347'][i%4]})}}
   for(let i=GC_SP.length-1;i>=0;i--){const p=GC_SP[i];p.m+=dt;p.vy+=520*dt;p.vx*=1-dt*1.5;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.m>p.l)GC_SP.splice(i,1)}
-  if(this.skip<0&&this.t>0.35&&hit){this.skip=this.t;if(this.bus)try{this.bus.gain.setTargetAtTime(0,AC.currentTime,0.05)}catch(e){}}
+  // first tap while the browser still has sound locked = turn sound on and replay from the top (so the credit isn't skipped)
+  if(hit&&!this.bus&&!this.re&&AC){this.re=1;this.t=0;this.hit=false;GC_SP.length=0}
+  else if(this.skip<0&&this.t>0.35&&hit){this.skip=this.t;if(this.bus)try{this.bus.gain.setTargetAtTime(0,AC.currentTime,0.05)}catch(e){}}
   if((this.skip>=0&&this.t-this.skip>0.25)||this.t>=GC_TE)this.done()},
  draw(){const t=this.st=='gate'?0:this.t,rm=GC_RM?0.25:1;
   const bg=ctx.createRadialGradient(VW/2,VH*0.4,20,VW/2,VH/2,640);bg.addColorStop(0,'#1c3a43');bg.addColorStop(1,'#07121a');ctx.fillStyle=bg;ctx.fillRect(0,0,VW,VH);
@@ -2612,7 +2626,8 @@ SCREENS.intro={
   if(a>0&&a<0.3){ctx.fillStyle=`rgba(255,248,235,${0.5*rm*(1-a/0.3)})`;ctx.fillRect(0,0,VW,VH)}
   const vg=ctx.createRadialGradient(VW/2,VH/2,VH*0.35,VW/2,VH/2,VH*0.95);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.55)');ctx.fillStyle=vg;ctx.fillRect(0,0,VW,VH);
   let f=t<0.3?1-t/0.3:0;if(t>GC_TH)f=Math.max(f,(t-GC_TH)/(GC_TE-GC_TH));if(this.skip>=0)f=Math.max(f,(t-this.skip)/0.25);
-  if(t>0.6&&t<GC_TH&&this.skip<0){ctx.font=`bold 12px ${FONT}`;ctx.textAlign='right';ctx.fillStyle='rgba(200,225,232,.3)';ctx.fillText((typeof touchOn=='function'&&touchOn())?'tap to skip':'press any key to skip',VW-16,VH-16)}
+  if(t>0.6&&t<GC_TH&&this.skip<0){ctx.font=`bold 12px ${FONT}`;ctx.textAlign='right';const ts=typeof touchOn=='function'&&touchOn(),ns=!this.bus&&!this.re;ctx.fillStyle=ns?'rgba(200,225,232,.6)':'rgba(200,225,232,.3)';
+   ctx.fillText(ns?(ts?'tap for sound':'click for sound'):(ts?'tap to skip':'press any key to skip'),VW-16,VH-16)}
   if(f>0){ctx.fillStyle=`rgba(14,11,28,${Math.min(1,f)})`;ctx.fillRect(0,0,VW,VH)}}
 };
 
@@ -2626,6 +2641,8 @@ function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now
  if(pressed.MUTE){S.set.music=S.set.music?0:1;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
  const updOn=UPD&&(SCR===SCREENS.menu||SCR===SCREENS.title||SCR===SCREENS.levels),UR=SCR===SCREENS.menu?{x:560,y:100,w:320,h:38}:SCR===SCREENS.levels?{x:VW-300,y:20,w:280,h:38}:{x:VW/2-160,y:20,w:320,h:38};
  if(updOn&&mouse.click&&inR(mouse,UR)){mouse.click=false;try{location.reload()}catch(e){}}
+ if(WATCH){const wm=playing()?1:0;if(wm!==FITC){FITC=wm;fit()}
+  if(wm){const on=performance.now()-CRT<260,r=on&&CRD>0,l=on&&CRD<0;if(r&&!keys.R)pressed.R=true;if(l&&!keys.L)pressed.L=true;keys.R=r;keys.L=l}}
  SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(!playing()&&(STK||tp.size))tReset();
@@ -2634,7 +2651,7 @@ function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now
   ctx.strokeStyle=`rgba(255,255,255,${0.4+k*0.6})`;ctx.lineWidth=3;rr(UR.x,UR.y,UR.w,UR.h,UR.h/2);ctx.stroke();txt('Update ready - tap to reload',UR.x+UR.w/2,UR.y+UR.h/2+1,17,'#10240a','center',false)}
  if(SCR!==SCREENS.intro)drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
- if(touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
+ if(!WATCH&&touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
  }catch(e){console.error(e)}
  for(const k in pressed)delete pressed[k];mouse.click=false;typedDigit=null;typedDel=false;
  requestAnimationFrame(frame)}
