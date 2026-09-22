@@ -23,7 +23,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-113000'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-115000'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -35,8 +35,12 @@ function gfxLevel(){try{const g=S.set.gfx||'auto';return g=='high'?0:g=='bal'?1:
 function applyGfx(){const l=gfxLevel();QUAL=l<2?1:0;SPR.delete('vig0');SPR.delete('vig1');fit();fpsEma=0.016;slowT=0}
 // Apple Watch (tiny touch screen, or ?watch=1 to test): levels fill the screen (cropped sides) and zoom in on the player,
 // tap anywhere = jump, Digital Crown (page scroll) = move. Menus stay letterboxed so every button is on screen.
-const WATCH=(()=>{try{return/[?&]watch=1/.test(location.search)||((navigator.maxTouchPoints||0)>0&&Math.min(screen.width,screen.height)<=260)}catch(e){return false}})();
+const WATCH=(()=>{try{return/[?&]watch=1/.test(location.search)||Math.min(screen.width,screen.height)<=260||/watch/i.test(navigator.userAgent)}catch(e){return false}})();
 let FITC=0,CRD=0,CRT=-1e9;
+// ?debug=1 shows what the device reports (screen size, Watch mode, scroll/wheel/touch event counts) to diagnose the Crown
+const DBG=/[?&]debug=1/.test(location.search),DBN={scroll:0,wheel:0,touch:0,key:0};
+if(DBG){addEventListener('scroll',()=>DBN.scroll++,{passive:true,capture:true});addEventListener('wheel',()=>DBN.wheel++,{passive:true});
+ addEventListener('touchstart',()=>DBN.touch++,{passive:true,capture:true});addEventListener('keydown',()=>DBN.key++,true)}
 function fit(){const d=Math.min(window.devicePixelRatio||1,[1.5,1,0.7][gfxLevel()]),s=(FITC?Math.max:Math.min)(innerWidth/VW,innerHeight/VH),cw=Math.floor(VW*s),ch=Math.floor(VH*s);cv.style.width=cw+'px';cv.style.height=ch+'px';cv.width=Math.max(1,Math.floor(cw*d));cv.height=Math.max(1,Math.floor(ch*d));KS=cv.width/VW;
  if(WATCH)try{PB.x=FITC?Math.round(VW/2+innerWidth/2/s-30):VW-38}catch(e){}}
 addEventListener('resize',fit);fit();
@@ -2652,6 +2656,9 @@ function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now
  if(SCR!==SCREENS.intro)drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
  if(!WATCH&&touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
+ if(DBG){const L=['watch '+WATCH+'  screen '+screen.width+'x'+screen.height,'window '+innerWidth+'x'+innerHeight+'  scrollY '+Math.round(scrollY),
+   'scroll '+DBN.scroll+'  wheel '+DBN.wheel+'  touch '+DBN.touch+'  key '+DBN.key,'crown '+(performance.now()-CRT<260?(CRD>0?'FORWARD':'BACK'):'-')];
+  ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(VW/2-230,VH/2-86,460,172);L.forEach((s,i)=>txt(s,VW/2,VH/2-60+i*40,26,'#7bdc3b','center',false))}
  }catch(e){console.error(e)}
  for(const k in pressed)delete pressed[k];mouse.click=false;typedDigit=null;typedDel=false;
  requestAnimationFrame(frame)}
