@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>HOPSCRAPER</title>
+<meta name="description" content="A platformer about a square that jumps. 41 levels, speed courses, endless and a daily climb.">
+<meta name="theme-color" content="#0e0b1c">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hopscraper">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 html,body{margin:0;height:100%;background:#0e0b1c;overflow:hidden;user-select:none;-webkit-user-select:none}
 canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);outline:none;cursor:default}
@@ -13,7 +22,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-102500'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-104000'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -2510,17 +2519,19 @@ function gcSounds(bus,A){
 function gcNewStar(z){return{x:(Math.random()*2-1)*900,y:(Math.random()*2-1)*520,z,pz:z}}
 SCREENS.intro={
  enter(){GC_ST=[];GC_SP=[];for(let i=0;i<150;i++)GC_ST.push(gcNewStar(60+Math.random()*2940));this.gt=0;this.t=0;this.skip=-1;this.want=-1;this.hit=false;this.bus=null;
-  try{audioInit()}catch(e){}this.layout();if(AC&&AC.state==='running')this.begin();else this.st='gate'},
+  try{audioInit();if(AC&&AC.state!=='running')AC.resume().catch(()=>{})}catch(e){}this.layout();this.begin()},
  layout(){ctx.save();ctx.font=GC_FONT;const ws=[...GC_NAME].map(c=>ctx.measureText(c).width),sp=4;this.W=ws.reduce((a,b)=>a+b,0)+sp*(ws.length-1);
   let x=VW/2-this.W/2;this.L=ws.map(w=>{const c=x+w/2;x+=w+sp;return c});ctx.restore()},
- begin(){this.st='run';this.t=0;this.at=0;
-  if(AC&&AC.state==='running'&&sfxGain){try{this.bus=AC.createGain();this.bus.connect(sfxGain);this.at=AC.currentTime+0.05;gcSounds(this.bus,this.at)}catch(e){this.bus=null}}},
+ begin(){this.st='run';this.t=0;this.at=0;this.snd()},
+ // sound only starts if audio is already allowed (iOS app with autoplay on, or a resume that lands in the first moment);
+ // on the web the browser keeps it locked until a tap, so the intro just plays silently
+ snd(){if(this.bus||!(AC&&AC.state==='running'&&sfxGain))return;try{this.bus=AC.createGain();this.bus.connect(sfxGain);this.at=AC.currentTime+0.05-this.t;gcSounds(this.bus,this.at)}catch(e){this.bus=null}},
  done(){if(this.bus){const b=this.bus;this.bus=null;try{b.gain.setTargetAtTime(0,AC.currentTime,0.04);setTimeout(()=>{try{b.disconnect()}catch(e){}},600)}catch(e){}}go('title')},
  update(dt){this.gt+=dt;const hit=pressed.ANY||mouse.click;
   const spd=this.st=='gate'?60:this.t<GC_TI?300+2300*Math.min(1,this.t/0.9):40+2300*Math.exp(-(this.t-GC_TI)*5);
   for(const s of GC_ST){s.pz=s.z;s.z-=spd*dt;if(s.z<30)Object.assign(s,gcNewStar(3000))}
   if(this.st=='gate'){if(hit&&this.want<0)this.want=this.gt;if(this.want>=0&&((AC&&AC.state==='running')||this.gt-this.want>0.4))this.begin();return}
-  this.t+=dt;if(this.bus&&AC.state==='running'){const at=AC.currentTime-this.at;this.t+=(at-this.t)*0.1}
+  this.t+=dt;if(!this.bus&&this.t<0.15&&this.skip<0)this.snd();if(this.bus&&AC.state==='running'){const at=AC.currentTime-this.at;this.t+=(at-this.t)*0.1}
   if(!this.hit&&this.t>=GC_TI){this.hit=true;for(let i=0;i<60;i++){const a=Math.random()*Math.PI*2,v=200+Math.random()*520;
    GC_SP.push({x:VW/2,y:200,vx:Math.cos(a)*v,vy:Math.sin(a)*v*0.7-120,l:0.5+Math.random()*0.55,m:0,c:['#ffd27a','#ffffff','#1db58f','#ffb347'][i%4]})}}
   for(let i=GC_SP.length-1;i>=0;i--){const p=GC_SP[i];p.m+=dt;p.vy+=520*dt;p.vx*=1-dt*1.5;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.m>p.l)GC_SP.splice(i,1)}
