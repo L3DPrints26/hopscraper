@@ -22,7 +22,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-125500'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-131000'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -185,8 +185,11 @@ addEventListener('blur',()=>{PTR.down=false;PTR.id=null});
 // iOS only hands out motion data after a permission prompt, which must come from a tap: asked on the first tap in the toy panel.
 const TILT={on:false,gx:0,gy:1,asked:false};
 function tiltOn(e){if(e.beta==null||e.gamma==null)return;const r=Math.PI/180,be=e.beta*r,ga=e.gamma*r,dx=Math.cos(be)*Math.sin(ga),dy=Math.sin(be);
- let a=(screen.orientation&&screen.orientation.angle!=null)?screen.orientation.angle:(window.orientation||0);a=((a%360)+360)%360;
+ // window.orientation (iOS + Android): 90 = device turned counter-clockwise (top edge on the left). Prefer it over screen.orientation.angle,
+ // whose sign isn't consistent across browsers.
+ let a=typeof window.orientation=='number'?window.orientation:(screen.orientation&&screen.orientation.angle!=null?screen.orientation.angle:0);a=((Math.round(a/90)*90%360)+360)%360;
  let sx=dx,sy=dy;if(a==90){sx=dy;sy=-dx}else if(a==180){sx=-dx;sy=-dy}else if(a==270){sx=-dy;sy=dx}
+ TILT.raw=[e.beta,e.gamma,window.orientation,screen.orientation&&screen.orientation.angle,a];
  TILT.gx+=(sx-TILT.gx)*0.35;TILT.gy+=(sy-TILT.gy)*0.35;TILT.on=true}
 function tiltAsk(){if(TILT.asked)return;TILT.asked=true;try{const D=window.DeviceOrientationEvent;if(!D)return;
  if(typeof D.requestPermission=='function')D.requestPermission().then(s=>{if(s=='granted')addEventListener('deviceorientation',tiltOn)}).catch(()=>{});else addEventListener('deviceorientation',tiltOn)}catch(e){}}
@@ -1828,6 +1831,8 @@ SCREENS.menu={enter(){musicPlay(0);if(!this.b)this.b={x:710,y:404,vx:0,vy:0,a:0,
    txt(sp?'x'+curTxt(S.tix)+(S.tix==1?' ticket':' tickets'):'no tickets',146,1,15,sp?'#c2185b':'#6d6982','right',false);if(sp&&!sel){ctx.globalAlpha=0.5+0.5*Math.sin(gtime*5);ctx.strokeStyle='#ff8fd8';ctx.lineWidth=3;rr(-w/2,-h/2,w,h,12);ctx.stroke();ctx.globalAlpha=1}}});
   txt('Trophies '+Object.keys(S.ach).length+'/'+ACH.length,710,470,15,'#fff');
   if(touchOn()&&navigator.maxTouchPoints>0&&!TILT.on&&!TILT.asked)txt('tap me, then tilt your screen!',710,282,14,'rgba(255,255,255,.6)','center',false);
+  if(/[?&]debug=1/.test(location.search)&&TILT.raw){const r=TILT.raw.map(v=>v==null?'-':Math.round(v));ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(540,300,340,70);
+   txt('beta '+r[0]+'  gamma '+r[1]+'  wo '+r[2]+'  so '+r[3]+'  used '+r[4],710,320,14,'#7bdc3b','center',false);txt('gravity x '+TILT.gx.toFixed(2)+'  y '+TILT.gy.toFixed(2),710,348,16,'#7bdc3b','center',false)}
   button('device',VW-196,18,176,38,touchOn()?'Controls: Mobile':'Controls: Computer',{fs:15});
   if(!touchOn())txt('M = music on/off     ESC = back',VW/2,VH-20,14,'rgba(255,255,255,.75)');
   if(S.dev){ctx.fillStyle='rgba(123,220,59,.9)';rr(VW-120,VH-46,100,26,13);ctx.fill();txt('DEV MODE',VW-70,VH-33,14,'#10240a',undefined,false)}},
