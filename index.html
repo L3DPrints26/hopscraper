@@ -22,7 +22,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-123000'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-124500'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -181,6 +181,16 @@ cv.addEventListener('pointerdown',e=>{const p=tpos(e);PTR.x=p.x;PTR.y=p.y;PTR.do
 addEventListener('pointermove',e=>{if(PTR.down&&e.pointerId!==PTR.id)return;const p=tpos(e);PTR.x=p.x;PTR.y=p.y});
 for(const ev of['pointerup','pointercancel'])addEventListener(ev,e=>{if(e.pointerId===PTR.id){PTR.down=false;PTR.id=null}});
 addEventListener('blur',()=>{PTR.down=false;PTR.id=null});
+// phone tilt -> gravity direction (screen space, length ~1 when held upright) for the menu toy.
+// iOS only hands out motion data after a permission prompt, which must come from a tap: asked on the first tap in the toy panel.
+const TILT={on:false,gx:0,gy:1,asked:false};
+function tiltOn(e){if(e.beta==null||e.gamma==null)return;const r=Math.PI/180,be=e.beta*r,ga=e.gamma*r,dx=Math.cos(be)*Math.sin(ga),dy=Math.sin(be);
+ let a=(screen.orientation&&screen.orientation.angle!=null)?screen.orientation.angle:(window.orientation||0);a=((a%360)+360)%360;
+ let sx=dx,sy=dy;if(a==90){sx=dy;sy=-dx}else if(a==180){sx=-dx;sy=-dy}else if(a==270){sx=-dy;sy=dx}
+ TILT.gx+=(sx-TILT.gx)*0.35;TILT.gy+=(sy-TILT.gy)*0.35;TILT.on=true}
+function tiltAsk(){if(TILT.asked)return;TILT.asked=true;try{const D=window.DeviceOrientationEvent;if(!D)return;
+ if(typeof D.requestPermission=='function')D.requestPermission().then(s=>{if(s=='granted')addEventListener('deviceorientation',tiltOn)}).catch(()=>{});else addEventListener('deviceorientation',tiltOn)}catch(e){}}
+addEventListener('pointerup',e=>{if(!touchOn()||!navigator.maxTouchPoints||TILT.asked||SCR!==SCREENS.menu)return;const p=tpos(e);if(p.x>530&&p.x<890&&p.y>250&&p.y<490)tiltAsk()});
 
 // ================= TOUCH (mobile mode) =================
 // left side: floating joystick where you touch, follows your thumb. right side: tap to jump (hold = higher).
@@ -1790,13 +1800,17 @@ SCREENS.menu={enter(){musicPlay(0);if(!this.b)this.b={x:710,y:404,vx:0,vy:0,a:0,
   PTR.was=PTR.down;if(b.g&&!PTR.down)b.g=false;
   if(b.g){const tx=clamp(PTR.x+b.ox,L,R),ty=clamp(PTR.y+b.oy,T,F);b.vx+=((tx-b.x)/dt-b.vx)*0.5;b.vy+=((ty-b.y)/dt-b.vy)*0.5;b.x=tx;b.y=ty;
    b.a+=(clamp(b.vx/1200,-0.5,0.5)-b.a)*Math.min(1,10*dt);b.idle=3;b.sq*=Math.max(0,1-10*dt);return}
-  b.vx=clamp(b.vx,-2600,2600);b.vy=clamp(b.vy,-2600,2600);b.vy+=1800*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.a+=b.va*dt;
-  if(b.x<L){b.x=L;b.va-=b.vy*0.004;b.vx=-b.vx*0.6}else if(b.x>R){b.x=R;b.va+=b.vy*0.004;b.vx=-b.vx*0.6}
-  if(b.y<T){b.y=T;b.vy=-b.vy*0.5}
+  // gravity points down, or wherever the phone is tilted once motion access is on
+  const tl=TILT.on&&touchOn(),gx=tl?TILT.gx*1800:0,gy=tl?TILT.gy*1800:1800;
+  b.vx=clamp(b.vx,-2600,2600);b.vy=clamp(b.vy,-2600,2600);b.vx+=gx*dt;b.vy+=gy*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.a+=b.va*dt;
+  if(b.x<L){b.x=L;b.va-=b.vy*0.004;b.vx=b.vx<-150?-b.vx*0.5:0}else if(b.x>R){b.x=R;b.va+=b.vy*0.004;b.vx=b.vx>150?-b.vx*0.5:0}
+  if(b.y<T){b.y=T;b.vy=b.vy<-150?-b.vy*0.45:0}
   if(b.y>F){b.y=F;if(b.vy>150){b.sq=Math.min(0.28,b.vy/2600);b.vy=-b.vy*0.42;b.va+=b.vx*0.006}else b.vy=0}
-  const rest=b.y>=F-0.5&&Math.abs(b.vy)<1;
-  if(rest){b.vx*=Math.max(0,1-7*dt);const k=Math.PI/2,ta=Math.round(b.a/k)*k;b.va+=((ta-b.a)*90-b.va*12)*dt;
-   if(Math.abs(b.vx)<5&&Math.abs(b.va)<0.3&&(b.idle-=dt)<0){b.vy=-rnd(300,400);b.idle=rnd(2,4)}}
+  const onY=(gy>0&&b.y>=F-0.5)||(gy<0&&b.y<=T+0.5),onX=(gx>0&&b.x>=R-0.5)||(gx<0&&b.x<=L+0.5),fr=tl?2.5:7;
+  if(onY&&Math.abs(b.vy)<1)b.vx*=Math.max(0,1-fr*dt);if(onX&&Math.abs(b.vx)<1)b.vy*=Math.max(0,1-fr*dt);
+  const rest=(onY&&Math.abs(b.vy)<1)||(onX&&Math.abs(b.vx)<1);
+  if(rest){const k=Math.PI/2,ta=Math.round(b.a/k)*k;b.va+=((ta-b.a)*90-b.va*12)*dt;
+   if(!tl&&Math.abs(b.vx)<5&&Math.abs(b.va)<0.3&&(b.idle-=dt)<0){b.vy=-rnd(300,400);b.idle=rnd(2,4)}}
   else b.va*=1-0.8*dt;
   b.sq*=Math.max(0,1-10*dt)},
  draw(){drawBG(WORLDS[2],gtime*20,0,gtime);txt('HOPSCRAPER',80,82,58,'#ffffff','left');txt('how high can a square go?',84,128,18,'#1e2a52','left',false);
@@ -1813,6 +1827,7 @@ SCREENS.menu={enter(){musicPlay(0);if(!this.b)this.b={x:710,y:404,vx:0,vy:0,a:0,
   const sp=S.dev||S.tix>0;button('wheel',550,204,320,48,'',{bg:sp?'#ffe9a8':'#ffffff',draw:(w,h,sel)=>{tixIcon(-128,0,13);txt('Prize Wheel',-104,1,20,'#1d1a2e','left',false);
    txt(sp?'x'+curTxt(S.tix)+(S.tix==1?' ticket':' tickets'):'no tickets',146,1,15,sp?'#c2185b':'#6d6982','right',false);if(sp&&!sel){ctx.globalAlpha=0.5+0.5*Math.sin(gtime*5);ctx.strokeStyle='#ff8fd8';ctx.lineWidth=3;rr(-w/2,-h/2,w,h,12);ctx.stroke();ctx.globalAlpha=1}}});
   txt('Trophies '+Object.keys(S.ach).length+'/'+ACH.length,710,470,15,'#fff');
+  if(touchOn()&&navigator.maxTouchPoints>0&&!TILT.on&&!TILT.asked)txt('tap me, then tilt your screen!',710,282,14,'rgba(255,255,255,.6)','center',false);
   button('device',VW-196,18,176,38,touchOn()?'Controls: Mobile':'Controls: Computer',{fs:15});
   if(!touchOn())txt('M = music on/off     ESC = back',VW/2,VH-20,14,'rgba(255,255,255,.75)');
   if(S.dev){ctx.fillStyle='rgba(123,220,59,.9)';rr(VW-120,VH-46,100,26,13);ctx.fill();txt('DEV MODE',VW-70,VH-33,14,'#10240a',undefined,false)}},
