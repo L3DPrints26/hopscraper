@@ -13,7 +13,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-083942'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-102500'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -2413,6 +2413,175 @@ SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(pressed.ESC)go('m
   if(id=='music')S.set.music=S.set.music?0:1;if(id=='sfx')S.set.sfx=S.set.sfx?0:1;if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='reset'){if(!this.conf){this.conf=1;return}S=defSave();this.conf=0;toast('Save erased','Fresh start!','info')}else this.conf=0;applyVol();save()}};
 
+// ================= STUDIO INTRO (GamerCrafter) =================
+// Plays once at boot: a 3D controller whooshes past the camera, swings back and slams into place,
+// GAMERCRAFTER waves out letter by letter, "A GAME BY" pops in, a shine sweeps it, then fades to the title.
+// On the web the browser blocks sound until a click/tap/key, so a quiet "click to start" gate comes first
+// whenever audio isn't already running (the iOS wrapper can allow autoplay and skip it). Any input skips.
+const GC_F=600,GC_NAME='GAMERCRAFTER',GC_FONT='800 58px "Segoe UI","Helvetica Neue",Arial,sans-serif',GC_SUBFONT=`bold 16px ${FONT}`;
+const GC_TA0=0.25,GC_TA1=1.02,GC_TB0=1.1,GC_TI=1.52,GC_TL=1.66,GC_LS=0.052,GC_LD=0.26,GC_TW=2.5,GC_TU=2.52,GC_TG=2.72,GC_TSC=2.95,GC_TS=3.05,GC_TH=4.15,GC_TE=4.5;
+const GC_PENT=[0,2,4,7,9,12,14,16,19,21,24,26];
+// controller silhouette (body + both bumpers), traced from the GamerCrafter controller logo; about 215 x 140 units
+const GC_SHAPE=(()=>{const p=new Path2D();
+ p.moveTo(0,-68.3);p.quadraticCurveTo(21.7,-67.9,38.3,-65.2);p.lineTo(43.8,-63.5);p.lineTo(73.7,-58.3);p.quadraticCurveTo(80.4,-56.3,83.3,-51.9);
+ p.bezierCurveTo(94.8,-31.7,104.4,6.7,107.3,37.5);p.bezierCurveTo(108.3,56.7,96.7,69.2,83.3,69.8);p.quadraticCurveTo(79.4,69.6,77.5,66.7);
+ p.bezierCurveTo(69.8,54.8,58.3,26,48.7,18.7);p.quadraticCurveTo(45.2,16.7,41.9,16.7);p.quadraticCurveTo(31.3,20.2,21.7,15.6);p.lineTo(0,15.2);
+ p.lineTo(-21.7,15.6);p.quadraticCurveTo(-31.3,20.2,-41.9,16.7);p.quadraticCurveTo(-45.2,16.7,-48.7,18.7);p.bezierCurveTo(-58.3,26,-69.8,54.8,-77.5,66.7);
+ p.quadraticCurveTo(-79.4,69.6,-83.3,69.8);p.bezierCurveTo(-96.7,69.2,-108.3,56.7,-107.3,37.5);p.bezierCurveTo(-104.4,6.7,-94.8,-31.7,-83.3,-51.9);
+ p.quadraticCurveTo(-80.4,-56.3,-73.7,-58.3);p.lineTo(-43.8,-63.5);p.lineTo(-38.3,-65.2);p.quadraticCurveTo(-21.7,-67.9,0,-68.3);p.closePath();
+ for(const s of[1,-1]){p.moveTo(49*s,-65.6);p.quadraticCurveTo(50*s,-70.2,55*s,-70.3);p.quadraticCurveTo(70*s,-69,76.5*s,-64.5);p.quadraticCurveTo(78.6*s,-62.6,77*s,-60.6);
+  p.lineTo(50.6*s,-64.6);p.quadraticCurveTo(48.8*s,-64.8,49*s,-65.6);p.closePath()}
+ return p})();
+// face details painted on the front: touchpad seam, create/options slots, d-pad, face buttons, sticks, speaker, mic pill
+function gcDetails(){const D='#14212a';ctx.fillStyle=D;ctx.strokeStyle=D;ctx.lineCap='round';ctx.lineJoin='round';
+ ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-40.6,-63);ctx.lineTo(-33.4,-31);ctx.quadraticCurveTo(-31,-22.5,-22,-22.5);ctx.lineTo(22,-22.5);ctx.quadraticCurveTo(31,-22.5,33.4,-31);ctx.lineTo(40.6,-63);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(-46,-56.5);ctx.lineTo(-44.6,-50.8);ctx.moveTo(46,-56.5);ctx.lineTo(44.6,-50.8);ctx.stroke();
+ for(let r=0;r<4;r++){ctx.save();ctx.translate(-64.2,-29.8);ctx.rotate(r*Math.PI/2);ctx.beginPath();ctx.moveTo(-5.2,-16.2);ctx.quadraticCurveTo(-5.2,-18,0,-18);ctx.quadraticCurveTo(5.2,-18,5.2,-16.2);
+  ctx.lineTo(5.2,-7.7);ctx.lineTo(0,-2.7);ctx.lineTo(-5.2,-7.7);ctx.closePath();ctx.fill();ctx.restore()}
+ for(const[x,y]of[[64.6,-44.6],[50.2,-30.2],[78.8,-30.2],[64.6,-16.3]]){ctx.beginPath();ctx.arc(x,y,6.9,0,Math.PI*2);ctx.fill()}
+ for(const x of[-36.5,36.5]){ctx.fillStyle=D;ctx.beginPath();ctx.arc(x,-1.5,15.8,0,Math.PI*2);ctx.fill();ctx.fillStyle=GC_FACEG;ctx.beginPath();ctx.arc(x,-1.5,12.4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=D;ctx.beginPath();ctx.arc(x,-1.5,9.8,0,Math.PI*2);ctx.fill()}
+ for(const[x,y]of[[-6.5,-16.9],[-2.2,-16.9],[2.2,-16.9],[6.5,-16.9],[-4.3,-13],[0,-13],[4.3,-13]]){ctx.beginPath();ctx.arc(x,y,1.35,0,Math.PI*2);ctx.fill()}
+ ctx.lineWidth=4.2;ctx.beginPath();ctx.moveTo(-5.2,1);ctx.lineTo(5.2,1);ctx.stroke()}
+let GC_FACEG=null,GC_NB=null,GC_ST=[],GC_SP=[];
+const GC_RM=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}})();
+// Browsers only unlock audio inside a real input event (and touchstart doesn't count), so resume there.
+function gcUnlock(){try{audioInit();if(AC&&AC.state!=='running')AC.resume().catch(()=>{})}catch(e){}}
+['pointerup','touchend','keydown','mousedown'].forEach(ev=>addEventListener(ev,gcUnlock,true));
+function gcEase(k){return 1-Math.pow(1-k,3)}
+function gcRot(yaw,pitch,roll){const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),cr=Math.cos(roll),sr=Math.sin(roll);
+ const ap=(x,y,z)=>{const y1=y*cp-z*sp,z1=y*sp+z*cp;return[x*cy+z1*sy,y1,-x*sy+z1*cy]};
+ return{ex:ap(cr,sr,0),ey:ap(-sr,cr,0),n:ap(0,0,1)}}
+// timeline pose of the controller: {X,Y,Z,yaw,pitch,roll,sz} in camera space, or null when off-screen
+function gcPose(t){
+ if(t<GC_TA0)return null;
+ if(t<GC_TA1){const u=(t-GC_TA0)/(GC_TA1-GC_TA0),e=Math.pow(u,2.3),iz=1/3200+(1/50-1/3200)*e;
+  return{X:-240+380*e,Y:-130+190*e,Z:1/iz,yaw:-0.35+0.9*e,pitch:0.15*Math.sin(u*Math.PI),roll:0.35-0.7*e,sz:1}}
+ if(t<GC_TB0)return null;
+ if(t<GC_TI){const u=(t-GC_TB0)/(GC_TI-GC_TB0),e=u*u,k=1-e,k2=k*k,iz=1/2600+(1/GC_F-1/2600)*e;
+  return{X:-700*Math.pow(k,1.3),Y:-70-420*k2,Z:1/iz,yaw:-1.1*k2,pitch:0.2*k2,roll:0.45*k2,sz:1}}
+ const a=t-GC_TI,s=1-Math.exp(-2*a);
+ return{X:0,Y:-70+3*Math.sin(a*2.2)*s,Z:GC_F,yaw:0.2*Math.sin(a*1.4)*s,pitch:0.06*Math.sin(a*1.1)*s,roll:0.05*Math.exp(-4*a)*Math.sin(10*a),sz:1-0.06*Math.exp(-5*a)*Math.cos(12*a)}}
+function gcScreen(o){return{x:VW/2+GC_F*o.X/o.Z,y:VH/2+GC_F*o.Y/o.Z,s:GC_F/o.Z*(o.sz||1)}}
+// extruded controller: stacked slices projected with per-slice perspective, far to near
+function drawGC(o,alpha,shine){
+ const R=gcRot(o.yaw,o.pitch,o.roll),sz=o.sz||1,D=20*sz,N=Math.min(40,Math.max(10,Math.round(8+2400/o.Z))),list=[];
+ for(let k=0;k<=N;k++){const d=(k/N-0.5)*D,wz=o.Z+R.n[2]*d;if(wz<25)return;list.push([k,o.X+R.n[0]*d,o.Y+R.n[1]*d,wz])}
+ list.sort((a,b)=>b[3]-a[3]);
+ const frontNear=list[list.length-1][0]===0,side=Math.abs(R.n[0])+Math.abs(R.n[1]);
+ if(!GC_FACEG){GC_FACEG=ctx.createLinearGradient(0,-75,0,75);GC_FACEG.addColorStop(0,'#ffffff');GC_FACEG.addColorStop(1,'#d9e2e6')}
+ ctx.save();ctx.globalAlpha=alpha;
+ for(let j=0;j<list.length;j++){const q=list[j],k=q[0],wz=q[3],sc=GC_F/wz*sz;
+  ctx.save();ctx.transform(R.ex[0]*sc,R.ex[1]*sc,R.ey[0]*sc,R.ey[1]*sc,VW/2+GC_F*q[1]/wz,VH/2+GC_F*q[2]/wz);
+  if(j===list.length-1){
+   if(frontNear){ctx.fillStyle=GC_FACEG;ctx.fill(GC_SHAPE,'evenodd');gcDetails();
+    if(shine>0&&shine<1){ctx.clip(GC_SHAPE,'evenodd');const bx=-190+380*shine,g=ctx.createLinearGradient(bx-45,-80,bx+45,80);
+     g.addColorStop(0,'rgba(255,214,150,0)');g.addColorStop(0.5,'rgba(255,238,200,.95)');g.addColorStop(1,'rgba(255,214,150,0)');ctx.fillStyle=g;ctx.fillRect(-110,-85,220,170)}}
+   else{ctx.fillStyle='#aab6bc';ctx.fill(GC_SHAPE,'evenodd')}}
+  else{const f=k/N,l=Math.round(46+62*(frontNear?1-f:f)+30*Math.min(1,side));ctx.fillStyle=`rgb(${l+16},${l+5},${l-6})`;ctx.fill(GC_SHAPE,'evenodd')}
+  ctx.restore()}
+ ctx.restore()}
+// ---- intro audio: everything is scheduled up front on the audio clock, through one bus we can fade on skip
+function gcNoise(){if(!GC_NB){const n=AC.sampleRate*2|0;GC_NB=AC.createBuffer(1,n,AC.sampleRate);const d=GC_NB.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1}return GC_NB}
+function gcOut(bus,at,p0,p1,dur){if(p0==null||!AC.createStereoPanner)return bus;const pn=AC.createStereoPanner();pn.pan.setValueAtTime(p0,at);if(p1!=null)pn.pan.linearRampToValueAtTime(p1,at+dur);pn.connect(bus);return pn}
+function gcOsc(bus,at,type,f0,f1,slide,peak,atk,dur,pan){const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.setValueAtTime(f0,at);if(f1)o.frequency.exponentialRampToValueAtTime(f1,at+slide);
+ g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(peak,at+atk);g.gain.exponentialRampToValueAtTime(0.0001,at+dur);o.connect(g);g.connect(gcOut(bus,at,pan));o.start(at);o.stop(at+dur+0.05)}
+function gcHiss(bus,at,type,f0,f1,q,peak,atk,dur,p0,p1){const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();s.buffer=gcNoise();s.loop=true;f.type=type;f.Q.value=q;
+ f.frequency.setValueAtTime(f0,at);if(f1)f.frequency.exponentialRampToValueAtTime(f1,at+dur*0.85);g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(peak,at+atk);g.gain.exponentialRampToValueAtTime(0.0001,at+dur);
+ s.connect(f);f.connect(g);g.connect(gcOut(bus,at,p0,p1,dur));s.start(at,Math.random()*1.5);s.stop(at+dur+0.05)}
+// airy whoosh: two soft noise layers (body + sheen) that swell toward the pass and trail off, no tonal buzz
+function gcWhoosh(bus,at,dur,p0,p1,vol){const out=gcOut(bus,at,p0,p1,dur+0.3),pk=at+dur*0.78,end=at+dur+0.3;
+ for(const[type,f0,f1,f2,q,v]of[['lowpass',350,1900,450,0.6,1],['bandpass',1800,4200,1500,0.5,0.22]]){
+  const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();s.buffer=gcNoise();s.loop=true;f.type=type;f.Q.value=q;
+  f.frequency.setValueAtTime(f0,at);f.frequency.exponentialRampToValueAtTime(f1,pk);f.frequency.exponentialRampToValueAtTime(f2,end);
+  g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(vol*v*0.35,at+dur*0.45);g.gain.exponentialRampToValueAtTime(vol*v,pk);g.gain.exponentialRampToValueAtTime(0.0001,end);
+  s.connect(f);f.connect(g);g.connect(out);s.start(at,Math.random()*1.5);s.stop(end+0.05)}}
+function gcSounds(bus,A){
+ gcOsc(bus,A+0.1,'sine',55,110,1.4,0.14,1.2,1.5);gcHiss(bus,A+0.2,'highpass',400,5000,0.7,0.05,1.1,1.35);
+ gcWhoosh(bus,A+GC_TA0,GC_TA1-GC_TA0+0.05,-0.7,0.9,0.5);gcWhoosh(bus,A+GC_TB0-0.05,GC_TI-GC_TB0+0.05,-0.8,0,0.38);
+ const I=A+GC_TI;gcOsc(bus,I,'sine',110,55,0.35,0.5,0.02,0.6);gcHiss(bus,I-0.02,'lowpass',1800,300,0.5,0.18,0.02,0.35);
+ gcOsc(bus,I+0.01,'sine',1046.5,0,0,0.08,0.01,1.0);gcOsc(bus,I+0.03,'sine',1568,0,0,0.05,0.01,0.9);
+ for(let i=0;i<GC_NAME.length;i++){const at=A+GC_TL+i*GC_LS+GC_LD,f=523.25*Math.pow(2,GC_PENT[i]/12),pn=-0.5+i/(GC_NAME.length-1);
+  gcOsc(bus,at,'sine',f,0,0,0.2,0.004,0.5,pn);gcOsc(bus,at,'sine',f*2.76,0,0,0.05,0.002,0.16,pn);gcOsc(bus,at,'triangle',f*4.2,0,0,0.02,0.001,0.04,pn)}
+ for(const f of[261.63,392,659.25])gcOsc(bus,A+GC_TU,'triangle',f,0,0,0.035,0.5,1.9);
+ gcOsc(bus,A+GC_TG,'sine',380,900,0.07,0.18,0.004,0.16);gcHiss(bus,A+GC_TG,'highpass',3000,0,1,0.05,0.002,0.04);
+ [2093,2637,3136,3951,4186].forEach((f,i)=>gcOsc(bus,A+GC_TSC+0.1+i*0.055,'sine',f,0,0,0.045,0.004,0.5,-0.4+0.2*i));
+ gcHiss(bus,A+GC_TSC+0.1,'highpass',5000,9000,0.8,0.035,0.2,0.6,-0.6,0.6)}
+function gcNewStar(z){return{x:(Math.random()*2-1)*900,y:(Math.random()*2-1)*520,z,pz:z}}
+SCREENS.intro={
+ enter(){GC_ST=[];GC_SP=[];for(let i=0;i<150;i++)GC_ST.push(gcNewStar(60+Math.random()*2940));this.gt=0;this.t=0;this.skip=-1;this.want=-1;this.hit=false;this.bus=null;
+  try{audioInit()}catch(e){}this.layout();if(AC&&AC.state==='running')this.begin();else this.st='gate'},
+ layout(){ctx.save();ctx.font=GC_FONT;const ws=[...GC_NAME].map(c=>ctx.measureText(c).width),sp=4;this.W=ws.reduce((a,b)=>a+b,0)+sp*(ws.length-1);
+  let x=VW/2-this.W/2;this.L=ws.map(w=>{const c=x+w/2;x+=w+sp;return c});ctx.restore()},
+ begin(){this.st='run';this.t=0;this.at=0;
+  if(AC&&AC.state==='running'&&sfxGain){try{this.bus=AC.createGain();this.bus.connect(sfxGain);this.at=AC.currentTime+0.05;gcSounds(this.bus,this.at)}catch(e){this.bus=null}}},
+ done(){if(this.bus){const b=this.bus;this.bus=null;try{b.gain.setTargetAtTime(0,AC.currentTime,0.04);setTimeout(()=>{try{b.disconnect()}catch(e){}},600)}catch(e){}}go('title')},
+ update(dt){this.gt+=dt;const hit=pressed.ANY||mouse.click;
+  const spd=this.st=='gate'?60:this.t<GC_TI?300+2300*Math.min(1,this.t/0.9):40+2300*Math.exp(-(this.t-GC_TI)*5);
+  for(const s of GC_ST){s.pz=s.z;s.z-=spd*dt;if(s.z<30)Object.assign(s,gcNewStar(3000))}
+  if(this.st=='gate'){if(hit&&this.want<0)this.want=this.gt;if(this.want>=0&&((AC&&AC.state==='running')||this.gt-this.want>0.4))this.begin();return}
+  this.t+=dt;if(this.bus&&AC.state==='running'){const at=AC.currentTime-this.at;this.t+=(at-this.t)*0.1}
+  if(!this.hit&&this.t>=GC_TI){this.hit=true;for(let i=0;i<60;i++){const a=Math.random()*Math.PI*2,v=200+Math.random()*520;
+   GC_SP.push({x:VW/2,y:200,vx:Math.cos(a)*v,vy:Math.sin(a)*v*0.7-120,l:0.5+Math.random()*0.55,m:0,c:['#ffd27a','#ffffff','#1db58f','#ffb347'][i%4]})}}
+  for(let i=GC_SP.length-1;i>=0;i--){const p=GC_SP[i];p.m+=dt;p.vy+=520*dt;p.vx*=1-dt*1.5;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.m>p.l)GC_SP.splice(i,1)}
+  if(this.skip<0&&this.t>0.35&&hit){this.skip=this.t;if(this.bus)try{this.bus.gain.setTargetAtTime(0,AC.currentTime,0.05)}catch(e){}}
+  if((this.skip>=0&&this.t-this.skip>0.25)||this.t>=GC_TE)this.done()},
+ draw(){const t=this.st=='gate'?0:this.t,rm=GC_RM?0.25:1;
+  const bg=ctx.createRadialGradient(VW/2,VH*0.4,20,VW/2,VH/2,640);bg.addColorStop(0,'#1c3a43');bg.addColorStop(1,'#07121a');ctx.fillStyle=bg;ctx.fillRect(0,0,VW,VH);
+  ctx.save();
+  const a=t-GC_TI;if(this.st=='run'&&a>0&&a<0.6){const m=5*Math.exp(-a*8)*rm;ctx.translate((Math.random()*2-1)*m,(Math.random()*2-1)*m)}
+  // warp stars
+  ctx.lineCap='round';for(const s of GC_ST){const x=VW/2+GC_F*s.x/s.z,y=VH/2+GC_F*s.y/s.z,px=VW/2+GC_F*s.x/s.pz,py=VH/2+GC_F*s.y/s.pz,al=Math.min(1,(3000-s.z)/1400)*0.75;
+   ctx.strokeStyle=`rgba(175,225,235,${al})`;ctx.lineWidth=Math.max(0.7,Math.min(3,900/s.z));ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x+0.01,y);ctx.stroke()}
+  if(this.st=='gate'){const k=0.5+0.5*Math.sin(this.gt*2.6);
+   drawGC({X:0,Y:-40,Z:GC_F*1.5,yaw:Math.sin(this.gt*0.9)*0.45,pitch:0.12,roll:0,sz:1},0.22+0.08*k,0);
+   ctx.font=GC_SUBFONT;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=`rgba(200,225,232,${0.45+0.45*k})`;
+   ctx.fillText(((typeof touchOn=='function'&&touchOn())?'TAP':'CLICK').split('').join(' ')+'   T O   S T A R T',VW/2,VH*0.72);ctx.restore();return}
+  // amber glow behind the controller once it lands
+  if(a>0){const g=Math.min(1,a/0.25),r=ctx.createRadialGradient(VW/2,205,10,VW/2,205,260);r.addColorStop(0,`rgba(255,168,70,${0.34*g})`);r.addColorStop(1,'rgba(255,168,70,0)');ctx.fillStyle=r;ctx.fillRect(0,0,VW,VH)}
+  // ground shockwave (flattened ring) and the upright ring
+  if(a>0&&a<0.7){const k=a/0.7,e=gcEase(k);ctx.lineWidth=7*(1-k);ctx.strokeStyle=`rgba(29,181,143,${0.8*(1-k)})`;ctx.beginPath();ctx.ellipse(VW/2,276,30+520*e,(30+520*e)*0.2,0,0,Math.PI*2);ctx.stroke()}
+  if(a>0&&a<0.55){const k=a/0.55,e=gcEase(k);ctx.lineWidth=9*(1-k);ctx.strokeStyle=`rgba(255,226,170,${0.85*(1-k)})`;ctx.beginPath();ctx.arc(VW/2,200,40+300*e,0,Math.PI*2);ctx.stroke()}
+  // controller (+ two motion-blur ghosts on the close pass)
+  const o=gcPose(t);if(o){if(t<GC_TI){const g1=gcPose(t-0.02),g2=gcPose(t-0.04);if(g2)drawGC(g2,0.12,0);if(g1)drawGC(g1,0.25,0)}
+   drawGC(o,1,t>GC_TSC&&t<GC_TSC+0.45?(t-GC_TSC)/0.45:0)}
+  // sparks
+  ctx.lineWidth=2.5;for(const p of GC_SP){ctx.strokeStyle=p.c;ctx.globalAlpha=Math.max(0,1-p.m/p.l);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x-p.vx*0.03,p.y-p.vy*0.03);ctx.stroke()}ctx.globalAlpha=1;
+  // lens-flare line across the impact
+  if(a>0&&a<0.5){const k=a/0.5,w=VW*gcEase(Math.min(1,a/0.18)),lg=ctx.createLinearGradient(VW/2-w/2,0,VW/2+w/2,0);lg.addColorStop(0,'rgba(255,240,210,0)');lg.addColorStop(0.5,`rgba(255,240,210,${0.9*(1-k)})`);lg.addColorStop(1,'rgba(255,240,210,0)');ctx.fillStyle=lg;ctx.fillRect(VW/2-w/2,198,w,4)}
+  // GAMERCRAFTER letters wave out of the impact
+  ctx.font=GC_FONT;ctx.textAlign='center';ctx.textBaseline='middle';
+  const n=GC_NAME.length;for(let i=0;i<n;i++){const la=t-(GC_TL+i*GC_LS);if(la<0)continue;
+   const k=Math.min(1,la/GC_LD),e=gcEase(k),tx=this.L[i],x=VW/2+(tx-VW/2)*e,y=210+(368-210)*e-70*Math.sin(Math.PI*e),dir=i%2?1:-1;
+   let sx=Math.cos((1-e)*Math.PI*2*dir),sy=1,s=0.35+0.65*e,rot=(1-e)*1.1*dir,dy=0;
+   if(la>GC_LD){const b=la-GC_LD,q=0.22*Math.exp(-10*b)*Math.cos(24*b);sx=1+q;sy=1-q;
+    const w=t-GC_TW-i*0.045;dy=-10*Math.exp(-Math.pow(w/0.07,2));
+    if(b<0.3){ctx.strokeStyle=`rgba(255,230,180,${0.55*(1-b/0.3)})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(tx,368,8+42*b/0.3,0,Math.PI*2);ctx.stroke()}}
+   ctx.save();ctx.globalAlpha=Math.min(1,la/0.06);ctx.translate(x,y+dy);ctx.rotate(rot);ctx.scale(sx*s,sy*s);
+   ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillText(GC_NAME[i],2,4);ctx.fillStyle='#f2f6f7';ctx.fillText(GC_NAME[i],0,0);ctx.restore()}
+  // teal underline grows from the centre
+  if(t>GC_TU){const e=gcEase(Math.min(1,(t-GC_TU)/0.35)),w=this.W*0.62*e;ctx.fillStyle='#1db58f';ctx.beginPath();ctx.roundRect?ctx.roundRect(VW/2-w/2,404,w,5,2.5):ctx.rect(VW/2-w/2,404,w,5);ctx.fill()}
+  // "A GAME BY" pops in above the name
+  if(t>GC_TG){const b=t-GC_TG,s=1-Math.exp(-12*b)*Math.cos(16*b),dl=70*gcEase(Math.min(1,b/0.35));
+   ctx.save();ctx.translate(VW/2,318);ctx.scale(s,s);ctx.font=GC_SUBFONT;ctx.fillStyle='#93b4be';ctx.fillText('A   G A M E   B Y',0,0);ctx.restore();
+   ctx.fillStyle='rgba(147,180,190,.6)';ctx.fillRect(VW/2-84-dl,317,dl,2);ctx.fillRect(VW/2+84,317,dl,2)}
+  // shine sweeps across the wordmark (+ a glint at the end)
+  if(t>GC_TS&&t<GC_TS+0.55){const p=(t-GC_TS)/0.55,x0=VW/2-this.W/2,bx=x0-120+(this.W+240)*p,g=ctx.createLinearGradient(bx-55,330,bx+55,400);
+   g.addColorStop(0,'rgba(255,246,225,0)');g.addColorStop(0.5,'rgba(255,246,225,1)');g.addColorStop(1,'rgba(255,246,225,0)');
+   ctx.font=GC_FONT;ctx.fillStyle=g;for(let i=0;i<n;i++)ctx.fillText(GC_NAME[i],this.L[i],368);
+   ctx.font=GC_SUBFONT;ctx.fillText('A   G A M E   B Y',VW/2,318)}
+  if(t>GC_TS+0.45&&t<GC_TS+0.95){const b=(t-GC_TS-0.45)/0.5,r=22*Math.sin(Math.PI*b),gx=VW/2+this.W/2+6,gy=346;
+   ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle='rgba(255,240,200,.9)';ctx.beginPath();ctx.moveTo(gx,gy-r);ctx.lineTo(gx+r*0.18,gy-r*0.18);ctx.lineTo(gx+r,gy);ctx.lineTo(gx+r*0.18,gy+r*0.18);
+   ctx.lineTo(gx,gy+r);ctx.lineTo(gx-r*0.18,gy+r*0.18);ctx.lineTo(gx-r,gy);ctx.lineTo(gx-r*0.18,gy-r*0.18);ctx.closePath();ctx.fill();ctx.restore()}
+  ctx.restore();
+  // impact flash, vignette, fades, skip hint
+  if(a>0&&a<0.3){ctx.fillStyle=`rgba(255,248,235,${0.5*rm*(1-a/0.3)})`;ctx.fillRect(0,0,VW,VH)}
+  const vg=ctx.createRadialGradient(VW/2,VH/2,VH*0.35,VW/2,VH/2,VH*0.95);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.55)');ctx.fillStyle=vg;ctx.fillRect(0,0,VW,VH);
+  let f=t<0.3?1-t/0.3:0;if(t>GC_TH)f=Math.max(f,(t-GC_TH)/(GC_TE-GC_TH));if(this.skip>=0)f=Math.max(f,(t-this.skip)/0.25);
+  if(t>0.6&&t<GC_TH&&this.skip<0){ctx.font=`bold 12px ${FONT}`;ctx.textAlign='right';ctx.fillStyle='rgba(200,225,232,.3)';ctx.fillText((typeof touchOn=='function'&&touchOn())?'tap to skip':'press any key to skip',VW-16,VH-16)}
+  if(f>0){ctx.fillStyle=`rgba(14,11,28,${Math.min(1,f)})`;ctx.fillRect(0,0,VW,VH)}}
+};
+
 // ================= LOOP =================
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&SCR===SCREENS.play&&G&&!G.won)go('pause')});
 let last=performance.now();
@@ -2423,19 +2592,19 @@ function frame(now){const dt=Math.min(0.05,Math.max(0,(now-last)/1000));last=now
  if(pressed.MUTE){S.set.music=S.set.music?0:1;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
  const updOn=UPD&&(SCR===SCREENS.menu||SCR===SCREENS.title||SCR===SCREENS.levels),UR=SCR===SCREENS.menu?{x:560,y:100,w:320,h:38}:SCR===SCREENS.levels?{x:VW-300,y:20,w:280,h:38}:{x:VW/2-160,y:20,w:320,h:38};
  if(updOn&&mouse.click&&inR(mouse,UR)){mouse.click=false;try{location.reload()}catch(e){}}
- SCR.update(dt);updToasts(dt);
+ SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(!playing()&&(STK||tp.size))tReset();
  UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();
  if(updOn){const k=0.5+0.5*Math.sin(gtime*4);ctx.fillStyle='rgba(0,0,0,.3)';rr(UR.x+3,UR.y+4,UR.w,UR.h,UR.h/2);ctx.fill();ctx.fillStyle='#7bdc3b';rr(UR.x,UR.y,UR.w,UR.h,UR.h/2);ctx.fill();
   ctx.strokeStyle=`rgba(255,255,255,${0.4+k*0.6})`;ctx.lineWidth=3;rr(UR.x,UR.y,UR.w,UR.h,UR.h/2);ctx.stroke();txt('Update ready - tap to reload',UR.x+UR.w/2,UR.y+UR.h/2+1,17,'#10240a','center',false)}
- drawToasts();
+ if(SCR!==SCREENS.intro)drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
  if(touchOn()&&innerHeight>innerWidth*1.05)drawRotate();
  }catch(e){console.error(e)}
  for(const k in pressed)delete pressed[k];mouse.click=false;typedDigit=null;typedDel=false;
  requestAnimationFrame(frame)}
-go('title');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
+go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
 </script>
 </body>
 </html>
