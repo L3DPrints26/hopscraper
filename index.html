@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-190000'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260922-214500'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -1158,12 +1158,15 @@ const LEVELS=[
 // and is allowed to be the hardest thing outside Hard Mode. Par times (t) come from the physics bot's optimal route at
 // roughly 1.25x, so the target-time star is a real run rather than a freebie handed out for finishing.
 {wd:7,W:44,n:'Bullion Gate',t:13,s:[2,18],e:[41,18],ch:[[19,9]],g:[[8,15],[20,5],[30,14]],
- tip:'Treasure chests open the gold vault doors. Find every chest in the level and the doors swing wide.',
+ // first chest in the game, so the tip has to teach BOTH halves of it: the door it unlocks and the gold it pays out.
+ tip:'Touch a treasure chest and it showers coins, one at a time. Open every chest in the level and the gold vault doors swing wide.',
  r:[['#',1,19,11,2],['=',6,16,5,1],
   ['#',16,19,11,2],['=',17,16,4,1],['=',22,13,4,1],['=',17,10,5,1],['^',23,18,3,1],
   ['#',31,19,5,2],['=',27,15,4,1],
   ['#',36,1,1,12],['D',36,13,1,6],['#',36,19,8,2]]},
-{wd:7,W:48,n:'Chandelier Hall',t:18,s:[2,18],e:[45,18],g:[[14,5],[28,4],[41,6]],
+{wd:7,W:48,n:'Chandelier Hall',t:18,s:[2,18],e:[45,18],ch:[[10,9]],g:[[14,5],[28,4],[41,6]],
+ // the chest sits on the LEFT lip of the first overhead gallery, back the way you came once you have climbed - a short
+ // detour away from the exit rather than a step on the route to it.
  tip:'Chandeliers swing on their chains - dead slow at the ends of the arc, quick through the middle. Move while one hangs at the far end.',
  r:[['#',1,19,46,2],
   ['#',9,10,10,2],['#',23,10,10,2],['#',36,10,9,2],
@@ -1172,14 +1175,23 @@ const LEVELS=[
   ['^',20,18,3,1],['^',34,18,2,1]],
  m:[['chan',14,12,5.65,0.75,2.8,0],['chan',28,12,5.65,0.75,2.3,0.4],['chan',40,12,5.65,0.75,3.2,0.15]]},
 {wd:7,W:40,H:28,n:'The Counting House',t:26,s:[3,24],e:[35,5],ch:[[6,19],[32,13]],g:[[12,20],[7,13],[26,9]],
- tip:'Two chests now, and neither one is on your way up.',
- r:[['#',1,25,38,2],['^',13,24,5,1],['^',24,24,4,1],
-  ['=',4,20,6,1],['=',12,21,4,1],['=',18,22,5,1],['=',25,20,5,1],
-  ['=',9,17,5,1],['=',16,18,4,1],['=',22,16,5,1],['=',30,17,5,1],
+ tip:'Two chests now, and neither one is on your way up. The east bay is through the arch at floor level.',
+ // FIX (was unbeatable): the east bay (x29-38) used to be sealed - the counting-house wall ran x28 from y6 all the way
+ // down to the floor, so the chest on its y14 shelf sat behind the very vault door it was meant to unlock and the level
+ // could never be finished. Worse, the y20 shelf overhangs x29, so dropping off its right end dumped you INSIDE the
+ // sealed bay with no way out and no way to die - a hard soft-lock. The wall now stops at y22, leaving a two-tile
+ // archway at floor level (y23-24); the second spike bed is shifted left so there is clear floor in front of the arch
+ // to land on; and the bay has its own shelf ladder (y22 -> y20 -> y17 -> y14) up to the chest and back down. The exit
+ // is still gated: the only way above the bay's solid y6 ceiling is the 'D' door at x28, which needs BOTH chests open.
+ r:[['#',1,25,38,2],['^',13,24,5,1],['^',22,24,4,1],
+  ['=',4,20,6,1],['=',12,21,4,1],['=',18,22,5,1],['=',25,20,5,1],['=',30,20,4,1],
+  ['=',9,17,5,1],['=',16,18,4,1],['=',22,16,5,1],['=',30,17,5,1],['=',34,22,4,1],
   ['=',5,14,5,1],['=',13,13,5,1],['=',21,12,4,1],['=',29,14,5,1],
   ['=',10,10,5,1],['=',17,9,5,1],['=',25,10,4,1],['=',24,5,4,1],
-  ['#',29,6,10,1],['D',28,1,1,5],['#',28,6,1,19]]},
-{wd:7,W:48,n:'The Smelting Floor',t:21,s:[2,18],e:[45,18],g:[[13,13],[27,10],[40,13]],
+  ['#',29,6,10,1],['D',28,1,1,5],['#',28,6,1,17]]},
+{wd:7,W:48,n:'The Smelting Floor',t:21,s:[2,18],e:[45,18],ch:[[34,13]],g:[[13,13],[27,10],[40,13]],
+ // the chest is up on the third bay's shelf, straight above the safe brick island - a climb you only make for the gold,
+ // since the run to the exit never leaves the floor.
  tip:'Molten gold is still molten. And cracked bricks give way a moment after you land on them.',
  r:[['#',1,19,9,2],['~',10,19,7,2],['#',17,19,6,2],['~',23,19,8,2],['#',31,19,5,2],['~',36,19,6,2],['#',42,19,5,2],
   ['#',10,1,7,9],['v',10,10,7,1],['#',23,1,8,8],['v',23,9,8,1],['#',36,1,6,9],['v',36,10,6,1],
@@ -1314,7 +1326,13 @@ const STORY_ORDER=[...Array(NL-1).keys(),...[...Array(NB).keys()].map(k=>NL+k),N
 // Every star the FREE story can award. NEVER use LEVELS.length*3 for a player-facing total: LEVELS also holds the paid
 // bonus worlds, so that denominator makes 100% unreachable without buying. See totalStars()/bonusStars().
 const STAR_MAX=STORY_ORDER.length*3;
-function nextOf(i){const k=STORY_ORDER.indexOf(i);return k>=0&&k<STORY_ORDER.length-1?STORY_ORDER[k+1]:-1}
+// "Next level" order. Worlds 1-5 then THE TOP follow STORY_ORDER exactly (unchanged - Marathon walks this too).
+// A PAID bonus world (wd>=6) is deliberately NOT in STORY_ORDER, so indexOf() missed it and Next fell straight through
+// to the level select with a bad tab, landing the player in the NEXT world - one they may not even own. Next now stays
+// inside the bonus world it is in (6-1 -> 6-2 -> ...), and its last level returns -1 so the clear screen falls back to
+// THAT world's own level select. See tabOf().
+function nextOf(i){const k=STORY_ORDER.indexOf(i);if(k>=0)return k<STORY_ORDER.length-1?STORY_ORDER[k+1]:-1;
+ const d=LEVELS[i],n=LEVELS[i+1];return d&&d.wd>=6&&n&&n.wd==d.wd?i+1:-1}
 function prevOf(i){const k=STORY_ORDER.indexOf(i);return k>0?STORY_ORDER[k-1]:-1}
 // coin spots per level (tile x,y where you can stand; checked reachable by the physics bot)
 const COINS=[[[34,18],[4,18],[21,12],[15,18],[26,18]],[[21,8],[1,30],[22,30],[4,5],[8,17]],[[35,18],[4,18],[17,18],[26,18],[22,18]],[[34,15],[4,6],[19,18],[21,4],[6,18]],[[34,18],[4,18],[21,3],[22,18],[9,7]],[[63,18],[4,18],[36,18],[54,8],[19,10]],[[34,15],[4,18],[16,6],[23,15],[12,18]],[[34,14],[3,7],[22,1],[13,18],[28,11]],[[34,9],[4,18],[21,18],[31,18],[12,18]],[[35,18],[4,18],[19,18],[26,12],[10,14]],[[35,18],[4,18],[22,14],[15,12],[28,11]],[[35,18],[4,18],[19,10],[25,18],[15,18]],[[10,2],[22,36],[3,24],[19,19],[8,36]],[[67,18],[4,18],[35,18],[47,6],[19,18]],[[39,13],[4,18],[24,14],[11,14]],[[38,18],[4,13],[22,3],[19,18],[30,8]],[[35,18],[4,18],[19,18],[11,7],[30,8]],[[38,11],[3,5],[19,14],[6,18],[29,18]],[[5,18]],[[35,18],[4,18],[19,8],[24,18],[14,18]],[[37,9],[1,6],[18,18],[24,6],[5,18]],[[4,14]],[[13,3],[1,34],[18,34],[10,17],[1,7]],[[38,18],[4,18],[22,6],[17,18],[10,8]],[[35,18],[4,18],[20,14],[12,15],[29,15]],[[16,2],[1,40],[26,26],[3,19],[18,40]],[[10,18],[4,18],[7,18]],[[38,18],[1,3],[23,3],[11,18],[24,18]],[[32,13],[7,13],[19,13],[13,11],[25,11]],[[13,21],[26,36],[7,36],[22,21],[16,36]],[[54,15],[14,14],[32,14],[23,15],[46,14]],[[1,18],[38,5],[22,18],[11,9],[38,18]],[[1,47],[28,51],[13,56],[18,47],[9,47]],[[38,13],[4,18],[21,18],[30,18],[12,18]],[[35,18],[4,18],[19,18],[11,18],[26,18]],[[32,6],[4,18],[21,18],[32,18],[12,18]],[[38,10],[1,18],[18,9],[31,18],[28,9]],[[17,9],[1,30],[22,30],[1,9],[11,21]],[[35,18],[4,18],[19,18],[27,14],[12,18]],[[35,18],[4,18],[21,18],[12,18],[28,18]],[[30,4],[1,24],[23,20],[8,6],[38,24]],
@@ -1341,6 +1359,17 @@ const wdOf=i=>LEVELS[i].wd;
 // matter which order World 6/7/8's LEVELS entries end up appended in.
 const lvLabel=i=>{const d=LEVELS[i];if(d&&d.wd>=6)return d.wd+'-'+(i-LEVELS.findIndex(l=>l.wd==d.wd)+1);
  return i>=NL?'5-'+(i-NL+1):i==NL-1?'TOP':(Math.floor(i/8)+1)+'-'+(i%8+1)};
+// Level index -> the TAB INDEX the level select shows it under. This is NOT wdOf(): the story tab row is
+// [4 main worlds, Rockets, each OWNED bonus world..., THE TOP last], so a world number and a tab index only happen to
+// agree for Worlds 1-4. Every "back to the level select" used to pass wdOf() straight in as `tab`, which is why
+// clearing 6-1 opened World 7's tab (wd 6 == tab index 6 == the second owned bonus world). Keep this in sync with
+// SCREENS.levels' ntab()/tf()/tabWd().
+function tabOf(i,hard){const d=LEVELS[i];if(!d)return 0;
+ if(hard)return d.wd<=4?d.wd:4;                      // hard mode has 5 tabs: Worlds 1-4 then THE TOP
+ if(d.wd<4)return d.wd;                              // Worlds 1-4
+ if(d.wd==5)return 4;                                // World 5 (Rocket Yard)
+ if(d.wd>=6){const k=ownedBonusWorlds().findIndex(b=>b.wd==d.wd);return k>=0?5+k:0}
+ return 5+ownedBonusWorlds().length}                 // wd 4 = THE TOP, always the last tab
 
 // ================= LEVEL BUILD =================
 function buildLevel(def,opt){opt=opt||{};
@@ -1359,7 +1388,10 @@ function buildLevel(def,opt){opt=opt||{};
  // World 7 (Gilded Vale) treasure chests: def.ch=[[x,y],...], y being the tile ABOVE the shelf it rests on so the chest
  // sits ON that shelf. Opening every chest in a level unlocks that level's gold vault doors - it sets the very same
  // G.keyGot flag L.key sets, so isSolid()/'D' rendering (and the physics bot's door model) need no special case. See step().
- L.chests=(def.ch||[]).map(p=>({x:MX(p[0])*TS+12,y:MY(p[1])*TS+12,got:false}));
+ L.chests=(def.ch||[]).map(p=>({x:MX(p[0])*TS+12,y:MY(p[1])*TS+12,got:false,pay:0,fly:null,cnt:0,cntT:0,openT:0}));
+ // ...but a Gilded Vale level is allowed to have chests and NO vault doors (they are pure gold detours there), so the
+ // "every chest found" toast has to know whether there is actually a door to swing open. See step().
+ L.hasDoor=(def.r||[]).some(r=>r[0]=='D');
  if(!opt.noChecks)(def.k||[]).forEach(p=>L.checks.push({x:MX(p[0]),y:MY(p[1]),on:false}));
  if(def.key)L.key={x:MX(def.key[0])*TS+12,y:MY(def.key[1])*TS+12,got:false};
  L.plats=[];
@@ -1629,6 +1661,14 @@ let HARDSET=[['mirror'],['inv'],['moon'],['mirror'],['moon'],
  ['ice','inv'],['lasers','inv'],['lasers','inv'],['lasers','inv'],['flip','saws'],['ice','saws'],['saws','mirror'],
  ['flip'],['ice','saws'],['lasers','mirror'],['saws','mirror'],['ice','saws'],['chaos','lasers'],['saws','mirror'],
  ['lasers','mirror'],['ice','lasers'],['chaos','inv'],['mirror'],['chaos','inv'],['ice','lasers'],['mirror']]; // THE TOP: both 'ice' and 'saws' fail its own modOK rule, so the finale twist is MIRRORED
+// NO AIR JUMP exceptions (Chaos Replay only - HARDSET never assigns 'nojump'). The structural rules in modOK below
+// catch the usual culprits, but the physics bot - exhaustive search over one ground jump plus wall jumps, timed hazards
+// ignored - proves the exit is flat-out unreachable on these two, so the Chaos picker must not offer it:
+//   5  = 1-6 "The Long Way": the spiked pillar at x=58 can only be cleared via the ledges at (53,9)/(62,13), both of
+//        which sit well above a single ground jump. Best the bot can do is 222px short.
+//   26 = 4-3 "Lava Falls": the ceiling-to-floor lava curtains are crossed on the '=' ledges above them; without an air
+//        jump the run stops at the second curtain, 546px short.
+const NOJUMP_NO=[5,26];
 function modsOf(i){if(HARDSET&&HARDSET[i])return HARDSET[i];return ['mirror']}
 function modLabel(i){return modsOf(i).map(k=>MODN[k]).join(' + ')}
 function modDesc(i){return modsOf(i).map(k=>MODD[k]).join(', ')}
@@ -1644,6 +1684,7 @@ function modOK(i,k){const d=LEVELS[i],r=d.r,has=ch=>r.some(q=>q[0]==ch);
  if(k=='walljump'||k=='nojump'){
   if(has('N')||d.rise||(k=='nojump'&&H>26)||H>40)return false;
   if((d.m||[]).some(m=>m[0]=='saw'&&Math.max(m[2],m[4])>=H-4))return false; // saw sweeping the floor and you cannot jump it
+  if(k=='nojump'&&NOJUMP_NO.includes(i))return false; // bot-proven unreachable without an air jump - see NOJUMP_NO
   return k=='nojump'?true:shaft>=7}
  if(k=='lasers')return !has('l')&&!has('L');
  if(k=='saws')return (d.m||[]).length<5&&!has('~');
@@ -1690,7 +1731,10 @@ function spawn(){const L=G.L,s=G.checkpoint||L.start;if(L.rk){L.rk.length=0;for(
  // otherwise you can respawn straight into a bolt or a rock you had no chance to see coming.
  if(L.rov){L.rov.length=0;for(const m of L.movers)if(m.t=='rov'){m.aim=null;m.aimT=0;m.kick=0;m.ft=-(m.wind||0.6)}}
  if(L.ast&&L.ast.length){const sx=s.x*TS+12,sy=s.y*TS+12;for(let i=L.ast.length-1;i>=0;i--){const a=L.ast[i];if(Math.abs(a.x-sx)<4*TS&&Math.abs(a.y-sy)<5*TS)L.ast.splice(i,1)}}
- G.player={x:s.x*TS+4,y:s.y*TS+TS-16,w:16,h:16,vx:0,vy:0,onG:false,coy:0,buf:0,face:L.mir?-1:1,sx:1.4,sy:0.6,wall:0,lock:0,lockDir:0,dead:false,bnc:false,inN:false,trT:0,aj:AIRJ,ajFx:0};
+ // UPSIDE DOWN: "standing on the start tile" means resting on its FLOOR normally, on its CEILING when gravity is
+ // inverted - otherwise the player spawns mid-tile and pops upward into the ceiling on the first frame.
+ const sgs=G.gs||1;
+ G.player={x:s.x*TS+4,y:sgs>0?s.y*TS+TS-16:s.y*TS,w:16,h:16,vx:0,vy:0,onG:false,coy:0,buf:0,face:L.mir?-1:1,sx:1.4,sy:0.6,wall:0,lock:0,lockDir:0,dead:false,bnc:false,inN:false,trT:0,aj:AIRJ,ajFx:0};
  G.player.px=G.player.x;G.player.py=G.player.y;
  if(G.spawnX==null){G.spawnX=G.player.x;G.spawnY=G.player.y} // fairness timer reference point: only the very first spawn of this run
  if(L.rise&&!L.rise.endless){G.lavaY=L.H*TS+TS;G.riseT=0}
@@ -2004,7 +2048,17 @@ function drawZombie(m,t){
  ctx.fillStyle=ZRD;ctx.beginPath();ctx.moveTo(-8.4,-31);ctx.lineTo(-2.4,-31);ctx.lineTo(-2.8,-16);ctx.lineTo(-6.4,-18.5);ctx.lineTo(-8.6,-17.5);ctx.closePath();ctx.fill();
  ctx.fillStyle='#6f2b39';ctx.beginPath();ctx.ellipse(3.6,-25,2.8,3.6,0.4,0,7);ctx.fill();ctx.fillStyle='#8e3a49';ctx.beginPath();ctx.ellipse(3.2,-25.8,1.4,1.8,0.4,0,7);ctx.fill(); // old wound
  // arms: the far one hangs dead, the near one reaches out front and rises as it closes on you
- ctx.strokeStyle=ZKD;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-6,-28);ctx.lineTo(-10.5,-22+gait2*2);ctx.lineTo(-9,-14+gait2*2.5);ctx.stroke();
+ // ART FIX: the far arm used to swing out to x=-10.5 and stop dead at hip height on a blunt round cap, so at game scale
+ // it read as a dark green TAIL hanging off the zombie's back instead of an arm - a bar of ZKD detached from the
+ // silhouette, ending in nothing, right where a tail would be. It now tucks along the back (the elbow only just breaks
+ // the silhouette), the wrist curves back IN toward the hip the way a real arm does, it is a touch slimmer than the
+ // near arm so it still reads as the far limb, and it finishes in a limp hand with hanging fingers so the shape
+ // terminates as an arm. Both facings and the whole gait cycle were checked at game scale.
+ const fex=-9.2,fey=-21.2+gait2*1.4,fhx=-7.6,fhy=-13.4+gait2*2.2;
+ ctx.strokeStyle=ZKD;ctx.lineWidth=3.6;ctx.beginPath();ctx.moveTo(-5.4,-27.6);ctx.lineTo(fex,fey);ctx.lineTo(fhx,fhy);ctx.stroke();
+ ctx.fillStyle=ZKD;ctx.beginPath();ctx.ellipse(fhx-0.3,fhy+1,2.4,2,0.25,0,7);ctx.fill();
+ ctx.strokeStyle=ZKD;ctx.lineWidth=1.4;ctx.beginPath();
+ for(const fd of[-1.5,0,1.5]){ctx.moveTo(fhx-0.3,fhy+1.6);ctx.lineTo(fhx-0.6+fd,fhy+4.6)}ctx.stroke();
  const ry=-24-lunge*7,rx=15+lunge*4;
  ctx.strokeStyle=ZK;ctx.lineWidth=4.6;ctx.beginPath();ctx.moveTo(6,-28);ctx.lineTo(11,-26+gait*1.6);ctx.lineTo(rx,ry+gait*2.2);ctx.stroke();
  ctx.strokeStyle=ZKL;ctx.lineWidth=1.9;ctx.beginPath(); // three clawed fingers, splayed
@@ -2236,8 +2290,33 @@ function drawRocketStuff(L,t){
    ctx.beginPath();ctx.moveTo(-6,3.6);ctx.lineTo(-13,8);ctx.lineTo(-4,3);ctx.fill()}
   ctx.restore()}}
 
+// ---------- GILDED VALE CHEST PAYOUT ----------
+// A chest does not just unlock the doors, it PAYS. Touch it and it coughs its gold up ONE COIN AT A TIME: each coin
+// pops out of the lid on its own little arc, spins in the air, and is banked the moment it lands, with a running "+N"
+// tally floating over the chest (see drawChestPayout). Every coin goes through addCoins(), so the Coin Doubler and the
+// Hopscraper Club multiplier apply to chest gold exactly like any other coin - the tally shows what was really banked,
+// so a doubled chest visibly counts +2, +4, +6.
+// BALANCE: the free coin economy is ~2.4k lifetime against a ~2.39k coin shop, so a chest has to feel generous without
+// becoming the economy. CHEST_PAY is a FIRST-CLEAR payout (14 chests across Gilded Vale = ~140 coins once, ~6% of the
+// lifetime total); every replay of a level you have already cleared pays CHEST_PAY_REPLAY instead, so re-running a
+// short gold level is never a coin farm. Unlike the vault flag, the payout is per-OPEN: an opened chest stays open
+// through a death (it can never soft-lock a run), and because it stays open it also never pays twice in one run.
+const CHEST_PAY=10,CHEST_PAY_REPLAY=4;
+function chestPay(){const rec=S.lv[G.idx];return(G.mode=='story'&&!(rec&&rec.done))?CHEST_PAY:CHEST_PAY_REPLAY}
+function updChests(L,dt){if(!L.chests||!L.chests.length)return;let done=false;const gs=G.gs||1;
+ for(const ch of L.chests){if(!ch.got)continue;
+  ch.openT=(ch.openT||0)+dt;if(ch.cntT>0)ch.cntT-=dt;
+  if(ch.pay>0){ch.emit-=dt;                                   // one coin every ~0.11s: a stream, not a burst
+   if(ch.emit<=0){ch.emit=0.11;ch.pay--;
+    (ch.fly=ch.fly||[]).push({x:ch.x+rnd(-3,3),y:ch.y-7,vx:(ch.pay%2?-1:1)*rnd(45,115),vy:rnd(-250,-185)*gs,r:rnd(0,6.28),rv:rnd(-10,10),l:rnd(0.5,0.68)});
+    sfx('coin')}}
+  if(ch.fly)for(let i=ch.fly.length-1;i>=0;i--){const f=ch.fly[i];f.l-=dt;f.vy+=980*dt*gs;f.x+=f.vx*dt;f.y+=f.vy*dt;f.r+=f.rv*dt;
+   if(f.l<=0){ch.fly.splice(i,1);ch.cnt=(ch.cnt||0)+addCoins(1);ch.cntT=0.24;burst(f.x,f.y,'#ffd45e',5);
+    if(ch.pay<=0&&!ch.fly.length)done=true}}}
+ if(done)save()}                                              // one save per finished stream, not one per coin
+
 function step(dt){const L=G.L,p=G.player;G.t+=dt;
- updMovers(L,G.t*G.spd);updRockets(L,dt);updRovers(L,dt);updAsteroids(L,dt);updOgres(L);updGhosts(L,dt);updPlats(L,G.t*G.spd);updCrumble(L,dt);updLava(dt);
+ updMovers(L,G.t*G.spd);updRockets(L,dt);updRovers(L,dt);updAsteroids(L,dt);updOgres(L);updGhosts(L,dt);updPlats(L,G.t*G.spd);updCrumble(L,dt);updLava(dt);updChests(L,dt);
  if(L.exit.y>0&&Math.random()<9*dt)G.parts.push({x:L.exit.x*TS+rnd(5,19),y:L.exit.y*TS+20,vx:0,vy:rnd(-50,-20),l:0.8,ml:0.8,c:'#ffffff',s:2,g:0,sh:'sq'}); // exit sparkles (~9/s)
  p.px=p.x;p.py=p.y; // previous position for render interpolation
  // phase blocks the player is already inside stay non-solid for them until they leave (no teleport-out when they switch on)
@@ -2288,7 +2367,9 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  p.plat=null;
  p.x+=p.vx*dt;colX(L,p);p.y+=p.vy*dt;colY(L,p,oy,down,gs);
  for(const m of L.plats){if(p.vy>=0&&!down&&p.x+p.w>m.x+2&&p.x<m.x+m.w-2&&oy+p.h<=m.y+Math.max(2,m.dy+2)&&p.y+p.h>=m.y&&p.y+p.h<=m.y+m.h+2){p.y=m.y-p.h;p.vy=0;p.onG=true;p.plat=m}}
- if(p.onG&&!p.plat){const fy=Math.floor((p.y+p.h+1)/TS);for(let tx=Math.floor(p.x/TS);tx<=Math.floor((p.x+p.w-0.01)/TS);tx++){const cc=tAt(L,tx,fy);if(cc=='c'||cc=='C'){const bv=cc=='C'?115:-115,ov=p.vx;p.x+=bv*dt;p.vx=bv;colX(L,p);p.vx=ov;break}}}
+ // arrow floors: the tile you are STANDING ON is below you normally, above you under UPSIDE DOWN (same gs test the
+ // crumble-block check below already uses) - otherwise a belt does nothing at all while gravity is inverted.
+ if(p.onG&&!p.plat){const fy=gs>0?Math.floor((p.y+p.h+1)/TS):Math.floor((p.y-1)/TS);for(let tx=Math.floor(p.x/TS);tx<=Math.floor((p.x+p.w-0.01)/TS);tx++){const cc=tAt(L,tx,fy);if(cc=='c'||cc=='C'){const bv=cc=='C'?115:-115,ov=p.vx;p.x+=bv*dt;p.vx=bv;colX(L,p);p.vx=ov;break}}}
  if(p.onG&&!was&&fall*gs>150){p.sx=1.35;p.sy=0.7;if(fall*gs>300)sfx('land');for(let i=0;i<5;i++)G.parts.push({x:p.x+8+rnd(-8,8),y:gs>0?p.y+16:p.y,vx:rnd(-60,60),vy:rnd(-40,-5)*gs,l:0.3,ml:0.3,c:'rgba(255,255,255,.85)',s:rnd(2,4),g:0,sh:'ci'})}
  p.sx+=(1-p.sx)*Math.min(1,dt*12);p.sy+=(1-p.sy)*Math.min(1,dt*12);
  if(p.onG){const ty=gs>0?Math.floor((p.y+p.h+1)/TS):Math.floor((p.y-1)/TS);for(let tx=Math.floor(p.x/TS);tx<=Math.floor((p.x+p.w-0.01)/TS);tx++){const c=L.cr[ty*L.W+tx];if(c&&c.s==0){c.s=1;c.t=0.38;sfx('crumble')}}}
@@ -2317,10 +2398,15 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  // Gilded Vale treasure chests (L.chests): open every one in the level and its gold vault doors unlock. Deliberately
  // reuses G.keyGot - the flag the key already sets - so isSolid()/'D' rendering need no new case. Like the key, an
  // opened chest STAYS open through a death, so a chest can never be the thing that soft-locks a run.
- if(L.chests&&L.chests.length&&!G.keyGot){let left=0,hit=false;
-  for(const ch of L.chests){if(!ch.got&&Math.abs(ch.x-pcx)<19&&Math.abs(ch.y-pcy)<21){ch.got=true;hit=true;sfx('coin');burst(ch.x,ch.y-4,'#ffd45e',20);burst(ch.x,ch.y-6,'#fff3b0',9)}
+ if(L.chests&&L.chests.length){let left=0,hit=false;
+  for(const ch of L.chests){if(!ch.got&&Math.abs(ch.x-pcx)<19&&Math.abs(ch.y-pcy)<21){ch.got=true;hit=true;
+    // queue the coin stream (updChests pays it out one coin at a time) and kick the lid open
+    ch.pay=chestPay();ch.emit=0.22;ch.openT=0;ch.cnt=0;ch.cntT=0;
+    sfx('coin');if(S.set.shake)G.shake=Math.max(G.shake,2);burst(ch.x,ch.y-4,'#ffd45e',20);burst(ch.x,ch.y-6,'#fff3b0',9)}
    if(!ch.got)left++}
-  if(hit){if(!left){G.keyGot=true;sfx('key');if(S.set.shake)G.shake=4;toast('Vault open','Every chest found - the gold doors are open','ach')}
+  if(hit&&!G.keyGot){if(!left){G.keyGot=true;sfx('key');if(S.set.shake)G.shake=4;
+    if(L.hasDoor)toast('Vault open','Every chest found - the gold doors are open','ach');
+    else toast('Every chest found','You have stripped this hall of its gold','ach')}
    else toast('Chest opened',left+(left>1?' chests':' chest')+' still locked away','info')}}
  // checkpoints only ever move forward (flag order in the level data), trigger covers the whole drawn flag
  L.checks.forEach((c,ci)=>{if(!c.on&&ci>(G.checkIdx==null?-1:G.checkIdx)&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-22&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkIdx=ci;G.checkpoint={x:c.x,y:c.y};sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}});
@@ -2995,19 +3081,29 @@ function drawChandelier(m,t){const ax=m.ax,ay=m.ay,x=m.x,y=m.y,vd=m.vd||1;ctx.sa
 // Gilded Vale treasure chest (L.chests - see buildLevel/step): closed it sits shut with a lock plate and a soft glow;
 // opened, the lid tips back on its hinge and the coins inside show. Open every chest in a level and that level's gold
 // vault doors swing open.
-function drawChest(c,t){ctx.save();ctx.translate(c.x,c.y+(c.got?0:Math.sin(t*2.6+c.x*0.05)*1.6));
+function drawChest(c,t){const op=c.got?clamp((c.openT||0)/0.3,0,1):0,oe=ease(op); // lid swings back over ~0.3s, then settles
+ ctx.save();ctx.translate(c.x,c.y+(c.got?Math.sin(clamp(c.openT||0,0,0.3)*21)*(1-oe)*2.5:Math.sin(t*2.6+c.x*0.05)*1.6));
  if(!c.got){ctx.globalAlpha=0.3;ctx.fillStyle='#ffd45e';ctx.beginPath();ctx.arc(0,0,17+Math.sin(t*4)*2,0,7);ctx.fill();ctx.globalAlpha=1}
+ else if(c.pay>0||(c.fly&&c.fly.length)){ctx.globalAlpha=0.26+0.12*Math.sin(t*12);ctx.fillStyle='#fff3b0';ctx.beginPath();ctx.arc(0,-3,19,0,7);ctx.fill();ctx.globalAlpha=1} // still paying out: it glows while gold is flying
  ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(1,12,13,4,0,0,7);ctx.fill();
  ctx.fillStyle='#6d4310';rr(-12,-2,24,13,3);ctx.fill();
  ctx.fillStyle='#a06a1a';rr(-12,-2,24,6,3);ctx.fill();
  ctx.fillStyle='#ffd45e';ctx.fillRect(-12,3.5,24,2);ctx.fillRect(-2,-2,4,13);
- ctx.save();if(c.got){ctx.translate(-12,-2);ctx.rotate(-1.2);ctx.translate(12,2)}
+ ctx.save();if(c.got){ctx.translate(-12,-2);ctx.rotate(-1.3*oe);ctx.translate(12,2)}
  ctx.fillStyle='#8a5614';ctx.beginPath();ctx.moveTo(-12,-2);ctx.lineTo(-12,-7);ctx.quadraticCurveTo(0,-15.5,12,-7);ctx.lineTo(12,-2);ctx.closePath();ctx.fill();
  ctx.strokeStyle='#ffd45e';ctx.lineWidth=2;ctx.stroke();ctx.restore();
- if(c.got){ctx.fillStyle='#ffe9a0';for(let i=0;i<5;i++){const a=i*1.31;ctx.beginPath();ctx.ellipse(Math.cos(a)*6,-1+Math.sin(a)*2,4,2.6,0,0,7);ctx.fill()}
-  ctx.globalAlpha=0.3;ctx.fillStyle='#fff3b0';ctx.beginPath();ctx.ellipse(0,-5,14,7,0,0,7);ctx.fill();ctx.globalAlpha=1}
- else{ctx.fillStyle='#ffd45e';rr(-4.5,-4,9,8,2);ctx.fill();ctx.fillStyle='#3f2505';ctx.beginPath();ctx.arc(0,-1,1.7,0,7);ctx.fill();ctx.fillRect(-0.9,-1,1.8,3.4)}
+ if(c.got){ctx.globalAlpha=oe;ctx.fillStyle='#ffe9a0';for(let i=0;i<5;i++){const a=i*1.31;ctx.beginPath();ctx.ellipse(Math.cos(a)*6,-1+Math.sin(a)*2,4,2.6,0,0,7);ctx.fill()}
+  ctx.globalAlpha=0.3*oe;ctx.fillStyle='#fff3b0';ctx.beginPath();ctx.ellipse(0,-5,14,7,0,0,7);ctx.fill();ctx.globalAlpha=1}
+ if(!c.got||oe<1){ctx.globalAlpha=1-oe;ctx.fillStyle='#ffd45e';rr(-4.5,-4,9,8,2);ctx.fill();ctx.fillStyle='#3f2505';ctx.beginPath();ctx.arc(0,-1,1.7,0,7);ctx.fill();ctx.fillRect(-0.9,-1,1.8,3.4);ctx.globalAlpha=1}
  ctx.restore()}
+// The coin stream an opened chest is spitting out, plus its running "+N" tally - drawn in world space beside the chest
+// (see updChests). The tally pops each time a coin lands and drifts up as the pile grows, so the payout reads as a
+// count, not a single lump sum.
+function drawChestPayout(c){if(!c.got)return;
+ if(c.fly)for(const f of c.fly)coinIcon(f.x,f.y,5.5,f.r);
+ if(c.cnt){const k=1+clamp(c.cntT||0,0,0.24)*1.5,paying=c.pay>0||(c.fly&&c.fly.length);
+  ctx.save();ctx.translate(c.x,c.y-36-Math.min(12,c.cnt*0.8));ctx.scale(k,k);ctx.globalAlpha=paying?1:clamp(2.2-(c.openT||0)*0.6,0,1);
+  otxt('+'+c.cnt,0,0,16,'#ffe9a0','rgba(56,26,0,.8)',5);ctx.restore();ctx.globalAlpha=1}}
 // Gilded Vale in-level dust motes: soft warm circles drifting slowly around the camera, screen-space-ish (camera-
 // relative so they read as part of the world, not a screen overlay) - the "drifting golden dust motes" ambient touch,
 // separate from the sparser ambient() particle spawner so the world always reads as hazy/sunlit, not just occasionally.
@@ -3090,7 +3186,7 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
  if(L.note&&!L.note.got)drawNote(L.note,t);
  drawRocketStuff(L,t);drawAsteroidStuff(L);drawRoverStuff(L,t);drawOgreStuff(L,t);drawGhosts(L,t);
  if(L.key&&!L.key.got){const b=Math.sin(t*3)*3;ctx.globalAlpha=0.35;ctx.fillStyle='#ffd45e';ctx.beginPath();ctx.arc(L.key.x,L.key.y+b,14,0,7);ctx.fill();ctx.globalAlpha=1;keyIcon(L.key.x,L.key.y+b,14)}
- if(L.chests)for(const ch of L.chests){if(ch.x<G.cam.x-40||ch.x>G.cam.x+VW+40||ch.y<G.cam.y-40||ch.y>G.cam.y+VH+40)continue;drawChest(ch,t)}
+ if(L.chests)for(const ch of L.chests){if(ch.x<G.cam.x-80||ch.x>G.cam.x+VW+80||ch.y<G.cam.y-80||ch.y>G.cam.y+VH+80)continue;drawChest(ch,t);drawChestPayout(ch)}
  for(const c of L.checks){const px=c.x*TS,py=c.y*TS;ctx.fillStyle='#3a3548';ctx.fillRect(px+5,py-10,3,34);ctx.fillStyle=c.on?th.acc:'#b9b6c6';ctx.beginPath();const w=Math.sin(t*6)*(c.on?3:1);ctx.moveTo(px+8,py-10);ctx.lineTo(px+22,py-5+w);ctx.lineTo(px+8,py);ctx.closePath();ctx.fill()}
  if(L.exit.y>0){const px=L.exit.x*TS,py=L.exit.y*TS,a=th.acc;ctx.save();ctx.shadowColor=a;ctx.shadowBlur=18;ctx.fillStyle='#16122a';rr(px,py-12,24,36,11);ctx.fill();ctx.restore();
   const g2=ctx.createLinearGradient(0,py-10,0,py+24);g2.addColorStop(0,'#ffffff');g2.addColorStop(1,a);ctx.fillStyle=g2;ctx.globalAlpha=0.55+Math.sin(t*4)*0.2;rr(px+4,py-8,16,32,8);ctx.fill();ctx.globalAlpha=1;
@@ -3594,7 +3690,7 @@ SCREENS.pause={enter(){},
   else{button('resume',VW/2-140,210,280,52,'Resume');button('restart',VW/2-140,276,280,52,'Restart  (R)');button('quit',VW/2-140,342,280,52,en?'End Run':'Quit')}
   txt(touchOn()?'Drag on the left to move. Hold down on the stick to drop through. Tap the right side to jump.':'Move: Arrows/WASD   Jump: SPACE / W / Up   Hold Down to drop through   Music: M',VW/2,440,15,'#fff',undefined,false)},
  onBtn(id){if(id=='resume'){SCR=SCREENS.play;return}if(id=='cards')return go('cards',{from:'pause'});if(id=='restart')return restartLevel();
-  if(G.mode=='tut')return go('menu');if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:wdOf(G.idx)})}};
+  if(G.mode=='tut')return go('menu');if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:tabOf(G.idx,G.mode=='hard')})}};
 
 // ================= POWER CARDS SCREEN =================
 // The one place that names every Power Card, spells out exactly what it does, and lets you play it. Reached from the
@@ -3658,7 +3754,7 @@ SCREENS.cdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);if(r.best)con
 
 // Chaos Replay: pick a single hard-mode modifier to replay a cleared story level with. Casual only.
 SCREENS.chaosPick={enter(a){this.i=a.i;UI.selId=null;musicPlay(0)},
- update(){uiNav(this);if(pressed.ESC)go('levels',{tab:wdOf(this.i)})},
+ update(){uiNav(this);if(pressed.ESC)go('levels',{tab:tabOf(this.i,false)})},
  // this screen inherits whichever world background the chosen level uses (pale green through near-black), so the whole
  // caption stack rides its own dark plate instead of hoping cyan-on-green works
  draw(){drawBG(WORLDS[LEVELS[this.i].wd],gtime*20,0,gtime);backBtn();
@@ -3669,7 +3765,7 @@ SCREENS.chaosPick={enter(a){this.i=a.i;UI.selId=null;musicPlay(0)},
   opts.forEach((k,idx)=>{const x=VW/2-330+(idx%3)*220,y=150+Math.floor(idx/3)*80;
    button('m'+k,x,y,200,64,'',{draw:()=>{txt(MODN[k],0,-8,17,'#1d1a2e','center',false);txt(MODD[k],0,16,fitFont(MODD[k],188,14,14),'#4a4660','center',false)}})});
   if(!opts.length)txt('No modifiers fit this level layout.',VW/2,230,16,'#b9b6c6')},
- onBtn(id){if(id=='back')return go('levels',{tab:wdOf(this.i)});if(id.startsWith('m'))return startChaosReplay(this.i,id.slice(1))}};
+ onBtn(id){if(id=='back')return go('levels',{tab:tabOf(this.i,false)});if(id.startsWith('m'))return startChaosReplay(this.i,id.slice(1))}};
 
 SCREENS.chaosdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(50)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
@@ -3681,7 +3777,7 @@ SCREENS.chaosdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(
   coinIcon(VW/2-30,306,9,gtime*3);txt('+5 coins',VW/2-12,307,18,'#ffd45e','left');
   txt('Casual run — not counted toward stars or leaderboards.',VW/2,340,14,'#b9b6c6',undefined,false);
   button('again',VW/2-230,400,210,54,'Replay Again');button('list',VW/2+20,400,210,54,'Levels')},
- onBtn(id){if(id=='again')return startChaosReplay(this.r.i,this.r.mod);go('levels',{tab:wdOf(this.r.i)})}};
+ onBtn(id){if(id=='again')return startChaosReplay(this.r.i,this.r.mod);go('levels',{tab:tabOf(this.r.i,false)})}};
 
 SCREENS.clear={enter(r){this.r=r;this.t=0;this.pl=[0,0,0];FX.length=0;if(r.first)confetti(60)},
  update(dt){this.t+=dt;const r=this.r;
@@ -3708,10 +3804,12 @@ SCREENS.clear={enter(r){this.r=r;this.t=0;this.pl=[0,0,0];FX.length=0;if(r.first
    coinIcon(x0+9,cY-1,9,gtime*3);txt(cs,x0+22,cY,18,'#ffd45e','left',false);if(gs2)txt(gs2,x0+22+w1,cY,18,'#5ff4ff','left',false);
    if(cTip)txt('Coins buy skins in the Shop.',VW/2,cY+22,14,'#d8d5ea',undefined,false)}
   ctx.restore();
-  const isLast=r.i==NL-1;button('next',VW/2+70,426,170,50,r.finaleFirst?'The End >':r.worldClear>=0?'Continue >':isLast?'Levels':'Next >');button('retry',VW/2-85,426,150,50,'Retry');button('levels',VW/2-240,426,150,50,'Levels');
+  // "Next >" only when there really is a next level in this run's own chain - the last level of a bonus world (and
+  // THE TOP) says "Levels" instead of promising a level it cannot deliver. Same nextOf() the button itself uses.
+  const isLast=r.mode=='story'?nextOf(r.i)<0:r.i+1>=NL;button('next',VW/2+70,426,170,50,r.finaleFirst?'The End >':r.worldClear>=0?'Continue >':isLast?'Levels':'Next >');button('retry',VW/2-85,426,150,50,'Retry');button('levels',VW/2-240,426,150,50,'Levels');
   drawParts(FX)},
- onBtn(id){const r=this.r;if(id=='next'){if(r.finaleFirst)return go('ending');if(r.worldClear>=0)return go('wclear',r);const n=r.mode=='story'?nextOf(r.i):(r.i+1<NL?r.i+1:-1);if(n>=0&&unlocked(n,r.mode))return startLevel(n,r.mode);return go('levels',{hard:r.mode=='hard',tab:wdOf(r.i)})}
-  if(id=='retry')return startLevel(r.i,r.mode);go('levels',{hard:r.mode=='hard',tab:wdOf(r.i)})}};
+ onBtn(id){const r=this.r;if(id=='next'){if(r.finaleFirst)return go('ending');if(r.worldClear>=0)return go('wclear',r);const n=r.mode=='story'?nextOf(r.i):(r.i+1<NL?r.i+1:-1);if(n>=0&&unlocked(n,r.mode))return startLevel(n,r.mode);return go('levels',{hard:r.mode=='hard',tab:tabOf(r.i,r.mode=='hard')})}
+  if(id=='retry')return startLevel(r.i,r.mode);go('levels',{hard:r.mode=='hard',tab:tabOf(r.i,r.mode=='hard')})}};
 
 // shop grid blink waves: every few seconds a new pattern sweeps across the squares
 let BLINKO=null;
@@ -4052,12 +4150,20 @@ function drawWheel(cx,cy,R,segs,rot,prem,hi,mode){const n=segs.length,A=Math.PI*
   const px=c*(R-9),py=sn*(R-9);ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.arc(px+1,py+2,4.8,0,TAU);ctx.fill();
   ctx.fillStyle=prem?'#ffe39a':'#eef0ff';ctx.beginPath();ctx.arc(px,py,4.4,0,TAU);ctx.fill();ctx.fillStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(px-1.3,py-1.3,1.6,0,TAU);ctx.fill()}
  // Prize art and labels sit on their wedge but are counter-rotated back to upright, so a prize is never read sideways
- // or upside down however the wheel happens to be turned. Anchor is the wedge midline at 0.67R; icon below, label above.
- for(let i=0;i<n;i++){const s=segs[i],am=-Math.PI/2+(i+0.5)*A,lab=segLabel(s);
+ // or upside down however the wheel happens to be turned.
+ // OVERLAP FIX: both used to hang off ONE anchor on the wedge midline at 0.67R, with the icon pushed R*0.14 DOWN and
+ // the label R*0.17 UP *in screen space*. Because the anchor rotates and the offsets do not, the pair slid sideways
+ // across the wedge as the wheel turned: on a wedge pointing down the label fell inward and collided with the hub
+ // while the icon shot outward over the divider into the next wedge, and neighbouring prizes (the Premium Wheel's big
+ // hat/trail/skin art especially) piled on top of each other. Label and icon now get their OWN polar anchors on the
+ // wedge midline - label at 0.79R, icon at 0.50R - and are counter-rotated individually. They are therefore always
+ // radially stacked inside their own wedge at every rotation, while still staying upright and readable.
+ for(let i=0;i<n;i++){const s=segs[i],am=-Math.PI/2+(i+0.5)*A,lab=segLabel(s),ca=Math.cos(am),sa=Math.sin(am);
   const fs=Math.round(lab.length>7?R*0.078:lab.length>5?R*0.092:lab.length>3?R*0.11:R*0.13);
-  ctx.save();ctx.translate(Math.cos(am)*R*0.67,Math.sin(am)*R*0.67);ctx.rotate(-rot);
-  segIcon(s,0,R*0.14,R*0.2);
-  otxt(lab,0,-R*0.17,fs,s.k=='J'?`hsl(${(gtime*140)%360},95%,72%)`:'#fff',prem?'rgba(40,10,60,.75)':'rgba(20,10,50,.6)');ctx.restore()}
+  // icon first, so a long label always wins the overlap it can never quite avoid on a 7-segment wheel
+  ctx.save();ctx.translate(ca*R*0.50,sa*R*0.50);ctx.rotate(-rot);segIcon(s,0,0,R*0.185);ctx.restore();
+  ctx.save();ctx.translate(ca*R*0.79,sa*R*0.79);ctx.rotate(-rot);
+  otxt(lab,0,0,fs,s.k=='J'?`hsl(${(gtime*140)%360},95%,72%)`:'#fff',prem?'rgba(40,10,60,.75)':'rgba(20,10,50,.6)');ctx.restore()}
  ctx.restore();
  const gl=ctx.createRadialGradient(cx-R*0.35,cy-R*0.45,R*0.05,cx,cy,R);gl.addColorStop(0,'rgba(255,255,255,.2)');gl.addColorStop(0.45,'rgba(255,255,255,.04)');gl.addColorStop(1,'rgba(0,0,0,.22)');ctx.fillStyle=gl;ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.fill();
  const hr=R*0.17;ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.arc(cx+2,cy+5,hr+5,0,TAU);ctx.fill();
@@ -4078,9 +4184,12 @@ function wheelBG(prem,cx,cy){drawBG(prem?WORLDS[4]:WORLDS[2],gtime*20,0,gtime);
  for(let j=0;j<12;j++){ctx.rotate(Math.PI/6);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-70,-760);ctx.lineTo(70,-760);ctx.closePath();ctx.fill()}ctx.restore();
  if(prem)for(let j=0;j<28;j++){const x=(j*173.3)%VW,y=VH-((gtime*14*(1+j%3)+j*83)%(VH+40))+20,tw=Math.abs(Math.sin(gtime*2+j));star5(x,y,2+(j%3)+tw*1.5,`rgba(255,220,120,${0.25+0.55*tw})`)}}
 function ghostBtn(x,y,w,h,label,bg,fg,fs){ctx.fillStyle='rgba(0,0,0,.25)';rr(x+3,y+5,w,h,12);ctx.fill();ctx.fillStyle=bg;rr(x,y,w,h,12);ctx.fill();txt(label,x+w/2,y+h/2+1,fs||20,fg||'#1d1a2e','center',false)}
-// The paid Premium Wheel stays completely hidden until the player has actually spent a free Prize Wheel ticket, so
-// the very first thing they meet on this screen is never a paid-spin upsell. S.spun is set in onBtn's free-spin branch.
-function pwOn(){return !!S.dev||!!S.spun}
+// The Premium Wheel is ALWAYS visible - its tab, its menu button and the Premium button on the wheel screen.
+// (This used to be gated on S.dev||S.spun, hiding it until the player had spent a free Prize Wheel ticket.) Everything
+// else about it is unchanged: the odds display, the pity system, the confirm popup and its "Not now" default all still
+// stand between the player and a paid spin. Kept as a function so the call sites (and the layouts that branch on it)
+// stay exactly as they were.
+function pwOn(){return true}
 SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
  enter(a){if(typeof a=='string')a={from:a};a=a||{};this.from=a.from||'menu';if(a.prem!=null)this.prem=!!a.prem;if(!pwOn())this.prem=false;this.spin=null;this.rev=null;this.modal=null;this.pa=0;this.pv=0;FX.length=0;musicPlay(0);UI.selId='spin'},
  segs(){return this.prem?PWHEEL:WHEEL},
@@ -4121,7 +4230,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    txt(busy?'Good luck...':last?'Last win: '+last.txt:'1 ticket = 1 spin',760,232,16,busy?'#fff':last?'#ffd45e':'#d8d5ea',undefined,false);
    if(!blocked){if(S.dev||S.tix>0){ctx.globalAlpha=0.3+0.25*Math.sin(gtime*4);ctx.fillStyle='#b6ff7a';rr(612,250,296,86,18);ctx.fill();ctx.globalAlpha=1}
     button('spin',620,258,280,70,(S.dev||S.tix>0)?'SPIN!':'No tickets',{fs:32,disabled:!S.dev&&S.tix<=0,bg:'#7bdc3b',col:'#b6ff7a'});
-    // Premium is hidden until the first free ticket has been spent (pwOn); Odds takes the whole row until then.
+    // Odds + Premium share this row (pwOn() is always true now - see above).
     if(pwOn()){button('odds',620,342,136,40,'Odds',{fs:17});button('gopremium',764,342,136,40,'',{bg:'#2a1450',draw:(w,h,sel)=>{const c=sel?'#3a1470':'#ffd45e';star5(-44,0,8,c);txt('Premium',6,1,17,c,'center',false)}})}
     else button('odds',620,342,280,40,'Odds',{fs:17});
     // coin sink: TIX_COST coins -> 1 ticket, TIX_BUY_MAX a day (see buyTix). Under the wheel so it can't be missed.
