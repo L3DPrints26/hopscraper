@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260922-214500'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260923-164458'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -65,7 +65,7 @@ const SKEY='hopscraper_save_v1';
 function prefersRM(){try{return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?1:0}catch(e){return 0}}
 function RM(){try{return !!S.set.rm}catch(e){return false}}
 function isTouchDev(){try{return(navigator.maxTouchPoints>0&&window.matchMedia&&matchMedia('(pointer:coarse)').matches)?1:0}catch(e){return 0}}
-function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,touch:isTouchDev(),gfx:'auto',rm:prefersRM()},
+function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,touch:isTouchDev(),gfx:'auto',rm:prefersRM()},
  // ver = save format version. tixDay/dtix/clubDay are day numbers (todaySeed-style) and clubMonth a month number, so a
  // clock set backwards grants nothing. clubExp = Club expiry (ms, 0 = no expiry known). txDone = App Store transactions
  // already delivered, iap = one-time products owned (both survive Reset Save, see resetSave()).
@@ -984,7 +984,10 @@ const LEVELS=[
  r:[['#',1,19,38,2],['#',30,6,9,1],['#',29,1,1,6],['D',29,3,1,3],['#',6,13,4,1],['#',25,10,4,1],['=',21,15,4,1],['=',26,13,4,1],['=',11,16,4,1],['=',8,10,4,1],['v',6,1,20,1]],
  m:[['saw',5,18,26,18,7],['orb',18,11,4,3,1.8]]},
 // ---------- FINALE ----------
-{wd:4,n:'THE TOP',W:32,H:60,t:35,s:[16,56],e:[27,2],k:[[12,38],[14,15]],g:[[3,53],[27,42],[11,33],[16,19],[15,8]],rise:{d:4,v:1.35},tip:'This is it. Do not look down.',
+// DELIBERATELY NO `k:` (checkpoints). THE TOP is one clean run, bottom to top - do not add flags back. It stays fair
+// because spawn() resets the lava to the bottom on every death (see spawn()), so each attempt is a full, fresh 54-tile
+// climb against a rise that takes ~44s to reach the exit: losing costs you the attempt, never the attempt's fairness.
+{wd:4,n:'THE TOP',W:32,H:60,t:35,s:[16,56],e:[27,2],g:[[3,53],[27,42],[11,33],[16,19],[15,8]],rise:{d:4,v:1.35},tip:'This is it. Do not look down.',
  r:[['#',1,57,30,2],['^',1,56,5,1],['^',26,56,5,1],['=',6,52,5,1],['=',16,50,5,1],['=',24,52,5,1],
   ['#',1,48,24,1],['v',1,49,24,1],['=',24,45,5,1],['=',12,42,5,1],['l',1,44,30,1],['=',2,42,5,1],
   ['#',7,39,24,1],['v',7,40,24,1],
@@ -1474,17 +1477,34 @@ function chunkOf(L,ti,cx,cy){const key=ti+':'+cx+','+cy;/* theme in the key: End
    if(c!='N'&&'^v<>B'.indexOf(c)>=0&&nN(x,y)>=2){ctx.fillStyle=getNPat();ctx.fillRect(px,py,TS,TS)}
    if(c=='N'){ctx.fillStyle=getNPat();ctx.fillRect(px,py,TS,TS)}
    else if(c=='#'){const mask=(SOL(L,x,y-1)||cover(x,y-1)?1:0)|(SOL(L,x,y+1)?2:0)|(SOL(L,x-1,y)?4:0)|(SOL(L,x+1,y)?8:0);ctx.drawImage(tileSpr(ti,'#',mask,((x*37+y*101)%4+4)%4),px-4,py-4)}
-   else if(c=='=')ctx.drawImage(tileSpr(ti,'=',(L.g[y][x-1]=='='?4:0)|(L.g[y][x+1]=='='?8:0),0),px-4,py-4);
+   // UPSIDE DOWN: bakeOneway paints the plank in the TOP 9px of its tile because you normally stand on its top face, but
+   // with gravity inverted colY parks you against the tile's BOTTOM edge - drawn as-is you float 15px clear of the very
+   // thing you are standing on. Mirror the 32x32 sprite about its own tile centre so the plank's face meets your feet.
+   else if(c=='='){const os=tileSpr(ti,'=',(L.g[y][x-1]=='='?4:0)|(L.g[y][x+1]=='='?8:0),0);
+    if(L.vf){ctx.save();ctx.translate(px+12,py+12);ctx.scale(1,-1);ctx.drawImage(os,-16,-16);ctx.restore()}else ctx.drawImage(os,px-4,py-4)}
    else if(c=='^'||c=='v'||c=='<'||c=='>')ctx.drawImage(tileSpr(ti,c,0,0),px-4,py-4);
    else if(c=='~')ctx.drawImage(tileSpr(ti,'~',0,0),px-4,py-4)}});
  L.chunks.set(key,cv2);if(L.chunks.size>30)L.chunks.delete(L.chunks.keys().next().value);
  return cv2}
 
 // ================= ENDLESS GENERATOR =================
+// Difficulty ramp: `d` is the ONLY difficulty scalar in this generator - every hazard chance, saw speed, orb reach and
+// gap width below is a function of it. It rises linearly with how far you have climbed (1.0 per END_RAMP tiles, so the
+// first hundred metres barely differ from the start) and then CLAMPS at END_DMAX so the tower stops getting harder
+// instead of eventually becoming unclearable. Raise END_DMAX to make the ceiling nastier, raise END_RAMP to reach it
+// later. Old behaviour was d=(climb)/150 with no clamp at all, which peaked around d=34 (every chance saturated to 1).
+const END_RAMP=220,END_DMAX=2.2;
+// How often a 'bar' section becomes the dense spike corridor (a full row of spikes under the ceiling). Meant to be a
+// rare "oh no" moment, not the shape of the whole tower - see SPIKEROW_DOUBLE for the both-rows version.
+// Tuned so the hanging row shows up roughly every ~140m of climb and the full two-row corridor roughly every ~400m:
+// often enough that you still meet it and swear at it, rare enough that it is an event and not the tower's wallpaper.
+const SPIKEROW_BASE=0.12,SPIKEROW_MAX=0.35,SPIKEROW_DOUBLE=0.35;
 function genEndless(seed){const R=mulberry(seed);const W=24,H=5200;const r=[],m=[],g=[],cand=[];const ri=(a,b)=>a+Math.floor(R()*(b-a+1));
  r.push(['#',1,H-3,22,2]);let y=H-9,last='',calm=0;
- while(y>14){const d=(H-9-y)/150;const types=['plat','bar','saws','laser','orb','crum','plat'];if(d>0.6)types.push('nz','bar');if(d>1.4)types.push('bar','saws','orb');
-  let tp=types[Math.floor(R()*types.length)];if(tp==last&&R()<0.7)tp=tp=='plat'?'bar':'plat';
+ while(y>14){const d=Math.min(END_DMAX,(H-9-y)/END_RAMP);const types=['plat','bar','saws','laser','orb','crum','plat'];if(d>0.6)types.push('nz','crum');if(d>1.4)types.push('saws','orb','bar');
+  // repeat-breaker: send a repeated section to 'crum', NOT to 'bar' - sending it to 'bar' was quietly making the
+  // spike-corridor section the most common thing in the tower
+  let tp=types[Math.floor(R()*types.length)];if(tp==last&&R()<0.7)tp=tp=='plat'?'crum':'plat';
   // fairness: a bounce pad throws you ~13 tiles up and you can't stop it, so keep ceilings (bars, no-jump zones) out of the next 2 sections
   if(calm>0){calm--;if(tp=='bar'||tp=='nz'||tp=='laser'||tp=='saws')tp='plat'}last=tp;let sh=6;
   if(tp=='plat'){sh=5;const n=ri(2,3);for(let i=0;i<n;i++){const w=ri(3,6),x=ri(1,23-w);r.push(['=',x,y-ri(0,3),w,1])}
@@ -1492,9 +1512,12 @@ function genEndless(seed){const R=mulberry(seed);const W=24,H=5200;const r=[],m=
   else if(tp=='bar'){sh=7;const yb=y-3,gw=R()<0.3+d*0.15?3:4,gx=ri(1,23-gw);if(gx>1)r.push(['#',1,yb,gx-1,1]);if(gx+gw<23)r.push(['#',gx+gw,yb,23-(gx+gw),1]);
    // fairness: a thin floor right across under the bar, so from either wall you can walk (not pixel-hop) to the gap
    r.push(['=',1,yb+3,22,1]);
-   // spikes stop one tile short of the walls: wall-climbers bump the ceiling and land on the floor instead of dying
-   if(R()<0.5+d*0.2){if(gx-3>0)r.push(['v',2,yb+1,gx-3,1]);if(21-(gx+gw)>0)r.push(['v',gx+gw+1,yb+1,21-(gx+gw),1])}
-   if(R()<0.2+d*0.2){if(gx-3>0)r.push(['^',2,yb-1,gx-3,1]);if(21-(gx+gw)>0)r.push(['^',gx+gw+1,yb-1,21-(gx+gw),1])}
+   // spikes stop one tile short of the walls: wall-climbers bump the ceiling and land on the floor instead of dying.
+   // RARE by design (SPIKEROW_*): most bars are just a ceiling with a gap to aim for. The hanging row is the challenge
+   // version, and the second row on top of it - the full tight corridor - only happens on a fraction of those again.
+   {const sr=R()<Math.min(SPIKEROW_MAX,SPIKEROW_BASE+d*0.11);
+    if(sr){if(gx-3>0)r.push(['v',2,yb+1,gx-3,1]);if(21-(gx+gw)>0)r.push(['v',gx+gw+1,yb+1,21-(gx+gw),1])}
+    if(sr&&R()<SPIKEROW_DOUBLE){if(gx-3>0)r.push(['^',2,yb-1,gx-3,1]);if(21-(gx+gw)>0)r.push(['^',gx+gw+1,yb-1,21-(gx+gw),1])}}
    // saw runs along the TOP of the bar (time your jump through the gap), not in the low corridor where you can't jump over it
    if(R()<0.25+d*0.2){const a=R()<0.5;m.push(['saw',a?2:21,yb-1,a?21:2,yb-1,4+Math.min(5,d*1.5)+R()*2])}}
   else if(tp=='saws'){const n=R()<0.3+d*0.3?2:1;for(let i=0;i<n;i++){const row=y-1-i*3,a=R()<0.5;m.push(['saw',a?2:21,row,a?21:2,row,4+Math.min(6,d*1.6)+R()*2,R()])}}
@@ -1531,8 +1554,12 @@ function makeCourse(ci){const c=COURSES[ci];if(c._d)return c._d;const R=mulberry
   r.push(['#',gx,4,2,hang]);r.push(['v',gx,4+hang,2,1]);
   r.push(['#',gx+8,19-hh,2,hh]);r.push(['^',gx+8,18-hh,2,1]);
   if(d>=2&&R()<0.45){const h3=ri(4,7);r.push(['#',gx+15,4,2,h3]);r.push(['v',gx+15,4+h3,2,1])}};
- const types=['gap','conv','stair','plat','saw','bounce','ceil','crum','gate','gate'];
- if(d>=1)types.push('conv','saw','gap','shaft','plat');
+ // 'beam' and 'lasers' are in the BASE list on purpose, including Sunny Sprint. Without them a course is a pure
+ // hold-right run: nothing on it ever costs time, so every good player converges on the same optimal number and the
+ // leaderboard is a pile of ties. A blinking beam is the one hazard whose cost depends on WHEN you arrive, which is
+ // what turns a course into a route decision (wait, or take the slower-but-always-open high line) instead of a dash.
+ const types=['gap','conv','stair','plat','saw','bounce','ceil','crum','gate','gate','beam','beam','lasers','beam'];
+ if(d>=1)types.push('conv','saw','gap','shaft','plat','beam');
  if(d>=2)types.push('phase','lasers','shaft','orb','phase');
  if(d>=3)types.push('gap','saw','phase','lasers','orb','ceil','shaft');
  let x=8,last='';
@@ -1540,7 +1567,8 @@ function makeCourse(ci){const c=COURSES[ci];if(c._d)return c._d;const R=mulberry
   if(tp=='gap'){const gw=Math.min(13,5+d*2+ri(0,2));r.push(['.',x,19,gw,1]);r.push([hz,x,20,gw,1]);
    if(gw>7||R()<0.5)r.push(['=',x+Math.floor(gw/2)-1,ri(13,16),3,1]);
    if(d>=2&&R()<0.5)r.push(['v',x+1,ri(9,11),gw-2,1]);w=gw+ri(2,4)}
-  else if(tp=='conv'){const cw=ri(7,12),dir=R()<0.7?'C':'c';r.push([dir,x,19,cw,1]);
+  // more belts now run AGAINST you (a backwards belt is the only floor in the game that actually costs you time)
+  else if(tp=='conv'){const cw=ri(7,12),dir=R()<0.55?'C':'c';r.push([dir,x,19,cw,1]);
    const n=1+(d>=2?1:0);for(let i=0;i<n;i++)r.push(['^',x+ri(1,cw-3),18,2,1]);
    if(d>=1&&R()<0.5)m.push(['saw',x,15,x+cw,15,4+d]);w=cw+2}
   else if(tp=='stair'){const n=ri(3,5),up=R()<0.6;for(let i=0;i<n;i++)r.push(['=',x+i*3,up?16-i*2:8+i*2,3,1]);w=n*3+2;if(R()<0.5)r.push(['^',x,18,w-2,1])}
@@ -1570,6 +1598,18 @@ function makeCourse(ci){const c=COURSES[ci];if(c._d)return c._d;const R=mulberry
    r.push(['#',x,19-hgt,3,hgt]);r.push(['#',x+7,19-hgt,3,hgt]);r.push(['^',x+3,18,4,1]);
    if(d>=2)r.push([R()<0.5?'>':'<',R()<0.5?x+2:x+7,19-hgt+ri(1,3),1,2]);
    if(R()<0.5)r.push(['=',x+3,19-hgt-2,4,1])}
+  // BEAM FORK - the segment that makes a course a race instead of a treadmill. A blinking beam stands in the ground
+  // lane (rows 13-18, so it stops a runner but leaves everything above row 13 open) and three thin platforms arc over
+  // the top of it. Both lanes always work, so the course is always completable:
+  //   * beam off when you get there -> sprint straight through, free.
+  //   * beam on -> either brake and wait out its half-cycle, or commit to the high line: a climb and two jumps that
+  //     cost you less than the wait but punish a miss. Beam phase is a function of run time, so which is right differs
+  //     every attempt - a perfect run means arriving at each beam on the correct half, which you steer earlier.
+  else if(tp=='beam'){w=ri(14,17);const bx=x+Math.floor(w/2),lc=R()<0.5?'l':'L';
+   r.push([lc,bx,13,1,6]);
+   r.push(['=',x+2,16,3,1]);r.push(['=',bx-1,12,3,1]);r.push(['=',bx+4,16,3,1]);
+   if(d>=1&&R()<0.5)r.push(['^',x+w-4,18,2,1]);
+   if(d>=2&&R()<0.4)m.push(['saw',x+1,9,bx-2,9,4+d])}
   if(tp!='gate'&&tp!='ceil'&&tp!='shaft'&&R()<0.3+d*0.1){gate(x+w+2);w+=20}
   x+=w}
  r.push(['#',W-8,16,6,3]);
@@ -1736,6 +1776,10 @@ function spawn(){const L=G.L,s=G.checkpoint||L.start;if(L.rk){L.rk.length=0;for(
  const sgs=G.gs||1;
  G.player={x:s.x*TS+4,y:sgs>0?s.y*TS+TS-16:s.y*TS,w:16,h:16,vx:0,vy:0,onG:false,coy:0,buf:0,face:L.mir?-1:1,sx:1.4,sy:0.6,wall:0,lock:0,lockDir:0,dead:false,bnc:false,inN:false,trT:0,aj:AIRJ,ajFx:0};
  G.player.px=G.player.x;G.player.py=G.player.y;
+ // fairness: every hazard (saws, platforms, lasers, phase blocks, ogres, ghosts...) is a pure function of G.t, so
+ // resetting it here means every attempt from this exact spawn point replays the SAME hazard layout - no dying to
+ // a saw that was "supposed" to be somewhere else because the clock kept running through your last death.
+ G.t=0;L.bt={}; // also wipe bounce-pad stamps (they're G.t timestamps too - stale ones read as negative age post-reset)
  if(G.spawnX==null){G.spawnX=G.player.x;G.spawnY=G.player.y} // fairness timer reference point: only the very first spawn of this run
  if(L.rise&&!L.rise.endless){G.lavaY=L.H*TS+TS;G.riseT=0}
  burst(G.player.x+8,G.player.y+14,'#ffffff',10,'puff')}
@@ -1768,7 +1812,9 @@ function updMovers(L,t){for(const m of L.movers){if(m.t=='saw'||m.t=='rov'||m.t=
  else{m.pts.length=0;for(let i=0;i<m.n;i++){const a=t*m.sp+i*Math.PI*2/m.n;m.pts.push(m.cx+Math.cos(a)*m.r,m.cy+Math.sin(a)*m.r)}}}}
 function updCrumble(L,dt){for(const c of L.crl){if(c.s==1){c.t-=dt;if(c.t<=0){c.s=2;c.t=2.6;for(let i=0;i<8;i++)G.parts.push({x:c.x*TS+rnd(0,24),y:c.y*TS+rnd(0,24),vx:rnd(-60,60),vy:rnd(-80,20),l:0.8,ml:0.8,c:themeOf().top,s:rnd(3,6),g:900,sh:'sq'})}}
  else if(c.s==2){c.t-=dt;if(c.t<=0){const p=G.player,x=c.x*TS,y=c.y*TS;if(p&&!p.dead&&p.x<x+TS&&p.x+p.w>x&&p.y<y+TS&&p.y+p.h>y)c.t=0.2;else c.s=0}}}}
-function updLava(dt){const L=G.L,p=G.player;if(!L.rise||G.won)return;G.riseT+=dt;if(G.riseT<L.rise.d)return;
+// The rise clock does not tick until the run has actually started (G.moved = first real input or first displacement,
+// set in step()). A slow load, a phone still waking up or reading the intro banner can never cost you ground.
+function updLava(dt){const L=G.L,p=G.player;if(!L.rise||G.won||!G.moved)return;G.riseT+=dt;if(G.riseT<L.rise.d)return;
  let v=L.rise.v*G.riseMul;if(L.rise.endless)v=Math.min(3.0,L.rise.v+(G.riseT-L.rise.d)*0.013);G.lavaY-=v*TS*dt;
  if(L.rise.endless&&p&&!p.dead){const cap=p.y+18*TS;if(G.lavaY>cap)G.lavaY=cap}}
 
@@ -2323,11 +2369,12 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  L.ghost=null;if(!p.dead)for(let ty=Math.floor(p.y/TS);ty<=Math.floor((p.y+p.h-0.01)/TS);ty++)for(let tx=Math.floor(p.x/TS);tx<=Math.floor((p.x+p.w-0.01)/TS);tx++){const c=tAt(L,tx,ty);if(c=='T'||c=='t')(L.ghost||(L.ghost=[])).push(ty*L.W+tx)}
  if(p.dead){G.respT-=dt;if(G.respT<=0){if(G.mode=='endless'||G.mode=='daily')endEndless();else spawn()}return}
  if(G.won)return;
- // fairness: the scored/displayed clock (G.time) only starts once the player gives real input or is actually
- // displaced from their spawn point (e.g. a conveyor tile) - lava-rise (G.riseT, in updLava above) is NOT gated,
- // it already runs on its own always-on clock so waiting to move can never stall the lava.
- // ...or once the intro banner has finished, whichever comes first
- if(!G.moved&&(G.intro<=0||keys.L||keys.R||keys.D||keys.J||keys.U||p.buf>0||p.x!==G.spawnX||p.y!==G.spawnY))G.moved=true;
+ // THE RUN STARTS WHEN YOU DO. G.moved flips on the first real input, or on the first frame the player is actually
+ // displaced from their spawn point (a conveyor tile, a crumbling start, a spawn with nothing under it) - never just
+ // because the intro banner finished. Everything that races you hangs off this one flag: the scored/displayed clock
+ // below, and the lava/hazard rise in updLava(). So a slow load or a moment spent reading the tip costs nothing, and
+ // standing still forever gains nothing either, because no exit is reachable without moving.
+ if(!G.moved&&(keys.L||keys.R||keys.D||keys.J||keys.U||p.buf>0||p.x!==G.spawnX||p.y!==G.spawnY))G.moved=true;
  if(G.moved)G.time+=dt;
  S.st.time+=dt;
  const M=G.mods,hardRun=G.mode=='hard'||G.mode=='hspeed',has=k=>!!M&&M.has(k),gs=G.gs||1,ice=has('ice');
@@ -2340,13 +2387,18 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  if(has('chaos'))gmul*=1+0.7*Math.sin(G.t*0.8);
  const left=keys.L,right=keys.R,down=keys.D,jh=keys.J||keys.U;
  let dir=(right?1:0)-(left?1:0);if(has('inv'))dir=-dir;
+ // INVERTED swaps which key sends you which way, so the wall-cling test below has to read the SWAPPED key too: it used
+ // the raw left/right, so on an 'inv' level you pressed right, slid into the left wall, and never got a wall grab -
+ // wall jumping (and with it wall climbing) was dead on every INVERTED level. Kept separate from dir, which p.lock
+ // overwrites on the frames just after a wall jump.
+ const iL=has('inv')?right:left,iR=has('inv')?left:right;
  if(p.lock>0){p.lock-=dt;dir=p.lockDir}
  if(dir){const acc=(p.vx*dir<0)?TURN*(ice?0.14:1):(p.onG?ACCG*(ice?0.1:1):ACCA*(ice?0.8:1));if(p.vx*dir<RUN)p.vx=Math.min(RUN,p.vx*dir+acc*dt)*dir;else p.vx=dir*Math.max(RUN,Math.abs(p.vx)-FRIC*0.5*dt);p.face=dir}
  else{const f=(p.onG?FRIC:FRIC*0.45)*fmul*dt;p.vx=Math.abs(p.vx)<=f?0:p.vx-Math.sign(p.vx)*f}
  const cx=p.x+p.w/2,cy=p.y+p.h/2;
  p.inN=tAt(L,Math.floor(cx/TS),Math.floor(cy/TS))=='N';
  const wl=solidAt(L,p.x-3,p.y+3)||solidAt(L,p.x-3,p.y+p.h-3),wr=solidAt(L,p.x+p.w+3,p.y+3)||solidAt(L,p.x+p.w+3,p.y+p.h-3);
- p.wall=p.onG?0:(has('walljump')?(wl?-1:wr?1:0):(wl&&left?-1:wr&&right?1:0));
+ p.wall=p.onG?0:(has('walljump')?(wl?-1:wr?1:0):(wl&&iL?-1:wr&&iR?1:0));
  if(p.wall){p.wallT=0.11;p.wallDir=p.wall}else p.wallT=(p.wallT||0)-dt;
  const wj=p.onG?0:(p.wall||(p.wallT>0?p.wallDir:0));
  if(p.onG||p.wall)p.aj=ajn;
@@ -2552,8 +2604,15 @@ function levelWon(){const i=G.idx,def=LEVELS[i];
 function worldTime(w){if(w<0)return 0;const a=w<4?w*8:NL;let s=0;for(let i=a;i<a+8;i++){const r=S.lv[i];if(!r||!r.t)return 0;s+=r.t}return s}
 function endEndless(){go('over',saveEndless())}
 // banks + records an Endless/Daily run (gems, coins, bests, daily ticket). Used by endEndless and by R-restart.
-function saveEndless(){if(G.endSaved)return G.endSaved;const r=G.endSaved={h:G.height,gems:G.gemsRun,daily:G.mode=='daily',best:false};S.bank+=r.gems;S.earned+=r.gems;r.coins=addCoins(Math.floor(r.h/5));
- if(r.daily){const d=G.dailyDay||todayStr();r.rollover=d!=todayStr();if(S.daily.d!=d)S.daily={d,h:0};if(r.h>S.daily.h){S.daily.h=r.h;r.best=true}r.bestV=S.daily.h;if(dayNum(d)>dayNum(S.dtix)){S.dtix=dayNum(d);S.tix++;r.tix=1}submitScore('daily',S.daily.h)}
+// DAILY CLIMB anti-farm: the daily tower is seeded, so its gems sit in the SAME spots every attempt - memorise the
+// route and you could re-run it forever for gems. So a day's tower only ever pays for gems you have not already been
+// paid for today: S.daily.gp is the high-water mark of gems banked off this day's tower (gems are collected bottom-up,
+// so a deeper run is a superset of a shallower one). Replaying for practice or for a better height stays free.
+function saveEndless(){if(G.endSaved)return G.endSaved;const dly=G.mode=='daily',dd=dly?(G.dailyDay||todayStr()):'';
+ if(dly&&S.daily.d!=dd)S.daily={d:dd,h:0,gp:0};
+ const raw=G.gemsRun,pay=dly?Math.max(0,raw-(S.daily.gp||0)):raw;
+ const r=G.endSaved={h:G.height,gems:pay,gemsRaw:raw,daily:dly,best:false};S.bank+=pay;S.earned+=pay;r.coins=addCoins(Math.floor(r.h/5));
+ if(r.daily){const d=dd;S.daily.gp=Math.max(S.daily.gp||0,raw);r.rollover=d!=todayStr();if(r.h>S.daily.h){S.daily.h=r.h;r.best=true}r.bestV=S.daily.h;if(dayNum(d)>dayNum(S.dtix)){S.dtix=dayNum(d);S.tix++;r.tix=1}submitScore('daily',S.daily.h)}
  else{if(r.h>S.endBest){S.endBest=r.h;r.best=true}r.bestV=S.endBest;submitScore('endless',S.endBest)}
  if(r.h>=100)grant('climb');if(r.h>=250)grant('mountain');checkAch();save();return r}
 function onWinDone(){
@@ -3610,9 +3669,11 @@ SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
  // Bonus worlds (World 6, Monster Woods, ...) are extra story-mode tabs, kept out of the hard-mode tab bar entirely
  // (hard mode never reaches bonus worlds). Tab order: 4 main worlds, Rockets, then each OWNED bonus world, then THE TOP last.
  ntab(){return this.hard?5:5+ownedBonusWorlds().length+1},
- tf(w){if(w<4)return w*8;if(w==4)return NL;const bw=ownedBonusWorlds(),k=bw.length;if(w<5+k)return LEVELS.findIndex(l=>l.wd==bw[w-5].wd);return NL-1},
- tabWd(w){if(w<4)return w;if(w==4)return 5;const bw=ownedBonusWorlds(),k=bw.length;if(w<5+k)return bw[w-5].wd;return 4},
- tabLabel(w){if(w<4)return['1  Fields','2  Saw Mill','3  Laser Lab','4  Magma'][w];if(w==4)return'5  Rockets';
+ // Hard mode stops after World 4 (it never plays World 5 or any bonus world), so its 5th and last tab IS THE TOP -
+ // bail out to the THE TOP answer before the Rockets/bonus branches, which only exist in story mode.
+ tf(w){if(w<4)return w*8;if(this.hard)return NL-1;if(w==4)return NL;const bw=ownedBonusWorlds(),k=bw.length;if(w<5+k)return LEVELS.findIndex(l=>l.wd==bw[w-5].wd);return NL-1},
+ tabWd(w){if(w<4)return w;if(this.hard)return 4;if(w==4)return 5;const bw=ownedBonusWorlds(),k=bw.length;if(w<5+k)return bw[w-5].wd;return 4},
+ tabLabel(w){if(w<4)return['1  Fields','2  Saw Mill','3  Laser Lab','4  Magma'][w];if(this.hard)return'★  The Top';if(w==4)return'5  Rockets';
   const bw=ownedBonusWorlds(),k=bw.length;if(w<5+k)return bw[w-5].label;return'★  The Top'},
  doneLv(i){return this.hard?!!(S.hard[i]&&S.hard[i].done):!!(S.lv[i]&&S.lv[i].done)},
  // levels behind a tab: the last slot is always the single THE TOP level, every other tab is a normal 8-level world
@@ -3867,7 +3928,10 @@ SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h
   txt(r.daily?'DAILY CLIMB':'ENDLESS',VW/2,70,26,'#ffffff');txt('YOU CLIMBED',VW/2,130,30,'#fff');ctx.save();ctx.translate(VW/2,220);ctx.scale(k,k);txt(Math.round(r.h*clamp(this.t,0,1))+'m',0,0,110,'#ffd45e');ctx.restore();
   if(r.best&&r.h>0&&this.t>1)txt('NEW BEST!',VW/2,300,28,'#7bdc3b');else txt('Best: '+r.bestV+'m',VW/2,300,22,'#fff');
   gemShape(VW/2-150,350,11,'#5ff4ff');txt('+'+r.gems+' gems',VW/2-132,351,24,'#fff','left');coinIcon(VW/2+40,350,11,gtime*3);txt('+'+(r.coins||0)+' coins',VW/2+58,351,24,'#ffd45e','left');
-  const oLines=[];if(r.tix)oLines.push({t:'+1 spin ticket for that climb',c:'#ff8fd8'});if(r.rollover)oLines.push({t:'New Daily Climb tower is ready!',c:'#ffd45e'});
+  const oLines=[];if(r.tix)oLines.push({t:'+1 spin ticket for that climb',c:'#ff8fd8'});
+  // say WHY a replay paid fewer gems than it picked up, so a 0 never looks like a bug
+  if(r.daily&&r.gemsRaw>r.gems)oLines.push({t:"Today's gems are already banked - climb higher or come back tomorrow",c:'#a9a3c4'});
+  if(r.rollover)oLines.push({t:'New Daily Climb tower is ready!',c:'#ffd45e'});
   oLines.forEach((l,i)=>txt(l.t,VW/2,385+i*22,16,l.c,undefined,false));
   const oMy=410+(oLines.length>1?22:0);
   button('again',VW/2-230,oMy,210,54,r.rollover?'New Tower':'Climb Again');button('menu',VW/2+20,oMy,210,54,'Back')},
