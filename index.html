@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260923-210201'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260923-214501'; // change this on every upload so open copies show "Update ready"
 // Where the Settings > Send Feedback button goes. Leave FEEDBACK_URL empty to email FEEDBACK_EMAIL instead;
 // paste a Google Form link into FEEDBACK_URL and it wins. Either way the build number rides along (see openFeedback).
 const FEEDBACK_URL='';  // Google Form URL - set before release
@@ -1331,10 +1331,11 @@ const LEVELS=[
   ['=',8,15,5,1],['=',15,12,5,1],['=',18,7,5,1],['#',20,16,6,1],['=',30,15,5,1],['=',34,11,6,1]],
  m:[['zom',4,18,11,18,1.7,0],['zom',30,18,38,18,1.5,0.4],['zom',20,15,25,15,1.3,0.2]]},
 // Ogre 101: a roofed land-bridge between two spike pits, so the only way on is straight through his swing. The club
-// covers a bit over 2 tiles each side of him - stand back at the pit lip, watch one full swing, then run it.
+// covers nearly 4 tiles each side of him - stand back at the pit lip, watch one full swing, then run it.
+// The roof sits 6 tiles over the bridge floor: that is the clearance the full-size ogre needs (see OGS/ogreFit).
 {wd:8,W:44,n:'First Slam',t:20,s:[2,18],e:[41,18],g:[[8,14],[22,3],[38,13]],tip:'The ogre swings the whole way round - BOTH sides of him. Wait for the club to fall, then run.',
  r:[['#',1,19,42,2],['.',12,19,4,2],['^',12,20,4,1],['.',28,19,4,2],['^',28,20,4,1],
-  ['#',16,12,12,2],['=',6,15,5,1],['=',9,11,5,1],['=',13,8,5,1],['=',20,4,5,1],['=',29,8,5,1],['=',33,12,5,1],['=',36,15,5,1]],
+  ['#',16,11,12,2],['=',6,15,5,1],['=',9,11,5,1],['=',13,8,5,1],['=',20,4,5,1],['=',29,8,5,1],['=',33,12,5,1],['=',36,15,5,1]],
  m:[['ogre',22,18,2.3,0],['zom',3,18,10,18,1.6,0.2],['zom',34,18,41,18,1.7,0.5]]},
 // Ghost 101: two of them, each leashed to its own stretch, drifting straight through the trees. They are slower than
 // a run and they only bite while lit, so this level teaches "keep moving and read the glow" before it matters.
@@ -1348,17 +1349,21 @@ const LEVELS=[
  tip:'Straight up. The ogre owns the halfway corridor - stand clear at one end, let the club fall, then dash under him.',
  r:[['#',1,31,26,2],['.',10,31,6,2],['^',10,32,6,1],
   ['=',3,27,5,1],['=',11,27,5,1],['=',19,27,6,1],['=',18,23,7,1],['=',20,20,5,1],
-  ['#',6,18,19,1],['#',9,12,11,2],['=',4,13,5,1],['=',10,10,6,1],['=',17,8,6,1],['=',10,5,9,1]],
- m:[['ogre',15,17,2.2,0],['zom',20,22,24,22,1.6,0.2],['zom',3,26,7,26,1.5,0.5],['gho',13,10,3.2,0.3,6]]},
+  // the corridor roof moved up to rows 10-11 to clear the full-size ogre (6 tiles of headroom). Its TOP is now exactly
+  // where the old ['=',10,10,6,1] ledge was, so that ledge was removed rather than buried - the climb is unchanged.
+  ['#',6,18,19,1],['#',9,10,11,2],['=',4,13,5,1],['=',17,8,6,1],['=',10,5,9,1]],
+ m:[['ogre',15,17,2.2,0],['zom',20,22,24,22,1.6,0.2],['zom',3,26,7,26,1.5,0.5],['gho',13,8,3.2,0.3,6]]},
 // Crumbling bark bridges over the pits, an ogre on the middle land-bridge with a safe perch directly above his head
-// (the club tops out just under it), and a wide-leashed ghost working the right-hand third.
+// (ogreFit clamps his arc to the ledge, so "just out of his reach" is enforced, not eyeballed), and a wide-leashed
+// ghost working the right-hand third. He stands a tile right of centre so the longer club sweeps PAST the last bark
+// plank at (20,17) instead of through it - it still threatens that approach, it just no longer clips the wood.
 {wd:8,W:48,H:24,n:'Crumbleback',t:25,s:[2,20],e:[45,8],g:[[9,16],[26,6],[39,12]],
  tip:'Cracked bark gives way under you - keep moving. The perch over the ogre is just out of his reach.',
  r:[['#',1,21,46,2],['.',13,21,7,2],['^',13,22,7,1],['.',30,21,6,2],['^',30,22,6,1],
   ['=',6,17,5,1],['X',13,17,2,1],['X',16,17,2,1],['X',19,17,2,1],
   ['=',21,15,7,1],['=',24,11,6,1],['=',24,7,6,1],
   ['X',30,16,2,1],['X',33,16,2,1],['=',36,17,5,1],['=',38,13,6,1],['=',41,9,6,1]],
- m:[['ogre',24,20,2.1,0],['gho',33,13,3.0,0,8],['zom',5,20,12,20,1.7,0.3],['zom',37,20,44,20,1.5,0.6]]},
+ m:[['ogre',25,20,2.1,0],['gho',33,13,3.0,0,8],['zom',5,20,12,20,1.7,0.3],['zom',37,20,44,20,1.5,0.6]]},
 // Two stacked shelves of zombies with a ghost that just cuts diagonally through the whole structure. The lower shelf
 // is the fast route and the upper shelf is the safe one; the ghost makes camping on either of them a bad idea.
 {wd:8,W:46,H:26,n:"Shambler's Den",t:26,s:[2,22],e:[43,6],g:[[13,17],[27,11],[40,16]],
@@ -1373,7 +1378,9 @@ const LEVELS=[
 {wd:8,W:52,H:24,n:'Ogre Gauntlet',t:29,s:[2,20],e:[49,20],k:[[18,17]],g:[[9,17],[26,17],[49,14]],
  tip:'Three of them, all out of step. Read each club before you commit - there is no way over.',
  r:[['#',1,21,50,2],['.',12,21,3,2],['^',12,22,3,1],['.',34,21,3,2],['^',34,22,3,1],
-  ['#',5,15,13,2],['^',5,14,13,1],['#',21,15,13,2],['^',21,14,13,1],['#',37,15,11,2],['^',37,14,11,1],
+  // roofs at rows 13-14 (6 tiles of headroom for the full-size ogre), spikes still on top so there is no way over.
+  // The third is one tile shorter than it was so it does not close off the ledge at (47,15) on the way to the exit.
+  ['#',5,13,13,2],['^',5,12,13,1],['#',21,13,13,2],['^',21,12,13,1],['#',37,13,10,2],['^',37,12,10,1],
   ['=',18,18,4,1],['=',33,18,4,1],['=',47,15,4,1]],
  m:[['ogre',9,20,2.4,0],['ogre',26,20,2.1,0.35],['ogre',42,20,1.9,0.7],['zom',30,20,33,20,1.5,0.5],['gho',26,12,3.0,0,8]]},
 // Finale: four sections back to back - zombie pits, a roofed ogre corridor, a tall ghost-haunted climb for the key,
@@ -1382,9 +1389,9 @@ const LEVELS=[
  tip:'Everything the woods have. Key at the top of the hollow tree, then the gate. Good luck.',
  r:[['#',1,25,60,2],['.',10,25,4,2],['^',10,26,4,1],['.',31,25,3,2],['^',31,26,3,1],['.',42,25,4,2],['^',42,26,4,1],
   ['=',5,20,5,1],['=',8,16,5,1],['=',12,13,5,1],['=',18,9,5,1],
-  ['#',17,19,12,2],['^',17,18,12,1],
+  ['#',17,17,12,2],['^',17,16,12,1],   // both ogre roofs raised to rows 17-18: 6 tiles of headroom for the full-size ogre
   ['=',34,21,5,1],['=',38,17,6,1],['=',34,13,5,1],['=',38,9,6,1],['=',35,5,7,1],
-  ['#',49,4,2,21],['D',49,20,2,5],['#',51,19,9,2],['^',51,18,9,1]],
+  ['#',49,4,2,21],['D',49,20,2,5],['#',51,17,9,2],['^',51,16,9,1]],
  m:[['ogre',23,24,1.9,0],['ogre',55,24,1.9,0.4],['gho',38,12,3.0,0,8],['gho',13,16,3.2,0.5,7],
     ['zom',3,24,9,24,1.8,0],['zom',35,24,41,24,1.6,0.3],['zom',38,16,43,16,1.5,0.6],['zom',46,24,48,24,1.9,0.2]]},
 ];
@@ -2138,6 +2145,14 @@ function drawRoverStuff(L,t){const p=G.player,pcx=p.x+p.w/2,pcy=p.y+p.h/2;
 // Shambling ground patroller (path/lurch already integrated in updMovers - this is draw-only). Hitbox: the drawn body
 // box, see hurt(). Telegraph: it visibly notices you - head turns, arm comes up, jaw opens - a beat before contact.
 const ZK='#79a453',ZKD='#4b6a31',ZKL='#9cc770',ZR='#4c4664',ZRD='#322e46',ZIN='#1a2411';
+// PERF: every fixed point list these monsters trace is hoisted to a module constant. Written inline as `for(const q of
+// [[..],[..]])` they were fresh arrays on EVERY monster on EVERY frame - with a levelful of zombies that was tens of
+// thousands of throwaway allocations a second, which is exactly the GC pressure you feel on a phone. Nothing in any of
+// the draw loops below allocates now.
+const SIDE2=[-1,1];
+const Z_HEM=[[5.6,-13.5],[3.4,-18.5],[1,-14.5],[-1.6,-19],[-4,-14],[-6.4,-18.5]];  // torn shirt hem
+const Z_HAIR=[[-4.6,-5.4],[-1.8,-7],[1.4,-6.6],[4.2,-5]];                          // lank hair tufts
+const Z_FING=[-1.5,0,1.5],Z_CLAW=[-3.2,0,3.2],Z_TEETH=[-1.8,0.8,3.2];
 function drawZombie(m,t){
  const face=m.face||1,ph=t*3.1+(m.ph||0)*6.283,gait=Math.sin(ph),gait2=Math.sin(ph+2.5),bob=Math.sin(ph*2)*1.1;
  const p=G.player;let lunge=0;
@@ -2155,7 +2170,7 @@ function drawZombie(m,t){
  ctx.fillStyle=ZK;rr(-7,-20,14,10,3.5);ctx.fill();            // bare belly under the torn hem
  ctx.fillStyle=ZKD;ctx.fillRect(-7,-15.5,14,2);
  ctx.fillStyle=ZR;ctx.beginPath();ctx.moveTo(-8.4,-31);ctx.lineTo(8.4,-31);ctx.lineTo(8.6,-17.5); // ragged shirt hem
- for(const q of[[5.6,-13.5],[3.4,-18.5],[1,-14.5],[-1.6,-19],[-4,-14],[-6.4,-18.5]])ctx.lineTo(q[0],q[1]);
+ for(const q of Z_HEM)ctx.lineTo(q[0],q[1]);
  ctx.lineTo(-8.6,-17.5);ctx.closePath();ctx.fill();
  ctx.fillStyle=ZRD;ctx.beginPath();ctx.moveTo(-8.4,-31);ctx.lineTo(-2.4,-31);ctx.lineTo(-2.8,-16);ctx.lineTo(-6.4,-18.5);ctx.lineTo(-8.6,-17.5);ctx.closePath();ctx.fill();
  ctx.fillStyle='#6f2b39';ctx.beginPath();ctx.ellipse(3.6,-25,2.8,3.6,0.4,0,7);ctx.fill();ctx.fillStyle='#8e3a49';ctx.beginPath();ctx.ellipse(3.2,-25.8,1.4,1.8,0.4,0,7);ctx.fill(); // old wound
@@ -2170,146 +2185,229 @@ function drawZombie(m,t){
  ctx.strokeStyle=ZKD;ctx.lineWidth=3.6;ctx.beginPath();ctx.moveTo(-5.4,-27.6);ctx.lineTo(fex,fey);ctx.lineTo(fhx,fhy);ctx.stroke();
  ctx.fillStyle=ZKD;ctx.beginPath();ctx.ellipse(fhx-0.3,fhy+1,2.4,2,0.25,0,7);ctx.fill();
  ctx.strokeStyle=ZKD;ctx.lineWidth=1.4;ctx.beginPath();
- for(const fd of[-1.5,0,1.5]){ctx.moveTo(fhx-0.3,fhy+1.6);ctx.lineTo(fhx-0.6+fd,fhy+4.6)}ctx.stroke();
+ for(const fd of Z_FING){ctx.moveTo(fhx-0.3,fhy+1.6);ctx.lineTo(fhx-0.6+fd,fhy+4.6)}ctx.stroke();
  const ry=-24-lunge*7,rx=15+lunge*4;
  ctx.strokeStyle=ZK;ctx.lineWidth=4.6;ctx.beginPath();ctx.moveTo(6,-28);ctx.lineTo(11,-26+gait*1.6);ctx.lineTo(rx,ry+gait*2.2);ctx.stroke();
  ctx.strokeStyle=ZKL;ctx.lineWidth=1.9;ctx.beginPath(); // three clawed fingers, splayed
- for(const d of[-3.2,0,3.2]){ctx.moveTo(rx,ry+gait*2.2);ctx.lineTo(rx+5,ry+gait*2.2+d)}ctx.stroke();
+ for(const d of Z_CLAW){ctx.moveTo(rx,ry+gait*2.2);ctx.lineTo(rx+5,ry+gait*2.2+d)}ctx.stroke();
  ctx.restore();
  // head: tilted, lopsided - one big staring eye, one dead sunken socket
  ctx.save();ctx.translate(1.5,-35+bob);ctx.rotate(0.14+snarl*0.1+gait*0.04);
  ctx.fillStyle=ZKD;ctx.beginPath();ctx.ellipse(0,0,7.6,7.2,0,0,7);ctx.fill();
  ctx.fillStyle=ZK;ctx.beginPath();ctx.ellipse(0.5,-0.5,7,6.6,0,0,7);ctx.fill();
  ctx.fillStyle=ZKL;ctx.beginPath();ctx.ellipse(1.2,-3,4.4,2.8,-0.2,0,7);ctx.fill();          // lit top of the skull
- ctx.fillStyle=ZIN;ctx.beginPath();for(const h of[[-4.6,-5.4],[-1.8,-7],[1.4,-6.6],[4.2,-5]]){ctx.moveTo(h[0],h[1]);ctx.lineTo(h[0]+1.1,h[1]-3.4);ctx.lineTo(h[0]+2.2,h[1])}ctx.fill(); // lank hair
+ ctx.fillStyle=ZIN;ctx.beginPath();for(const h of Z_HAIR){ctx.moveTo(h[0],h[1]);ctx.lineTo(h[0]+1.1,h[1]-3.4);ctx.lineTo(h[0]+2.2,h[1])}ctx.fill(); // lank hair
  ctx.fillStyle='#fdfff0';ctx.beginPath();ctx.ellipse(4.2,-1.4,2.8,3,0,0,7);ctx.fill();        // big staring eye
  const px2=p&&!p.dead?clamp(((p.x+8-m.x)*face)/60,-1,1):1,py2=p&&!p.dead?clamp((p.y+8-m.y+35)/60,-1,1):0;
  ctx.fillStyle='#1d2a12';ctx.beginPath();ctx.arc(4.2+px2,-1.4+py2*1.1,1.5,0,7);ctx.fill();
  ctx.fillStyle=ZKD;ctx.beginPath();ctx.ellipse(-1.6,-1.2,2.3,2.4,0,0,7);ctx.fill();           // dead, sunken socket
  ctx.fillStyle='#0f1608';ctx.beginPath();ctx.arc(-1.6,-1,1.1,0,7);ctx.fill();
  ctx.fillStyle='#0e1507';const mw=3.6+snarl*1.6,mh=1.1+snarl*3.4;ctx.beginPath();ctx.ellipse(2.4,4.2,mw,mh,0.08,0,7);ctx.fill(); // jaw drops as it snarls
- ctx.fillStyle='#f2efd2';ctx.beginPath();for(const q of[-1.8,0.8,3.2]){ctx.moveTo(2.4+q-0.8,4.2-mh);ctx.lineTo(2.4+q+0.8,4.2-mh);ctx.lineTo(2.4+q,4.2-mh+1.6+snarl)}ctx.fill();
+ ctx.fillStyle='#f2efd2';ctx.beginPath();for(const q of Z_TEETH){ctx.moveTo(2.4+q-0.8,4.2-mh);ctx.lineTo(2.4+q+0.8,4.2-mh);ctx.lineTo(2.4+q,4.2-mh+1.6+snarl)}ctx.fill();
  ctx.strokeStyle=ZIN;ctx.lineWidth=0.9;ctx.beginPath();ctx.moveTo(-6.2,1.4);ctx.lineTo(-2.6,2.6);ctx.moveTo(-5.6,0.2);ctx.lineTo(-5,2.6);ctx.moveTo(-3.8,0.9);ctx.lineTo(-3.4,3.3);ctx.stroke(); // stitched cheek
  ctx.restore();
  ctx.restore()}
 
 // ---------- OGRE ----------
-// Huge two-handed club swinger. The swing is a FULL arc - up on his right, down the right side, across the ground and
-// up his left - so he threatens BOTH sides of himself, reaching ~2.4 tiles out: wide enough to cover a gap or ledge the
-// player has to cross. Timing is a pure function of time (deterministic, solver-safe, same family as the laser blink),
-// and the hazard is sampled along the SAME club line that gets drawn, so the hitbox is literally the club you see.
-const OG_PIV=-48;                                      // club pivot in the feet-origin frame (his chest)
-const OG_ARM=20,OG_TIP=62;                             // the club runs from r=OG_ARM to r=OG_TIP out of that pivot
-const OG_HIT=[[26,5],[34,5.5],[42,7],[50,9],[58,11]];  // [distance along club, hit radius] - matches the drawn taper
+// Huge two-handed club swinger. The swing is a FULL arc - up on one side, down that side, across the ground and up the
+// other - so he threatens BOTH sides of himself, reaching 3.7 tiles out EACH way (a 7.4-tile span, wide enough to cover
+// a whole land-bridge or corridor the player has to cross). Timing is a pure function of time (deterministic,
+// solver-safe, same family as the laser blink), and the hazard is sampled along the SAME club line that gets drawn, so
+// the hitbox is literally the club you see. Sizes and clearances are checked by the geometry audit, not by eye.
+// SIZE: 1.4x the old ogre - 123px (5.1 tiles) tall and 104px (4.3 tiles) across the shoulders, roughly double the
+// screen area of the zombie he used to be barely bigger than. The club pivots at his NECK rather than his chest, which
+// is what buys the extra length: the arc has to bottom out at the floor, so club radius <= pivot height + a small bite,
+// and raising the pivot 11px raises the ceiling on how long the club can be. He now reaches 3.9 tiles EACH side.
+const OGS=1.4;                                         // overall ogre scale - he has to read as a heavy miniboss, not a mook
+const OG_PIVL=-59,OG_ARML=20,OG_TIPL=60;               // club geometry in his OWN (unscaled) drawing frame
+const OG_GRIPL=31;                                     // where the FISTS sit along the haft - well clear of his face,
+                                                       // which the math pivot (at his neck) is deliberately not
+const OG_PIV=OG_PIVL*OGS,OG_ARM=OG_ARML*OGS,OG_TIP=OG_TIPL*OGS;  // ...and in world px, which is what ogreClub/hurt use
+const OG_R=(OG_TIPL+7)*OGS;                            // the club ART overruns OG_TIP by the head cap + bone spikes
+const OG_HIT=[[24,5],[32,5.5],[40,7],[47,8.5],[54,10],[58,10.5]].map(q=>[q[0]*OGS,q[1]*OGS]); // [dist along club, hit radius] - matches the drawn taper
+const OG_RMAX=Math.max(OG_R,...OG_HIT.map(q=>q[0]+q[1]));  // furthest ANYTHING about him gets from the pivot, art or hitbox
+// How far along the GROUND the club sweeps: where its circle crosses knee height. Much narrower than the max reach,
+// because the club peaks at chest height - this is the number the floor telegraph draws and the number that decides
+// whether someone standing on the floor is safe. Local (unscaled) units: the telegraph is drawn in his own frame.
+const OG_GND=Math.sqrt(Math.max(0,(OG_TIPL+7)*(OG_TIPL+7)-(-OG_PIVL-12)*(-OG_PIVL-12)));
+// hoisted point lists - see the note by ZK above: nothing in drawOgreStuff allocates per frame either
+const OG_KILT=[[14,-29],[9,-22],[3,-28],[-3,-21],[-9,-27],[-15,-22]];   // ragged hem of his kilt
+const OG_KNOT=[[-6,OG_TIPL-16,2],[4.6,OG_TIPL-18,1.7],[1,OG_TIPL-8,2.1],[-4,OG_TIPL-6,1.5]];   // knots in the club head
+const OG_SPIKE=[[-11,OG_TIPL-14,-1,-0.3],[11,OG_TIPL-13,1,-0.2],[-7,OG_TIPL-1,-0.7,0.8],[7,OG_TIPL-2,0.7,0.8]]; // bone spikes
+// cycle: 42% idle | 28% wind-up (telegraphed) | 16% swing (the ONLY hazard) | 14% recover. At his usual per=2.1s that is
+// a 0.59s wind-up you can read and a 0.34s kill window, with 1.76s of guaranteed safety between swings.
 function ogrePhase(m,t){const per=m.per||2.2,u=(((t/per+(m.ph||0))%1)+1)%1;
- if(u<0.46)return{k:'idle',u:u/0.46};
- if(u<0.68)return{k:'windup',u:(u-0.46)/0.22};  // telegraph: club up, body shaking, dashed preview arc
- if(u<0.86)return{k:'swing',u:(u-0.68)/0.18};   // the ONLY hazard window
+ if(u<0.42)return{k:'idle',u:u/0.42};
+ if(u<0.70)return{k:'windup',u:(u-0.42)/0.28};  // telegraph: club up, body shaking, dashed preview arc
+ if(u<0.86)return{k:'swing',u:(u-0.70)/0.16};   // the ONLY hazard window
  return{k:'recover',u:(u-0.86)/0.14}}
 // club angle: 0 = straight down, positive = out to HIS right (+x), negative = his left. Drawn with rotate(-a), so the
-// numbers can run past +-PI freely and the rotation still looks continuous.
-function ogreArm(st,t){
- if(st.k=='idle')return 2.42+Math.sin(st.u*6.283)*0.06;
- if(st.k=='windup')return lerp(2.42,3.06,ease(st.u))+Math.sin(t*34)*0.055*st.u;
- if(st.k=='swing')return lerp(3.06,-3.06,0.5-0.5*Math.cos(Math.PI*st.u));
- return lerp(-3.06,-3.88,ease(st.u))}
-function ogreClub(m,t){const st=ogrePhase(m,t),a=ogreArm(st,t);
+// numbers can run past +-PI freely and the rotation still looks continuous. m.ak (see ogreFit) squashes the whole arc
+// toward the horizontal when he is under a low roof: the sweep still crosses straight down and still covers BOTH sides,
+// he just stops cocking the club overhead - so a big ogre in a tight corridor never swings it through the ceiling.
+function ogreArm(st,t,k){k=k||1;
+ if(st.k=='idle')return (2.42+Math.sin(st.u*6.283)*0.06)*k;
+ if(st.k=='windup')return lerp(2.42,3.06,ease(st.u))*k+Math.sin(t*34)*0.055*st.u;
+ if(st.k=='swing')return lerp(3.06,-3.06,0.5-0.5*Math.cos(Math.PI*st.u))*k;
+ return lerp(-3.06,-3.88,ease(st.u))*k}
+function ogreClub(m,t){const st=ogrePhase(m,t),a=ogreArm(st,t,m.ak);
  return{st,a,px:m.x,py:m.y+12+OG_PIV,sx:Math.sin(a),sy:Math.cos(a)}}
+// Fit him to whatever is over his head, ONCE per ogre per level: scan his column for the first ceiling (solid tile) or
+// standable ledge ('='), then squash the arc so neither the drawn club nor its hitbox can ever reach it. This is what
+// keeps "the perch over the ogre is just out of his reach" literally true, and it survives the mirror/flip hard-mode
+// mods (and any future level) for free instead of needing every corridor hand-tuned to the art.
+function ogreFit(L,m){const feet=m.y+12,tx=Math.floor(m.x/TS);let cy=-1e9;
+ for(let ty=Math.floor(feet/TS)-1;ty>=0;ty--){const c=tAt(L,tx,ty);if(isSolid(L,tx,ty)||c=='='){cy=(c=='='?ty:ty+1)*TS;break}}
+ const up=feet+OG_PIV-cy-14;  // free px above the pivot, less a margin so nothing ever quite touches
+ // 3.88 is the largest |angle| the cycle reaches (the end of 'recover'), so scaling by this keeps the WHOLE cycle under it
+ m.ak=up>=OG_RMAX?1:clamp(Math.acos(clamp(-Math.max(up,0)/OG_RMAX,-1,1))/3.88,0.3,1)}
 function updOgres(L){const gt=G.t*(G.spd||1);
- for(const m of L.movers){if(m.t!='ogre')continue;const st=ogrePhase(m,gt);
+ for(const m of L.movers){if(m.t!='ogre')continue;if(m.ak===undefined)ogreFit(L,m);const st=ogrePhase(m,gt);
   if(st.k=='swing'&&st.u>=0.5){if(!m._slammed){m._slammed=true;sfx('crumble');if(S.set.shake)G.shake=Math.max(G.shake,5);
-    for(let i=0;i<14;i++)G.parts.push({x:m.x+rnd(-28,28),y:m.y+14,vx:rnd(-150,150),vy:rnd(-160,-20),l:0.45,ml:0.45,c:i%2?'#8a6b4a':'#4d3a52',s:rnd(3,7),g:820,sh:'sq'})}}
+    for(let i=0;i<16;i++)G.parts.push({x:m.x+rnd(-38,38),y:m.y+14,vx:rnd(-185,185),vy:rnd(-185,-20),l:0.45,ml:0.45,c:i%2?'#8a6b4a':'#4d3a52',s:rnd(3,8),g:820,sh:'sq'})}}
   else if(st.k!='swing')m._slammed=false}}
 function drawOgreStuff(L,t){const gt=G.t*(G.spd||1);
  for(const m of L.movers){if(m.t!='ogre')continue;
-  if(m.x<G.cam.x-130||m.x>G.cam.x+VW+130||m.y<G.cam.y-170||m.y>G.cam.y+VH+90)continue;
+  if(m.x<G.cam.x-175||m.x>G.cam.x+VW+175||m.y<G.cam.y-215||m.y>G.cam.y+VH+95)continue; // margins cover the scaled body + full club reach
   const c=ogreClub(m,gt),st=c.st,a=c.a;
   const chg=st.k=='windup'?st.u:st.k=='swing'?1:st.k=='recover'?1-st.u:0;
   const shake=st.k=='windup'?Math.sin(gt*36)*1.7*st.u:0;
   const breathe=Math.sin(gt*1.5+(m.ph||0)*6.283)*1.2;
-  ctx.save();ctx.translate(m.x+shake,m.y+12);ctx.lineCap='round';ctx.lineJoin='round';
-  ctx.globalAlpha=0.34;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,-1,31,7,0,0,7);ctx.fill();ctx.globalAlpha=1;
-  // wind-up preview: a dashed arc tracing EXACTLY the path the club is about to sweep. Fairness, in one stroke.
-  if(st.k=='windup'){ctx.save();ctx.globalAlpha=0.12+0.34*st.u;ctx.strokeStyle='#ff9d4d';ctx.lineWidth=3;ctx.setLineDash([8,10]);
-   ctx.beginPath();ctx.arc(0,OG_PIV,OG_TIP-7,-0.52,Math.PI+0.52);ctx.stroke();ctx.setLineDash([]);ctx.restore()}
+  // weight: he draws himself UP through the wind-up and DROPS into the slam, legs staying planted - anticipation and
+  // impact, which is most of what makes a heavy thing feel heavy. Idle, it is just the breathing.
+  const wt=st.k=='windup'?-2.6*ease(st.u):st.k=='swing'?lerp(-2.6,3.4,Math.min(1,st.u*2)):st.k=='recover'?3.4*(1-ease(st.u)):0;
+  // everything below is drawn in his OWN frame (origin = his feet, unscaled units) and blown up as ONE piece by OGS,
+  // so the art and the world-space club math (OG_PIV/OG_ARM/OG_TIP = the local values * OGS) can never drift apart.
+  ctx.save();ctx.translate(m.x+shake,m.y+12);ctx.scale(OGS,OGS);ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.globalAlpha=0.34;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,-1,33,7.5,0,0,7);ctx.fill();ctx.globalAlpha=1;
+  // wind-up preview: a dashed arc tracing EXACTLY the path the club is about to sweep - squashed by m.ak exactly like
+  // the swing is, so in a low corridor the preview shrinks with it and still tells the truth. Fairness, in one stroke.
+  if(st.k=='windup'){const pa=3.06*(m.ak||1);ctx.save();ctx.globalAlpha=0.10+0.30*st.u;ctx.strokeStyle='#ff9d4d';ctx.lineWidth=2.5;ctx.setLineDash([8,10]);
+   ctx.beginPath();ctx.arc(0,OG_PIVL,OG_TIPL-7,Math.PI/2-pa,Math.PI/2+pa);ctx.stroke();ctx.setLineDash([]);
+   // ...and the bit that actually matters to someone standing on the floor: how far along the GROUND the club will
+   // sweep. That is much narrower than its max reach (the club peaks at chest height), so showing the arc alone
+   // over-reads. OG_GND is where the club's circle crosses knee height, i.e. the span you must not be standing in.
+   ctx.globalAlpha=0.13+0.33*st.u;ctx.fillStyle='#ff7a3d';ctx.fillRect(-OG_GND,-7,OG_GND*2,6);
+   ctx.globalAlpha=0.3+0.5*st.u;ctx.strokeStyle='#ffb877';ctx.lineWidth=3;ctx.beginPath();
+   for(const sd of SIDE2){ctx.moveTo(sd*OG_GND,-14);ctx.lineTo(sd*OG_GND,0)}ctx.stroke();ctx.restore()}
   // feet / legs: planted wide apart, so the gap between them reads as somewhere you could dive through
   ctx.fillStyle='#241b33';rr(-29,-8,20,8,3.5);ctx.fill();rr(9,-8,20,8,3.5);ctx.fill();
   ctx.fillStyle='#4e3b63';rr(-25,-35,15,29,6);ctx.fill();rr(10,-35,15,29,6);ctx.fill();
   ctx.fillStyle='#3b2c4d';ctx.fillRect(-25,-35,6,29);ctx.fillRect(10,-35,5,29);
   ctx.fillStyle='#6a5442';ctx.beginPath();ctx.moveTo(-23,-42);ctx.lineTo(23,-42);ctx.lineTo(20,-24);
-  for(const q of[[14,-29],[9,-22],[3,-28],[-3,-21],[-9,-27],[-15,-22]])ctx.lineTo(q[0],q[1]);
+  for(const q of OG_KILT)ctx.lineTo(q[0],q[1]);
   ctx.lineTo(-20,-25);ctx.closePath();ctx.fill();
   ctx.fillStyle='#53412f';ctx.fillRect(-23,-42,46,4);
-  // torso: heavy slab + gut, lighter up top so the mass reads as lit from above
-  ctx.save();ctx.translate(0,breathe);
-  ctx.fillStyle='#5c4670';rr(-25,-64,50,28,12);ctx.fill();
-  ctx.fillStyle='#4a3860';ctx.beginPath();ctx.ellipse(0,-44,24,13,0,0,7);ctx.fill();
-  ctx.fillStyle='#6d5484';rr(-25,-64,50,11,7);ctx.fill();
-  ctx.fillStyle='#8a6b9e';rr(-19,-63,26,5,3);ctx.fill();
-  ctx.fillStyle='#3f2f53';ctx.beginPath();ctx.moveTo(-22,-62);ctx.lineTo(-13,-62);ctx.lineTo(15,-38);ctx.lineTo(6,-38);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#2b2039';ctx.beginPath();ctx.ellipse(-8,-52,3.2,4.6,0.3,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(13,-47,2.4,3.4,-0.2,0,7);ctx.fill();
-  ctx.fillStyle='#6d5484';ctx.beginPath();ctx.arc(-25,-59,11,0,7);ctx.arc(25,-59,11,0,7);ctx.fill();
-  ctx.fillStyle='#816399';ctx.beginPath();ctx.arc(-26,-62,6,0,7);ctx.arc(24,-62,6,0,7);ctx.fill();
-  // head: heavy brow, deep-set eyes that glow as he charges, big underbite with tusks
-  ctx.save();ctx.translate(0,-71+Math.sin(gt*1.5+1)*0.6);
-  ctx.fillStyle='#5c4670';ctx.beginPath();ctx.moveTo(-17,-2);ctx.lineTo(-25,-9);ctx.lineTo(-16,-9);ctx.closePath();ctx.moveTo(17,-2);ctx.lineTo(25,-9);ctx.lineTo(16,-9);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#7a5c8e';ctx.beginPath();ctx.ellipse(0,0,17,15,0,0,7);ctx.fill();
-  ctx.fillStyle='#8f6da5';ctx.beginPath();ctx.ellipse(-1,-6,13,7,0,0,7);ctx.fill();
-  ctx.fillStyle='#5c4670';rr(-13,2,26,13,6);ctx.fill();
-  ctx.fillStyle='#4a3860';rr(-11,3.5,22,4,2);ctx.fill();
-  ctx.fillStyle='#f3ead9';ctx.beginPath();for(const sd of[-1,1]){ctx.moveTo(sd*8.6,3);ctx.lineTo(sd*5.2,3);ctx.lineTo(sd*6.4,-5.5)}ctx.fill();
-  ctx.fillStyle='#4a3860';rr(-17,-7,34,7,3.5);ctx.fill();
-  ctx.fillStyle='#6d5484';ctx.beginPath();ctx.ellipse(0,-0.5,4.2,3,0,0,7);ctx.fill();ctx.fillStyle='#3d2e50';ctx.beginPath();ctx.arc(-1.8,0.2,1.1,0,7);ctx.arc(1.8,0.2,1.1,0,7);ctx.fill();
-  ctx.globalAlpha=0.2+0.45*chg;ctx.fillStyle='#ff8a2e';ctx.beginPath();ctx.arc(-7,-1.6,5.5,0,7);ctx.arc(7,-1.6,5.5,0,7);ctx.fill();ctx.globalAlpha=1;
+  // UPPER BODY. Draw order is the whole trick: FAR arm behind the torso (only its outer half shows), then the torso,
+  // then the shoulders, then the head on top, then the NEAR arm in front. Before, both arms were drawn last in the same
+  // purple as the chest, so they read as bars laid across him and the head vanished into the shoulder blobs.
+  // Light is from the upper LEFT throughout: lit planes up-left, the gut and the underside of the jaw in shadow.
+  ctx.save();ctx.translate(0,breathe+wt);
+  const gx=Math.sin(a)*OG_GRIPL,gy=OG_PIVL+Math.cos(a)*OG_GRIPL;   // where both fists are, well out along the haft
+  // elbows hang BELOW the shoulder-to-fist line (the +9), which is what stops the arms reading as noodles
+  const efx=-25+(gx+25)*0.45-3,efy=-59+(gy+59)*0.45+9,enx=25+(gx-25)*0.45+3,eny=-59+(gy+59)*0.45+9;
+  ctx.strokeStyle='#3f2f53';ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(-25,-59);ctx.lineTo(efx,efy);ctx.lineTo(gx,gy);ctx.stroke(); // FAR arm, behind
+  ctx.fillStyle='#5c4670';rr(-26,-64,52,29,13);ctx.fill();                                   // chest slab
+  ctx.fillStyle='#4a3860';ctx.beginPath();ctx.ellipse(2,-43,24,13,0,0,7);ctx.fill();          // gut, shaded low-right
+  ctx.fillStyle='#6d5484';rr(-26,-64,52,11,7);ctx.fill();                                     // lit top plane
+  ctx.fillStyle='#8a6b9e';rr(-21,-63,24,5,3);ctx.fill();                                      // upper-left highlight
+  ctx.fillStyle='#3f2f53';ctx.beginPath();ctx.moveTo(-22,-62);ctx.lineTo(-13,-62);ctx.lineTo(15,-38);ctx.lineTo(6,-38);ctx.closePath();ctx.fill(); // strap
+  ctx.fillStyle='#2b2039';ctx.beginPath();ctx.ellipse(-8,-52,3.2,4.6,0.3,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(13,-47,2.4,3.4,-0.2,0,7);ctx.fill(); // scars
+  // shoulders: small and pushed to the TOP CORNERS of the chest, so they continue the chest line instead of bulging
+  // out below it as two balls. The head then stands clear ABOVE them.
+  ctx.fillStyle='#6d5484';ctx.beginPath();ctx.arc(-25,-59,10,0,7);ctx.arc(25,-59,10,0,7);ctx.fill();
+  ctx.fillStyle='#816399';ctx.beginPath();ctx.arc(-27,-62,5.5,0,7);ctx.arc(23,-62,4,0,7);ctx.fill();
+  ctx.fillStyle='#3b2c4d';ctx.beginPath();ctx.ellipse(0,-64,10,4.5,0,0,7);ctx.fill();          // neck well, in shadow
+  // head: BONE horns (the one bright thing in his whole silhouette), a heavy brow shelf with the eyes lit underneath
+  // it, and a jutting underbite with two big tusks. Lighter in value than the chest, so it separates at a glance.
+  // Vertical layout, head-local: horns -16..-4 | crown -8 | brow -7..-1 | eyes +1.5 | nose +4 | jaw +6..+18.
+  ctx.save();ctx.translate(0,-73+Math.sin(gt*1.5+1)*0.6);
+  ctx.fillStyle='#cfc3a8';ctx.beginPath();  // horns, swept up and out past the skull so the silhouette has points
+  for(const sd of SIDE2){ctx.moveTo(sd*13,-3);ctx.quadraticCurveTo(sd*24,-6,sd*26,-16);ctx.quadraticCurveTo(sd*19,-10,sd*12,-8)}
+  ctx.fill();
+  ctx.fillStyle='#efe7d2';ctx.beginPath();  // lit upper edge of each horn (light from the upper left)
+  for(const sd of SIDE2){ctx.moveTo(sd*14,-5.5);ctx.quadraticCurveTo(sd*22,-8,sd*25,-15.5);ctx.quadraticCurveTo(sd*20,-10,sd*13.5,-7.5)}ctx.fill();
+  ctx.fillStyle='#8b6aa2';ctx.beginPath();ctx.ellipse(0,0,18,15,0,0,7);ctx.fill();             // skull
+  ctx.fillStyle='#a37fba';ctx.beginPath();ctx.ellipse(-4,-7,12,6,-0.14,0,7);ctx.fill();        // lit crown, upper-left
+  ctx.fillStyle='#7a5c8e';rr(-13,6,26,12,5.5);ctx.fill();                                      // jutting lower jaw
+  ctx.fillStyle='#5c4670';ctx.beginPath();ctx.ellipse(0,6,14.5,3,0,0,7);ctx.fill();            // shadow under the brow/cheek
+  ctx.fillStyle='#3d2e50';rr(-10.5,7,21,3,1.5);ctx.fill();                                     // mouth line
+  ctx.fillStyle='#f3ead9';ctx.beginPath();  // two big tusks growing UP out of the lower jaw, clear of the mouth line
+  for(const sd of SIDE2){ctx.moveTo(sd*10,9);ctx.lineTo(sd*5.4,9);ctx.lineTo(sd*7,-1.5)}ctx.fill();
+  ctx.fillStyle='#4a3860';rr(-18,-7,36,6.5,3);ctx.fill();                                      // heavy brow shelf
+  ctx.fillStyle='#5c4670';rr(-16,-7,32,2.4,1.2);ctx.fill();                                    // its lit top edge
+  ctx.globalAlpha=0.2+0.45*chg;ctx.fillStyle='#ff8a2e';ctx.beginPath();ctx.arc(-7.5,1.5,6,0,7);ctx.arc(7.5,1.5,6,0,7);ctx.fill();ctx.globalAlpha=1;
+  ctx.fillStyle='#2e2340';ctx.beginPath();ctx.ellipse(-7.5,1.5,4,3.4,0,0,7);ctx.ellipse(7.5,1.5,4,3.4,0,0,7);ctx.fill(); // socket
   ctx.fillStyle=chg>0.04?`rgb(255,${Math.round(lerp(226,120,chg))},${Math.round(lerp(150,40,chg))})`:'#ffe296';
-  ctx.beginPath();ctx.arc(-7,-1.6,2.5,0,7);ctx.arc(7,-1.6,2.5,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(-7.5,1.5,2.5,0,7);ctx.arc(7.5,1.5,2.5,0,7);ctx.fill();
+  ctx.fillStyle='#6d5484';ctx.beginPath();ctx.ellipse(0,4.5,4,2.8,0,0,7);ctx.fill();ctx.fillStyle='#3d2e50';ctx.beginPath();ctx.arc(-1.8,5.2,1.1,0,7);ctx.arc(1.8,5.2,1.1,0,7);ctx.fill(); // snout
   ctx.restore();
-  // BOTH arms grip the club, so the full swing reads as a two-handed haymaker
-  const gx=Math.sin(a)*OG_ARM,gy=OG_PIV+Math.cos(a)*OG_ARM;
-  ctx.strokeStyle='#5b4570';ctx.lineWidth=11;ctx.beginPath();ctx.moveTo(-24,-58);ctx.lineTo(gx*0.55-6,gy*0.5-24);ctx.lineTo(gx,gy);ctx.stroke();
-  ctx.strokeStyle='#7a5c8e';ctx.lineWidth=11;ctx.beginPath();ctx.moveTo(24,-58);ctx.lineTo(gx*0.55+6,gy*0.5-24);ctx.lineTo(gx,gy);ctx.stroke();
+  // NEAR arm, in front of everything, lighter than the far one so the pair reads in depth. Both end on the same fists,
+  // so the pose still reads as a two-handed haymaker wherever the club is.
+  ctx.strokeStyle='#7a5c8e';ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(25,-59);ctx.lineTo(enx,eny);ctx.lineTo(gx,gy);ctx.stroke();
+  ctx.strokeStyle='#96759f';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(24,-62);ctx.lineTo(enx-1,eny-4);ctx.stroke(); // lit top edge of the near upper arm
+  ctx.fillStyle='#8a6b9e';ctx.beginPath();ctx.arc(gx,gy,7,0,7);ctx.fill();
+  ctx.fillStyle='#5c4670';ctx.beginPath();ctx.arc(gx,gy,7,0.6,3.2);ctx.fill();  // underside of the fists, in shadow
   ctx.restore(); // breathe
   // the club, in the pivot frame. rotate(-a) maps local +y onto (sin a, cos a) - the same vector hurt() samples.
-  ctx.save();ctx.translate(0,OG_PIV);
-  if(st.k=='swing'){const a0=ogreArm({k:'swing',u:Math.max(0,st.u-0.16)},gt); // one arc = the whole motion trail
-   ctx.save();ctx.globalAlpha=0.22;ctx.strokeStyle='#ffd9a8';ctx.lineWidth=18;
-   ctx.beginPath();ctx.arc(0,0,OG_TIP-14,Math.PI/2-a0,Math.PI/2-a,a>a0);ctx.stroke();ctx.restore()}
+  ctx.save();ctx.translate(0,OG_PIVL);
+  // motion trail. Drawn as 6 tapering segments from the club BACKWARDS, not one flat band: a single even arc came out
+  // as two stray whiskers poking from behind him (the body hides its middle), which is exactly the kind of detached
+  // geometry that makes a character look broken. Tapered, it reads as a comet tail hanging off the club head.
+  if(st.k=='swing'){const spd=Math.sin(Math.PI*st.u),N=QUAL?6:3;   // half the taper steps on the 'perf' graphics level
+   ctx.save();ctx.strokeStyle='#ffd9a8';
+   for(let i=0;i<N;i++){const f0=i/N,f1=(i+1)/N,w=1-f0;
+    const aa=ogreArm({k:'swing',u:Math.max(0,st.u-0.15*f0)},gt,m.ak),ab=ogreArm({k:'swing',u:Math.max(0,st.u-0.15*f1)},gt,m.ak);
+    if(aa===ab)continue;
+    ctx.globalAlpha=(0.05+0.3*spd)*w*w;ctx.lineWidth=3+15*w;
+    ctx.beginPath();ctx.arc(0,0,OG_TIPL-13,Math.PI/2-aa,Math.PI/2-ab,ab>aa);ctx.stroke()}
+   ctx.restore()}
   ctx.rotate(-a);
-  ctx.fillStyle='#4a3826';ctx.beginPath();ctx.moveTo(-3.6,OG_ARM-4);ctx.lineTo(3.6,OG_ARM-4);ctx.lineTo(6,OG_TIP-20);ctx.lineTo(-6,OG_TIP-20);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#6b5138';ctx.beginPath();ctx.moveTo(-2.4,OG_ARM-4);ctx.lineTo(2,OG_ARM-4);ctx.lineTo(4,OG_TIP-20);ctx.lineTo(-3.6,OG_TIP-20);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='#33271b';ctx.lineWidth=2.4;ctx.beginPath();for(let k=0;k<3;k++){ctx.moveTo(-4.4,OG_ARM+2+k*5);ctx.lineTo(4.4,OG_ARM+4+k*5)}ctx.stroke();
-  if(chg>0.02){ctx.globalAlpha=0.16+0.34*chg;ctx.fillStyle='#ff9d3d';ctx.beginPath();ctx.ellipse(0,OG_TIP-10,17,20,0,0,7);ctx.fill();ctx.globalAlpha=1}
-  ctx.fillStyle='#54402b';ctx.beginPath();ctx.moveTo(-7,OG_TIP-22);ctx.quadraticCurveTo(-13,OG_TIP-12,-10,OG_TIP-2);ctx.quadraticCurveTo(0,OG_TIP+5,10,OG_TIP-2);ctx.quadraticCurveTo(13,OG_TIP-12,7,OG_TIP-22);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#7d6142';ctx.beginPath();ctx.moveTo(-5.4,OG_TIP-21);ctx.quadraticCurveTo(-11,OG_TIP-12,-8.4,OG_TIP-4);ctx.quadraticCurveTo(0,OG_TIP+1,7,OG_TIP-5);ctx.quadraticCurveTo(9.5,OG_TIP-13,5.4,OG_TIP-21);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#98764e';ctx.beginPath();ctx.ellipse(-3.4,OG_TIP-16,3.4,5.4,-0.25,0,7);ctx.fill();
-  ctx.fillStyle='#3b2c1d';ctx.beginPath();for(const q of[[-6,OG_TIP-16,2],[4.6,OG_TIP-18,1.7],[1,OG_TIP-8,2.1],[-4,OG_TIP-6,1.5]]){ctx.moveTo(q[0]+q[2],q[1]);ctx.arc(q[0],q[1],q[2],0,7)}ctx.fill();
+  ctx.fillStyle='#4a3826';ctx.beginPath();ctx.moveTo(-3.6,OG_ARML-6);ctx.lineTo(3.6,OG_ARML-6);ctx.lineTo(6,OG_TIPL-20);ctx.lineTo(-6,OG_TIPL-20);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#6b5138';ctx.beginPath();ctx.moveTo(-2.4,OG_ARML-6);ctx.lineTo(2,OG_ARML-6);ctx.lineTo(4,OG_TIPL-20);ctx.lineTo(-3.6,OG_TIPL-20);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#33271b';ctx.lineWidth=2.4;ctx.beginPath();for(let k=0;k<4;k++){ctx.moveTo(-4.4,OG_ARML+2+k*6);ctx.lineTo(4.4,OG_ARML+4+k*6)}ctx.stroke();
+  if(chg>0.02){ctx.globalAlpha=0.16+0.34*chg;ctx.fillStyle='#ff9d3d';ctx.beginPath();ctx.ellipse(0,OG_TIPL-10,17,20,0,0,7);ctx.fill();ctx.globalAlpha=1}
+  ctx.fillStyle='#54402b';ctx.beginPath();ctx.moveTo(-7,OG_TIPL-22);ctx.quadraticCurveTo(-13,OG_TIPL-12,-10,OG_TIPL-2);ctx.quadraticCurveTo(0,OG_TIPL+5,10,OG_TIPL-2);ctx.quadraticCurveTo(13,OG_TIPL-12,7,OG_TIPL-22);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#7d6142';ctx.beginPath();ctx.moveTo(-5.4,OG_TIPL-21);ctx.quadraticCurveTo(-11,OG_TIPL-12,-8.4,OG_TIPL-4);ctx.quadraticCurveTo(0,OG_TIPL+1,7,OG_TIPL-5);ctx.quadraticCurveTo(9.5,OG_TIPL-13,5.4,OG_TIPL-21);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#98764e';ctx.beginPath();ctx.ellipse(-3.4,OG_TIPL-16,3.4,5.4,-0.25,0,7);ctx.fill();
+  ctx.fillStyle='#3b2c1d';ctx.beginPath();for(const q of OG_KNOT){ctx.moveTo(q[0]+q[2],q[1]);ctx.arc(q[0],q[1],q[2],0,7)}ctx.fill();
   ctx.fillStyle='#d8cdb4';ctx.beginPath(); // bone spikes around the club head
-  for(const q of[[-11,OG_TIP-14,-1,-0.3],[11,OG_TIP-13,1,-0.2],[-7,OG_TIP-1,-0.7,0.8],[7,OG_TIP-2,0.7,0.8]]){
+  for(const q of OG_SPIKE){
    ctx.moveTo(q[0]-q[3]*2.6,q[1]+q[2]*2.6);ctx.lineTo(q[0]+q[2]*6.5,q[1]+q[3]*6.5);ctx.lineTo(q[0]+q[3]*2.6,q[1]-q[2]*2.6)}
   ctx.fill();
   ctx.restore();
-  // ground shock the instant the club lands (swing u == 0.5 is exactly straight down)
-  if(st.k=='swing'&&st.u>0.5){const k=(st.u-0.5)*2;ctx.globalAlpha=0.55*(1-k);ctx.strokeStyle='#fff3d6';ctx.lineWidth=3;
-   ctx.beginPath();ctx.arc(0,-2,16+k*52,Math.PI*1.08,Math.PI*1.92);ctx.stroke();ctx.globalAlpha=1}
+  // ground shock the instant the club lands (swing u == 0.5 is exactly straight down). A FLAT ring hugging the floor,
+  // not a big upright circle: as a circle its two ends rose either side of him and read as stray whiskers rather than
+  // as an impact. Squashed onto the ground plane it reads as exactly what it is.
+  if(st.k=='swing'&&st.u>0.5){const k=(st.u-0.5)*2;ctx.globalAlpha=0.6*(1-k)*(1-k);ctx.strokeStyle='#fff3d6';ctx.lineWidth=3.5*(1-k)+1;
+   ctx.beginPath();ctx.ellipse(0,-3,14+k*72,3.5+k*11,0,0,7);ctx.stroke();ctx.globalAlpha=1}
   ctx.restore()}}
 
 // ---------- GHOST ----------
 // The one monster that ignores the level: it drifts straight THROUGH terrain, homing on the player, but it is slow
 // (well under run speed - you can always just leave) and it is only solid for part of its cycle, so every ghost has a
 // guaranteed safe window. It is leashed to where it spawned, so it haunts a stretch of woods, not the whole map.
-// u: 0-.10 materialising (safe) | .10-.55 SOLID (hazard) | .55-.70 dissolving (safe) | .70-1 phased out (safe)
+// u: 0-.18 materialising (safe) | .18-.58 SOLID (hazard) | .58-.72 dissolving (safe) | .72-1 phased out (safe)
+// The materialise window is the whole telegraph, so it is deliberately long: at the default per=3.4s you get 0.61s of
+// "it is about to be real" - it brightens, swells to full size and pulls in a contracting dashed ring - before it can
+// touch you, and it very nearly STOPS drifting for that whole window (see updGhosts) so it can never materialise onto
+// you from behind. 0.61s at run speed is 150px of escape, against a 11px hitbox.
+// The phased-out alpha is 0.22 rather than near-nothing on purpose: a ghost you cannot see is a ghost you cannot plan
+// around. Faded, it is a visible cold smudge that happens to be harmless; lit, it is unmistakable.
 function ghostPhase(m,t){const per=m.per||3.4,u=(((t/per+(m.ph||0))%1)+1)%1;
- if(u<0.10)return{u,a:0.14+0.72*(u/0.10),solid:false,form:u/0.10};
- if(u<0.55)return{u,a:0.86,solid:true,form:1};
- if(u<0.70)return{u,a:0.86-0.72*((u-0.55)/0.15),solid:false,form:1-(u-0.55)/0.15};
- return{u,a:0.14,solid:false,form:0}}
+ if(u<0.18)return{u,a:0.22+0.64*(u/0.18),solid:false,form:u/0.18};
+ if(u<0.58)return{u,a:0.86,solid:true,form:1};
+ if(u<0.72)return{u,a:0.86-0.64*((u-0.58)/0.14),solid:false,form:1-(u-0.58)/0.14};
+ return{u,a:0.22,solid:false,form:0}}
 function updGhosts(L,dt){if(!L.movers)return;const p=G.player,s=G.spd||1,gt=G.t*s;
  for(const m of L.movers){if(m.t!='gho')continue;const st=ghostPhase(m,gt);m.sol=st.solid;
   const dh=Math.hypot(m.x-m.hx,m.y-m.hy);
   if(dh>m.lea)m.ret=1;else if(m.ret&&dh<m.lea*0.3)m.ret=0;   // leashed: it haunts its own stretch of woods
   let tx=m.hx,ty=m.hy;if(!m.ret&&p&&!p.dead){tx=p.x+8;ty=p.y+8}
   const dx=tx-m.x,dy=ty-m.y,d=Math.hypot(dx,dy)||1;
-  const sp=(st.solid?44:74)*s;                               // SLOWER while it can hurt you - always outrunnable
+  // SLOWER while it can hurt you (always outrunnable - RUN is 250), and it all but STOPS while materialising, so the
+  // telegraph is honest: wherever the ring appears is where the thing is going to be solid. It cannot creep onto you.
+  const sp=(st.form<1&&st.u<0.5?12:st.solid?44:74)*s;
   m.x+=dx/d*sp*dt;m.y+=dy/d*sp*dt;m.bob+=dt*s*2.4;
   if(Math.abs(dx)>1)m.face=dx<0?-1:1}}
 function drawGhosts(L,t){const gt=G.t*(G.spd||1); // t is wall-clock (cosmetic pulses); the PHASE must use game time
@@ -2317,28 +2415,37 @@ function drawGhosts(L,t){const gt=G.t*(G.spd||1); // t is wall-clock (cosmetic p
   if(m.x<G.cam.x-90||m.x>G.cam.x+VW+90||m.y<G.cam.y-100||m.y>G.cam.y+VH+90)continue;
   const st=ghostPhase(m,gt),fl=Math.sin(m.bob*1.6),p=G.player;
   ctx.save();ctx.translate(m.x,m.y+Math.sin(m.bob)*2.4);ctx.globalAlpha=st.a;ctx.lineJoin='round';ctx.lineCap='round';
-  if(st.solid){ctx.globalAlpha=st.a*(0.16+0.09*Math.sin(t*5));ctx.fillStyle='#a9e2ff';ctx.beginPath();ctx.arc(0,-1,21+fl*1.5,0,7);ctx.fill();ctx.globalAlpha=st.a}
-  // body: dome + four wavering tails, drawn as ONE closed path so the silhouette never breaks up
-  const sc=0.62+0.38*st.form;ctx.save();ctx.scale(sc,sc);
+  if(st.solid){ctx.globalAlpha=st.a*(0.16+0.09*Math.sin(t*5));ctx.fillStyle='#d2ecff';ctx.beginPath();ctx.arc(0,-1,21+fl*1.5,0,7);ctx.fill();ctx.globalAlpha=st.a}
+  // body: dome + THREE wavering tails, drawn as ONE closed path so the silhouette never breaks up in any pose. Three
+  // tails, the cold blue-white palette and the hollow lit sockets below are all taken straight from the c_ghost skin
+  // (see the c_ghost entries in SKIN_BODY/SKIN_FACE and the tail loop in drawSq) so the enemy and the skin read as the
+  // same creature. It also leans into its drift, which is the only facing cue a blob like this can carry.
+  const sc=0.62+0.38*st.form;ctx.save();ctx.scale(sc,sc);ctx.rotate((m.face||1)*0.07+fl*0.03);
   ctx.beginPath();ctx.moveTo(-13,-1);ctx.arc(0,-1,13,Math.PI,0);ctx.lineTo(13,5);
-  for(let k=0;k<4;k++){const x0=13-k*6.5,x1=x0-6.5,dp=9+Math.sin(m.bob*1.7+k*1.5)*4;ctx.quadraticCurveTo((x0+x1)/2,dp,x1,5+Math.sin(m.bob*1.7+k*1.5+0.8)*1.6)}
+  for(let k=0;k<3;k++){const x0=13-k*8.67,x1=x0-8.67,dp=10+Math.sin(m.bob*1.7+k*1.9)*4.5;ctx.quadraticCurveTo((x0+x1)/2,dp,x1,5+Math.sin(m.bob*1.7+k*1.9+0.8)*1.8)}
   ctx.closePath();
-  ctx.fillStyle=st.solid?'#e6f5ff':'#cfe2f2';ctx.fill();
+  ctx.fillStyle=st.solid?'#e8f4ff':'#cfe2f2';ctx.fill();
   ctx.save();ctx.clip();
-  ctx.fillStyle='rgba(126,168,214,.42)';ctx.beginPath();ctx.ellipse(-9,6,13,12,0.3,0,7);ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.ellipse(4,-9,6,4.2,-0.4,0,7);ctx.fill();
+  ctx.fillStyle='rgba(138,186,232,.4)';ctx.beginPath();ctx.ellipse(-9,6,13,12,0.3,0,7);ctx.fill();   // cold underside
+  ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.ellipse(4,-9,6,4.2,-0.4,0,7);ctx.fill();  // lit from upper right
+  ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.3;ctx.beginPath();                          // the skin's vapour swirl
+  ctx.moveTo(-8,7);ctx.quadraticCurveTo(-2,1,-4,-4);ctx.quadraticCurveTo(-6,-9,0,-10);ctx.stroke();
   ctx.restore();
-  ctx.strokeStyle=st.solid?'rgba(159,220,255,.9)':'rgba(150,175,200,.55)';ctx.lineWidth=1.6;ctx.stroke();
-  // face: hollow sockets always, but it only LIGHTS UP (and bares a mouth) while it is solid
-  const lx=p&&!p.dead?clamp((p.x+8-m.x)/70,-1,1):0,ly=p&&!p.dead?clamp((p.y+8-m.y)/70,-1,1):0;
-  ctx.fillStyle='#1d2740';ctx.beginPath();ctx.ellipse(-4.6,-4,3,4,0,0,7);ctx.ellipse(4.6,-4,3,4,0,0,7);ctx.fill();
-  if(st.solid){ctx.fillStyle='rgba(197,139,255,.45)';ctx.beginPath();ctx.arc(-4.6,-4,4.6,0,7);ctx.arc(4.6,-4,4.6,0,7);ctx.fill();
-   ctx.fillStyle='#d9b0ff';ctx.beginPath();ctx.arc(-4.6+lx*1.2,-4+ly*1.3,1.7,0,7);ctx.arc(4.6+lx*1.2,-4+ly*1.3,1.7,0,7);ctx.fill();
-   ctx.fillStyle='#1d2740';ctx.beginPath();ctx.ellipse(0,4.6,3.2,2.2+Math.abs(fl)*1.4,0,0,7);ctx.fill()}
+  ctx.strokeStyle=st.solid?'rgba(150,215,255,.9)':'rgba(150,175,200,.5)';ctx.lineWidth=1.6;ctx.stroke();
+  // face: hollow sockets always, but it only LIGHTS UP (and bares a mouth) while it is solid - that is the hazard tell
+  const lx=p&&!p.dead?clamp((p.x+8-m.x)/70,-1,1):0,ly=p&&!p.dead?clamp((p.y+8-m.y)/70,-1,1):0,gg=0.6+0.4*Math.sin(t*2.4);
+  if(st.solid){ctx.fillStyle=`rgba(150,215,255,${(0.34*gg).toFixed(2)})`;ctx.beginPath();ctx.arc(-4.6,-4,5,0,7);ctx.arc(4.6,-4,5,0,7);ctx.fill()}
+  ctx.fillStyle='#1b2a44';ctx.beginPath();ctx.ellipse(-4.6,-4,3,4,0,0,7);ctx.ellipse(4.6,-4,3,4,0,0,7);ctx.fill();
+  if(st.solid){ctx.fillStyle=`rgba(198,238,255,${(0.72+0.28*gg).toFixed(2)})`;
+   ctx.beginPath();ctx.arc(-4.6+lx*1.2,-4+ly*1.3,1.7,0,7);ctx.arc(4.6+lx*1.2,-4+ly*1.3,1.7,0,7);ctx.fill();
+   ctx.fillStyle='rgba(27,42,68,.75)';ctx.beginPath();ctx.ellipse(0,4.6,3.2,2.2+Math.abs(fl)*1.4,0,0,7);ctx.fill()}
   ctx.restore();
-  // materialising ring: a contracting dashed circle - the one and only "it is about to be real" cue
-  if(st.form<1&&st.u<0.5){ctx.globalAlpha=0.6*(1-st.form);ctx.strokeStyle='#bfe6ff';ctx.lineWidth=2;ctx.setLineDash([6,7]);
-   ctx.beginPath();ctx.arc(0,-1,15+(1-st.form)*17,0,7);ctx.stroke();ctx.setLineDash([])}
+  // materialising ring: a dashed circle that contracts onto the body AND brightens as it closes, so the cue is loudest
+  // at the moment it matters. Then one clean flash on the frame it actually becomes solid - "that is live now".
+  if(st.form<1&&st.u<0.5){ctx.globalAlpha=0.28+0.5*st.form;ctx.strokeStyle='#bfe6ff';ctx.lineWidth=2+st.form;ctx.setLineDash([6,7]);
+   ctx.lineDashOffset=-t*26;ctx.beginPath();ctx.arc(0,-1,15+(1-st.form)*20,0,7);ctx.stroke();ctx.setLineDash([]);ctx.lineDashOffset=0}
+  else if(st.solid&&st.u<0.26){const k=(st.u-0.18)/0.08;ctx.globalAlpha=0.55*(1-k);ctx.strokeStyle='#eaf7ff';ctx.lineWidth=3*(1-k);
+   ctx.beginPath();ctx.arc(0,-1,15+k*16,0,7);ctx.stroke()}
   ctx.restore()}}
 
 function portalStep(L,p){if(!L.portals||!L.portals.length)return;let inAny=null;
