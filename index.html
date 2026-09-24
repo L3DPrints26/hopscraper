@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260923-164458'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260923-193218'; // change this on every upload so open copies show "Update ready"
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -421,26 +421,33 @@ const ITEMS=[
  {id:'c_neon',cat:'c',n:'Neon',col:'#39ff14',wheel:1},
  {id:'c_galaxy',cat:'c',n:'Galaxy',col:'#6a3de8',wheel:1},
  {id:'c_choco',cat:'c',n:'Choco',col:'#7b4a2e',wheel:1},
- // bundle + store skins: hidden in the grid until you own them (shown on the Store tab instead)
- {id:'c_npink',cat:'c',n:'Hot Pink',col:'#ff2bd6',pack:'neon'},
- {id:'c_ncyan',cat:'c',n:'Electric',col:'#00e5ff',pack:'neon'},
+ // The neon pair used to be a pack (the retired pack_neon product / gem Neon Pack). The store collapse dropped both, so
+ // they became ordinary gem-priced skins rather than vanish - see the store-collapse note above PRODUCTS.
+ {id:'c_npink',cat:'c',n:'Hot Pink',col:'#ff2bd6',cost:40},
+ {id:'c_ncyan',cat:'c',n:'Electric',col:'#00e5ff',cost:40},
+ // ---- pack: THE one field that says "this comes with a themed pack". PACK_PRODUCT maps each pack key onto the product
+ // that grants it, and the shop shows locked pack items greyed with that pack's name instead of hiding them (see subOf/
+ // priceTag/packLabel) - hiding them is what left the old "Special" tab empty and mysterious.
  {id:'c_moon',cat:'c',n:'Moon',col:'#cfd3e0',pack:'space'},
  {id:'c_mars',cat:'c',n:'Mars',col:'#d9542c',pack:'space'},
  {id:'c_comet',cat:'c',n:'Comet',col:'#7fd8ff',pack:'space'},
- // World 6 bundle exclusive trail (see PRODUCTS world6bundle) - iap:1 hides it in the shop grid until owned, same as c_starter/c_supp.
- {id:'t_meteor',cat:'t',n:'Meteor Trail',col:'#8fa8ff',iap:1},
+ // the Space Pack's astronaut: a white EVA suit with a smoked visor (see SKP.c_astro) so it reads as a person in a suit
+ // next to the three planet skins, not a fourth pale rock.
+ {id:'c_astro',cat:'c',n:'Astronaut',col:'#e8edf5',pack:'space'},
+ {id:'t_meteor',cat:'t',n:'Meteor Trail',col:'#8fa8ff',pack:'space'},
  {id:'c_zombie',cat:'c',n:'Zombie',col:'#8fb58a',pack:'monster'},
  {id:'c_ogre',cat:'c',n:'Ogre',col:'#6b7d2c',pack:'monster'},
  {id:'c_beast',cat:'c',n:'Beast',col:'#7a2f8f',pack:'monster'},
- // added alongside the World 8 ghost enemy - the fourth Monster Pack skin (see PRODUCTS pack_monster/monsterworldbundle)
+ // added alongside the World 8 ghost enemy - the fourth Monster Pack skin (see PRODUCTS pack_monster)
  {id:'c_ghost',cat:'c',n:'Ghost',col:'#d6e9ff',pack:'monster'},
- {id:'c_starter',cat:'c',n:'Starter',col:'#00c2a8',iap:1},
- {id:'c_supp',cat:'c',n:'Supporter',col:'#ffb300',iap:1},
- // Gilded Vale bundle exclusive skin - NOT the trophy-locked c_gold ('perfect' achievement) above, deliberately a
+ // was the retired Starter Pack's exclusive skin; kept alive as a cheap coin skin so nothing disappeared with the pack
+ {id:'c_starter',cat:'c',n:'Starter',col:'#00c2a8',coins:160},
+ // was the retired Supporter Pack's skin. The Gold Supporter Pack is its natural home - it is literally the supporter skin.
+ {id:'c_supp',cat:'c',n:'Supporter',col:'#ffb300',pack:'gold'},
+ // Gilded Vale's exclusive skin - NOT the trophy-locked c_gold ('perfect' achievement) above, deliberately a
  // different, brighter/more saturated gold with its own sparkle+double-sweep detail (see SKP.c_aurum / drawSq) so
- // players who earned the trophy skin can still tell the two apart at a glance. premium:1 + iap:1 (no cost/coins/wheel/
- // ach field) means it's never purchasable on its own - only via the goldworldbundle product.
- {id:'c_aurum',cat:'c',n:'Aurum',col:'#ffe066',premium:1,iap:1},
+ // players who earned the trophy skin can still tell the two apart at a glance.
+ {id:'c_aurum',cat:'c',n:'Aurum',col:'#ffe066',pack:'gold'},
  // Premium Wheel legendaries + Hopscraper Club monthly skins (simple recolors for now; iap:1 keeps them hidden in the grid until owned)
  {id:'c_aurora',cat:'c',n:'Aurora',col:'#39d6c8',anim:[165,295,82,58,2.2],premium:1,legend:1,iap:1},
  {id:'c_nova',cat:'c',n:'Supernova',col:'#ff9a2e',anim:[8,52,95,58,3.4],premium:1,legend:1,iap:1},
@@ -481,7 +488,12 @@ const ITEMS=[
  {id:'h_flower',cat:'h',n:'Flower Crown',cost:35},
  {id:'h_wizard',cat:'h',n:'Wizard Hat',cost:45},
  {id:'h_viking',cat:'h',n:'Viking Helmet',wheel:1},
+ // h_astro is reachable TWO ways on purpose: the fly5k trophy (free) and the Space Pack. subOf ranks ach above pack, so
+ // it lives in Rewards and the pack simply hands it over early - buying a pack never takes a trophy route away.
  {id:'h_astro',cat:'h',n:'Space Helmet',ach:'fly5k'},
+ // the two pack hats (see drawHat/HAT_TOP for their art)
+ {id:'h_ogre',cat:'h',n:'Ogre Horns',pack:'monster'},
+ {id:'h_gild',cat:'h',n:'Gilded Crown',pack:'gold'},
  {id:'t_none',cat:'t',n:'No Trail',cost:0},
  {id:'t_dust',cat:'t',n:'Dust',cost:0},
  {id:'t_spark',cat:'t',n:'Sparkles',world:2},
@@ -496,6 +508,9 @@ const ITEMS=[
  {id:'t_notes',cat:'t',n:'Music Notes',cost:35},
  {id:'t_bolt',cat:'t',n:'Lightning',ach:'speedy'},
  {id:'t_ghost',cat:'t',n:'Ghosts',wheel:1},
+ // the two pack trails (see TRX for their particles); t_meteor above is the Space Pack's
+ {id:'t_slime',cat:'t',n:'Slime Drip',col:'#7bdc3b',pack:'monster'},
+ {id:'t_gild',cat:'t',n:'Gilded Dust',col:'#ffd23f',pack:'gold'},
 ];
 // trophy rewards added after a trophy was earned still get handed out
 for(const it of ITEMS)if(it.ach&&S.ach[it.ach])S.own[it.id]=1;
@@ -503,78 +518,75 @@ for(const it of ITEMS)if(it.ach&&S.ach[it.ach])S.own[it.id]=1;
 function fixEq(){const d=defSave().eq;for(const c of['c','h','t'])if(!ITEMS.some(i=>i.id==S.eq[c]&&i.cat==c))S.eq[c]=d[c]}
 fixEq();
 const WREW=['c_sky','h_party','t_spark','t_fire'];
-// real-money products. Ids match App Store Connect so the iOS wrapper can hook in. No ads, ever.
+// ================= REAL-MONEY PRODUCTS =================
+// Ids match App Store Connect so the iOS wrapper can hook in. No ads, ever.
+//
+// ---- THE STORE COLLAPSE (read this before adding a product) ----
+// This list used to hold EIGHTEEN products: three world unlocks, two world+cosmetic bundles, an all-worlds bundle, three
+// cheap skin packs, a starter pack, a supporter pack, a coin doubler, a chaos pass and a card pack. The owner's verdict
+// was that the shop read as "low key kinda confusing", and he was right: half of those were the same content sold twice
+// at different prices, and nothing in the list told a player what KIND of thing they were looking at.
+// There are now EIGHT, and only three shapes of thing:
+//   * THREE themed packs   - one per bonus world, each carrying that world + every cosmetic that belongs to its theme
+//   * FOUR gem tiers       - the consumable currency
+//   * ONE subscription     - Hopscraper Club
+// Nothing else goes in here. A new cosmetic joins an existing pack (give the ITEM a pack: key); it does not become a
+// product of its own. That is the whole point of the collapse.
+//
+// Everything the retired products carried is still reachable - see migrateStore() for old saves, and:
+//   neon skins  -> ordinary 40-gem skins (ITEMS c_npink/c_ncyan)
+//   Starter skin-> a 160-coin skin (ITEMS c_starter)      Supporter skin -> the Gold Supporter Pack
+//   Coin Doubler-> a Gold Supporter Pack perk (dbl:1 below) and still a Club perk (coinMult)
+//   Power Cards -> won on the FREE Prize Wheel (WHEEL 'cards' segment) and the Premium Wheel
+//   Chaos Pass  -> won on the Premium Wheel (PWHEEL 'chaos' segment)
+//   Gold Rush   -> granted by the Gold Supporter Pack, but NOT as a cards:{} payload: the store refuses a purchase when
+//                  card stock is full (cardPackRoom), and a world unlock must never be blocked by a consumable. See
+//                  grantProduct's goldrush:1 branch, which tops it up instead of failing.
 const PRODUCTS=[
+ // ---- the three themed packs. Same shape every time: one bonus-world flag + the cosmetics with that pack: key.
+ {id:'com.gamercrafter.hopscraper.pack_space',n:'Space Pack',pk:'space',d:'The Low-G Zone world - 8 bonus levels of floaty low-gravity platforming and tumbling asteroids - plus the Moon, Mars and Comet planet skins, the Astronaut skin, the Space Helmet and the Meteor Trail.',p:'$3.99',once:1,world6:1,items:['c_moon','c_mars','c_comet','c_astro','h_astro','t_meteor']},
+ {id:'com.gamercrafter.hopscraper.pack_monster',n:'Monster Pack',pk:'monster',d:'The Monster Woods world - 8 bonus levels stalked by zombies, club-swinging ogres and ghosts that walk through walls - plus the Ogre, Ghost, Zombie and Beast skins, the Ogre Horns hat and the Slime Drip trail.',p:'$3.99',once:1,monsterworld:1,items:['c_zombie','c_ogre','c_beast','c_ghost','h_ogre','t_slime']},
+ // Deliberately the dearest thing in the game: it is a SUPPORTER pack, not a content pack that happens to cost more.
+ // It carries the most generous permanent perks in return - the Coin Doubler forever, and gem-dropping Gilded Vale
+ // chests (see CHEST_GEM / goldChestGems) - so the price reads as "thank you", not as a paywall.
+ {id:'com.gamercrafter.hopscraper.pack_gold',n:'Gold Supporter Pack',pk:'gold',d:'The Gilded Vale world - 8 peaceful bonus levels bathed in warm golden light - plus the Aurum and Supporter skins, the Gilded Crown, the Gilded Dust trail, the Coin Doubler forever, a Gold Rush charge, and Gilded Vale chests that pay out gems as well as coins.',p:'$9.99',once:1,goldworld:1,dbl:1,goldrush:1,items:['c_aurum','c_supp','h_gild','t_gild'],tag:'SUPPORTER'},
+ // ---- gems: the consumable currency
  {id:'com.gamercrafter.hopscraper.gems80',n:'80 Gems',d:'A handful of gems',p:'$0.99',gems:80},
  {id:'com.gamercrafter.hopscraper.gems250',n:'250 Gems',d:'A bag of gems',p:'$2.99',gems:250},
  {id:'com.gamercrafter.hopscraper.gems700',n:'700 Gems',d:'A chest of gems',p:'$6.99',gems:700},
  {id:'com.gamercrafter.hopscraper.gems1600',n:'1,600 Gems',d:'A vault of gems',p:'$14.99',gems:1600,tag:'BEST VALUE'},
- {id:'com.gamercrafter.hopscraper.club',n:'Hopscraper Club',d:'+10 gems a day, 2x coins, a free Premium spin every week and 3 exclusive Club skins, one unlocked each month',p:'$2.99/mo',type:'sub'},
- {id:'com.gamercrafter.hopscraper.starter',n:'Starter Pack',d:'100 gems, 1,000 coins, Starter skin',p:'$1.99',gems:100,coins:1000,item:'c_starter',once:1},
- {id:'com.gamercrafter.hopscraper.doubler',n:'Coin Doubler',d:'2x coins from playing, forever',p:'$2.99',dbl:1,once:1},
- {id:'com.gamercrafter.hopscraper.supporter',n:'Supporter Pack',d:'500 gems + gold Supporter skin',p:'$4.99',gems:500,item:'c_supp',once:1},
- // cheap real-money skin packs (same skin groups as the gem-priced PACKS below, just a faster way to get them)
- {id:'com.gamercrafter.hopscraper.pack_neon',n:'Neon Pack',d:'Hot Pink + Electric neon skins',p:'$0.99',items:['c_npink','c_ncyan'],once:1},
- {id:'com.gamercrafter.hopscraper.pack_space',n:'Space Pack',d:'Moon, Mars and Comet skins',p:'$0.99',items:['c_moon','c_mars','c_comet'],once:1},
- {id:'com.gamercrafter.hopscraper.pack_monster',n:'Monster Pack',d:'Zombie, Ogre, Beast and Ghost skins',p:'$0.99',items:['c_zombie','c_ogre','c_beast','c_ghost'],once:1},
- // Power Cards + Chaos Pass: gameplay items, Story Mode only. The Card Pack is a CONSUMABLE (buy it again any time); bought
- // cards may stack past CARD_MAX up to CARD_BUY_MAX so a purchase is never silently lost (see grantProduct/cardPackRoom).
- {id:'com.gamercrafter.hopscraper.cardpack',n:'Power Card Pack',d:'2 Shield + 2 Slow-Mo + 2 Extra Jump + 2 Magnet. Story Mode only.',p:'$1.99',cards:{shield:2,slowmo:2,xjump:2,magnet:2}},
- {id:'com.gamercrafter.hopscraper.chaos',n:'Chaos Pass',d:'Unlocks Chaos Replay: redo any cleared story level with a modifier for fun. No stars, no leaderboard.',p:'$0.99',once:1,chaos:1},
- // World 6 (Low-G Zone): the game's first PAID content world - optional bonus, never required to clear Worlds 1-5 or THE TOP. See S.world6/unlocked().
- {id:'com.gamercrafter.hopscraper.world6only',n:'World 6 Unlock',d:'Unlocks Low-G Zone: 8 bonus levels of floaty low-gravity platforming and tumbling asteroids.',p:'$1.99',once:1,world6:1},
- {id:'com.gamercrafter.hopscraper.world6bundle',n:'World 6 + Space Bundle',d:'Unlocks Low-G Zone, plus the Moon, Mars and Comet skins and the new Meteor Trail.',p:'$3.49',once:1,world6:1,items:['c_moon','c_mars','c_comet','t_meteor']},
- // World 7 (Gilded Vale): the game's second PAID content world - deliberately PEACEFUL, low hazard density, warm gold
- // palette. One bundle product grants the world flag, the exclusive Aurum skin, and 1 Gold Rush charge (see the
- // "goldrush" CARD_TYPES entry / spawnGoldRush - same Power Card plumbing, reused for a coin-flood consumable instead
- // of a player buff). See S.goldworld/unlocked().
- {id:'com.gamercrafter.hopscraper.goldworldbundle',n:'Gilded Vale Bundle',d:'Unlocks Gilded Vale: 8 peaceful bonus levels bathed in warm golden light. Includes the exclusive Aurum skin and 1 Gold Rush charge (floods a level with bonus coins for 60 seconds).',p:'$3.99',once:1,goldworld:1,item:'c_aurum',cards:{goldrush:1}},
- // World 8 (Monster Woods): the game's third PAID content world - same deal as World 6 above (optional bonus, never
- // required). One bundle product (not a separate unlock+bundle pair) grants the world flag plus the existing Monster
- // Pack skins - idempotent even if the skins are already owned separately (see grantProduct: S.own[id]=1 either way).
- {id:'com.gamercrafter.hopscraper.monsterworldbundle',n:'Monster Woods Bundle',d:'Unlocks Monster Woods: 8 bonus levels stalked by zombies, club-swinging ogres and ghosts that walk through walls. Includes the Zombie, Ogre, Beast and Ghost skins.',p:'$2.99',once:1,monsterworld:1,items:['c_zombie','c_ogre','c_beast','c_ghost']},
- // All 3 Bonus Worlds: the only product carrying more than one bonus-world flag (allworlds:1 marks it). It grants every
- // bonus-world flag plus every COSMETIC the three individual bundles include, so owning it makes all three of them read
- // as Owned via prodOwned(). It deliberately does NOT carry cards:{goldrush:1}: the Store blocks a purchase when card
- // stock is full (see cardPackRoom), and a world unlock must never be blocked by a consumable. The Gold Rush charge
- // stays a Gilded Vale Bundle exclusive - flagged to the owner as an open call.
- {id:'com.gamercrafter.hopscraper.allworldsbundle',n:'All 3 Bonus Worlds',d:'Unlocks all three bonus worlds - Low-G Zone, Gilded Vale and Monster Woods - plus every skin and trail their individual bundles include.',p:'$7.99',once:1,allworlds:1,world6:1,goldworld:1,monsterworld:1,tag:'ALL 3 WORLDS',items:['c_moon','c_mars','c_comet','t_meteor','c_aurum','c_zombie','c_ogre','c_beast']}];
-// cosmetic bundles, bought with gems
-const PACKS=[{id:'neon',n:'Neon Pack',cost:60},{id:'space',n:'Space Pack',cost:90},{id:'monster',n:'Monster Pack',cost:90}];
-const packItems=id=>ITEMS.filter(it=>it.pack==id);
-const packOwned=id=>packItems(id).every(it=>S.own[it.id]);
-// Store tab sections: grouped so the card wall stays scannable. Each section pages 6 cards at a time.
-// bonus-world unlock flags a PRODUCTS entry can carry (world6, monsterworld, ...) - kept in one place so the Store's
-// single consolidated Bundles section below and prodOwned/grantProduct don't need a per-world special case each.
+ // ---- the one subscription
+ {id:'com.gamercrafter.hopscraper.club',n:'Hopscraper Club',d:'+10 gems a day, 2x coins, a free Premium spin every week and 3 exclusive Club skins, one unlocked each month',p:'$2.99/mo',type:'sub'}];
+// the themed packs, in shop order, and the product that grants a given pack: key
+const packProducts=()=>PRODUCTS.filter(p=>p.pk);
+const packProduct=k=>PRODUCTS.find(p=>p.pk==k);
+// "Space Pack" / "Gold Supporter Pack" - the one-line answer to "where does this locked item come from?"
+function packLabel(k){const p=packProduct(k);return p?p.n:''}
+// which WORLDS index a pack's bonus world is (see BONUS_WORLDS, defined further down alongside the More Worlds screen)
+function bwWorldOf(p){const f=bonusFlagOf(p),b=BONUS_WORLDS.find(x=>x.flag==f);return b?b.wd:1}
+// "1 world · 8 levels" / "4 skins · 1 hat · 1 trail" / perks - what a pack card says under its name, counted from the
+// product itself so it can never fall out of step with what the product actually grants.
+function packBlurb(p){const its=(p.items||[]).map(i=>ITEMS.find(x=>x.id==i)).filter(Boolean),a=[];
+ for(const g of [['c','skin','skins'],['h','hat','hats'],['t','trail','trails']]){const n=its.filter(i=>i.cat==g[0]).length;if(n)a.push(n+' '+(n>1?g[2]:g[1]))}
+ const out=['1 world · '+LEVELS.filter(l=>l.wd==bwWorldOf(p)).length+' levels'];
+ if(a.length)out.push(a.join(' · '));
+ if(p.dbl)out.push('Coin Doubler forever');
+ if(p.goldrush)out.push('Chests drop gems too');
+ return out}
+// bonus-world unlock flags a PRODUCTS entry can carry (world6, monsterworld, ...) - kept in one place so prodOwned/
+// grantProduct/migrateStore don't need a per-world special case each.
 const BONUS_WORLD_KEYS=['world6','goldworld','monsterworld'];
-// bonusFlagsOf = EVERY bonus world a product unlocks (the All 3 Bonus Worlds bundle carries all three);
-// bonusFlagOf = just the first, which is all the single-world callers ever needed.
+// bonusFlagsOf = EVERY bonus world a product unlocks; bonusFlagOf = just the first, which is all the callers ever needed.
+// (Nothing carries more than one any more - the All 3 Bonus Worlds bundle was retired in the store collapse - but the
+// plural stays so a future "everything" bundle can't quietly half-work.)
 const bonusFlagsOf=p=>BONUS_WORLD_KEYS.filter(k=>p[k]);
 const bonusFlagOf=p=>bonusFlagsOf(p)[0];
-// the three individual world bundles (world6only carries no cosmetics, so it isn't one) - used for the saving maths
-const worldBundles=()=>PRODUCTS.filter(p=>!p.allworlds&&bonusFlagOf(p)&&(p.items||p.item));
-// "save X" is computed from the LIVE price strings (Apple's localized ones when the wrapper is there, the PRODUCTS
-// placeholders otherwise), so it can never drift from the prices themselves. If any price can't be parsed into a
-// number we return null and the UI simply says nothing rather than inventing a figure.
-// loc says whether the price came from Apple or from the PRODUCTS placeholder: subtracting one kind from the other
-// would print a garbage figure (a localized bundle price minus three USD placeholders), so allWorldsSaving refuses to.
+// price strings are Apple's localized ones when the wrapper is there, the PRODUCTS placeholders otherwise
 function priceInfo(p){const l=localPrice(p),s=l||p.p,m=s&&s.match(/(\d+(?:[.,]\d+)?)/);
  return{s,loc:!!l,n:m?parseFloat(m[1].replace(',','.')):null}}
 function priceNum(p){return priceInfo(p).n}
-function allWorldsSaving(){const all=PRODUCTS.find(p=>p.allworlds);if(!all)return null;
- const a=priceInfo(all),parts=worldBundles().map(priceInfo);
- if(a.n==null||!parts.length||parts.some(v=>v.n==null))return null;
- if(parts.some(v=>v.loc!==a.loc))return null; // mixed sources: say nothing rather than print a wrong number
- const save=parts.reduce((x,y)=>x+y.n,0)-a.n;if(save<=0.005)return null;
- const pre=(a.s.match(/^[^\d]*/)||[''])[0],suf=(a.s.match(/[^\d]*$/)||[''])[0]; // works for "$7.99" and "7,99 €"
- return pre+save.toFixed(2)+suf}
-function storeSections(){const cardsFor=ps=>ps.map(p=>({id:'pr_'+PRODUCTS.indexOf(p),p}));
- // one consolidated "Bundles" section (starter/doubler/supporter/cards/chaos + every bonus-world unlock, whether or not
- // it also carries cosmetic items) instead of an awkward separate section per paid bonus world.
- return[{id:'sub',label:'Subscription',cards:cardsFor(PRODUCTS.filter(p=>p.type=='sub'))},
-  {id:'gems',label:'Gems',cards:cardsFor(PRODUCTS.filter(p=>p.gems&&!p.once))},
-  {id:'bundles',label:'Bundles',cards:cardsFor(PRODUCTS.filter(p=>bonusFlagOf(p)||((p.once||p.cards)&&!p.items)))},
-  {id:'packs',label:'Cosmetic Packs',cards:PACKS.map(pk=>({id:'pk_'+pk.id,k:pk})).concat(cardsFor(PRODUCTS.filter(p=>p.items&&!bonusFlagOf(p))))}]}
+// A pack is Owned when its world flag is set AND every cosmetic in it is owned, so a save that got the flag some other
+// way (an old bundle, a hand edit) still shows the pack as something to buy until migrateStore has handed the rest over.
 function prodOwned(pr){if(pr.type=='sub')return clubOn();const bfs=bonusFlagsOf(pr);if(bfs.length)return pr.items?(bfs.every(k=>!!S[k])&&pr.items.every(id=>S.own[id])):bfs.every(k=>!!S[k]);if(pr.items)return pr.items.every(id=>S.own[id]);if(pr.chaos)return !!S.chaos;if(pr.cards)return false;return !!pr.once&&(pr.dbl?!!S.dbl:pr.item?!!S.own[pr.item]:false)}
 // Owner decision: the web build shows the exact same Store / More Worlds / Restore UI as the app. storeOn() is kept as
 // the single switch; without window.HopNative, Buy/Restore just toast "Purchases open in the app" (see noNativeBuy).
@@ -600,10 +612,38 @@ function grantProduct(id,txId,isRestore){const pr=PRODUCTS.find(p=>p.id==id);if(
  if(pr.type=='sub'){const was=clubOn();S.club=1;if(!was&&S.clubExp&&Date.now()>=S.clubExp)S.clubExp=0;save();if(!was){toast('Welcome to the Club!','Your perks are active','ach');sfx('ach')}clubDaily();return true}
  const entOnly=!!isRestore||(!!pr.once&&(!!S.iap[pr.id]||prodOwned(pr)));
  if(!entOnly){if(pr.gems)S.bank+=pr.gems;if(pr.coins)S.coins+=pr.coins;if(pr.cards)for(const k in pr.cards){const c=S.cards[k]||0;S.cards[k]=Math.max(c,Math.min(CARD_BUY_MAX,c+pr.cards[k]))}}
+ // goldrush:1 (Gold Supporter Pack) is NOT a cards:{} payload on purpose - see the PRODUCTS note. It tops the charge up
+ // to at least 1 instead of adding, so a restore can never stack Gold Rush charges and a full card stock can never
+ // block the world unlock behind it.
+ if(pr.goldrush)S.cards.goldrush=Math.max(S.cards.goldrush||0,1);
  if(pr.dbl)S.dbl=1;if(pr.item)S.own[pr.item]=1;if(pr.items)pr.items.forEach(i=>S.own[i]=1);if(pr.chaos)S.chaos=1;bonusFlagsOf(pr).forEach(k=>S[k]=1);if(pr.once)S.iap[pr.id]=1;
  save();if(isRestore)toast('Restored',pr.n,'info');else{toast('Thank you!',pr.n+' unlocked','ach');sfx('buy')}return true}
-// a Card Pack only goes through if every card in it still fits under CARD_BUY_MAX (the Store says so instead of wasting it)
+// a consumable card payload only goes through if every card in it still fits under CARD_BUY_MAX (the Store says so
+// instead of wasting it). Nothing in PRODUCTS carries cards:{} any more, but the guard stays for the buy path.
 function cardPackRoom(pr){return !pr.cards||Object.keys(pr.cards).every(k=>(S.cards[k]||0)+pr.cards[k]<=CARD_BUY_MAX)}
+// ---- SAVE MIGRATION for the eighteen-products-to-eight collapse (see the note above PRODUCTS).
+// Nothing was ever actually sold, so this stays deliberately simple - but an old save must never come back poorer.
+// Two passes, and the second is the one that really matters:
+//  1. every retired product id in S.iap is redeemed for what it used to grant, then forgotten;
+//  2. the bonus-world FLAGS are treated as the source of truth - a save holding S.goldworld gets the whole Gold
+//     Supporter Pack (cosmetics, Coin Doubler, Gold Rush), however it came by that flag. That means a player who
+//     bought any old Gilded Vale bundle ends up with strictly MORE than they paid for, never less.
+// S.dev is untouched by this: dev mode unlocks by overriding checks, not by setting flags, so nothing is over-granted.
+const RETIRED_PRODUCTS={world6only:'world6',world6bundle:'world6',goldworldbundle:'goldworld',monsterworldbundle:'monsterworld',
+ allworldsbundle:'*',pack_neon:'neon',starter:'starter',supporter:'supporter',doubler:'dbl',chaos:'chaos',cardpack:''};
+function migrateStore(){if(!isObj(S.iap))S.iap={};if(!isObj(S.own))S.own={};let ch=false;
+ for(const k in RETIRED_PRODUCTS){const old='com.gamercrafter.hopscraper.'+k;if(!S.iap[old])continue;delete S.iap[old];ch=true;
+  const v=RETIRED_PRODUCTS[k];
+  if(v=='*')BONUS_WORLD_KEYS.forEach(f=>S[f]=1);else if(BONUS_WORLD_KEYS.indexOf(v)>=0)S[v]=1;
+  else if(v=='neon'){S.own.c_npink=1;S.own.c_ncyan=1}else if(v=='starter')S.own.c_starter=1;
+  else if(v=='supporter')S.own.c_supp=1;else if(v=='dbl')S.dbl=1;else if(v=='chaos')S.chaos=1}
+ for(const pr of PRODUCTS){const f=bonusFlagOf(pr);if(!f||!S[f])continue;
+  if(!S.iap[pr.id]){S.iap[pr.id]=1;ch=true}
+  (pr.items||[]).forEach(i=>{if(!S.own[i]){S.own[i]=1;ch=true}});
+  if(pr.dbl&&!S.dbl){S.dbl=1;ch=true}
+  if(pr.goldrush&&!(S.cards.goldrush>0)){S.cards.goldrush=1;ch=true}}
+ if(ch){fixEq();save()}}
+migrateStore();
 // Reset Save wipes progress but KEEPS what was paid for (Coin Doubler, Club, Chaos Pass, bonus worlds, bought/won
 // special items, pack skins, stocked cards, delivered transactions) and the daily/weekly claim markers (no re-farming).
 function resetSave(){const o=S,n=defSave();
@@ -611,8 +651,11 @@ function resetSave(){const o=S,n=defSave();
  for(const it of ITEMS)if((it.iap||it.pack)&&o.own[it.id])n.own[it.id]=1;
  S=n;fixEq()}
 // prize wheel: order = position on the wheel (clockwise from the top)
+// The 'cards' segment is the FREE route to Power Cards, added when the paid Card Pack was retired in the store collapse
+// (see the note above PRODUCTS): cards had to stay reachable without money, and the free wheel is where the game already
+// hands things out. Weights are relative and every odds display normalizes them, so adding a segment is safe.
 const WHEEL=[{n:'25 coins',k:'c',v:25,w:20,col:'#ffc93c'},{n:'2 gems',k:'g',v:2,w:14,col:'#4dabff'},{n:'50 coins',k:'c',v:50,w:18,col:'#ff8f3c'},{n:'+1 ticket',k:'t',v:1,w:12,col:'#ff8fd8'},
- {n:'100 coins',k:'c',v:100,w:12,col:'#7bdc3b'},{n:'5 gems',k:'g',v:5,w:6,col:'#2ee6c5'},{n:'250 coins',k:'c',v:250,w:5,col:'#ff4d6d'},{n:'Mystery Item',k:'s',v:0,w:6,col:'#9b5de5'}];
+ {n:'100 coins',k:'c',v:100,w:12,col:'#7bdc3b'},{n:'Power Card',l:'CARD',k:'cards',v:1,w:9,col:'#20b8c9'},{n:'5 gems',k:'g',v:5,w:6,col:'#2ee6c5'},{n:'250 coins',k:'c',v:250,w:5,col:'#ff4d6d'},{n:'Mystery Item',k:'s',v:0,w:6,col:'#9b5de5'}];
 // Premium Wheel: 100 gems a spin. Every prize is exclusive to this wheel — no plain currency outcomes.
 // Weights are RELATIVE (they don't add up to 100): every odds display normalizes them, w/total. Odds are shown in-game (App Store rule).
 // Duplicate protection: already own everything a prize could give you? It converts to a PW_REFUND-gem refund.
@@ -653,6 +696,12 @@ function grantSetOrRefund(items,label,extraGems){const p={};
 // prizes are granted the moment you spin (closing the game mid-spin never loses them); the wheel just shows it
 function awardWheel(i){const s=WHEEL[i],p={seg:i,k:s.k,txt:s.n,sub:''};
  if(s.k=='c'){S.coins+=s.v}else if(s.k=='g'){S.bank+=s.v;S.earned+=s.v}else if(s.k=='t'){S.tix+=s.v;p.txt='+1 ticket';p.sub='Spin again!'}
+ // one Power Card of whichever regular type you have least of (ties random), so the free route fills gaps rather than
+ // piling onto a type you already hoard. Gold Rush stays a Gold Supporter Pack exclusive. Stock full -> 60 coins instead.
+ else if(s.k=='cards'){const reg=CARD_TYPES.filter(k=>k!='goldrush'&&(S.cards[k]||0)<CARD_MAX);
+  if(!reg.length){S.coins+=60;p.txt='60 coins';p.sub='Card stock full'}
+  else{const lo=Math.min(...reg.map(k=>S.cards[k]||0)),best=reg.filter(k=>(S.cards[k]||0)==lo),t=best[Math.floor(Math.random()*best.length)];
+   S.cards[t]=(S.cards[t]||0)+1;p.txt='+1 '+CARD_NAMES[t];p.sub='Story Mode power card — activate it in-level'}}
  else{const pool=ITEMS.filter(it=>it.wheel&&!S.own[it.id]);if(pool.length){const it=pool[Math.floor(Math.random()*pool.length)];S.own[it.id]=1;p.item=it.id;p.txt=it.n+(it.cat=='c'?' skin':it.cat=='h'?'':' trail');p.sub='Wheel exclusive'}else{S.coins+=150;p.txt='150 coins';p.sub='You own every wheel item already'}}
  save();return p}
 function awardPremium(i){const s=PWHEEL[i];let p={seg:i,k:s.k,txt:s.n,sub:''};
@@ -853,6 +902,8 @@ function wrapText(str,maxW,size){ctx.font=`bold ${size}px ${FONT}`;const w=str.s
 function fitFont(str,maxW,size,min){min=min||14;let s=size;ctx.font=`bold ${s}px ${FONT}`;
  while(s>min&&ctx.measureText(str).width>maxW){s--;ctx.font=`bold ${s}px ${FONT}`}return s}
 function txtW(str,size){ctx.font=`bold ${size}px ${FONT}`;return ctx.measureText(str).width}
+// truncate to fit a width, with an ellipsis (fitFont above shrinks instead; this one is for labels already at the floor)
+function fitStr(str,maxW,size){if(txtW(str,size)<=maxW)return str;let r=String(str);while(r.length>1&&txtW(r+'…',size)>maxW)r=r.slice(0,-1);return r+'…'}
 // note card: dismissible like a phone notification (tap the X, or swipe it off either side)
 function noteCardGeom(){const ns=G.noteShow;if(!ns)return null;const age=gtime-ns.t0;const lines=wrapText(NOTES[ns.i],520,17),h=46+lines.length*24;
  const k=age<0.3?ease(age/0.3):age>7?1-(age-7)/0.5:1;return{lines,h,y:96-(1-k)*40,k}}
@@ -1391,7 +1442,7 @@ function buildLevel(def,opt){opt=opt||{};
  // World 7 (Gilded Vale) treasure chests: def.ch=[[x,y],...], y being the tile ABOVE the shelf it rests on so the chest
  // sits ON that shelf. Opening every chest in a level unlocks that level's gold vault doors - it sets the very same
  // G.keyGot flag L.key sets, so isSolid()/'D' rendering (and the physics bot's door model) need no special case. See step().
- L.chests=(def.ch||[]).map(p=>({x:MX(p[0])*TS+12,y:MY(p[1])*TS+12,got:false,pay:0,fly:null,cnt:0,cntT:0,openT:0}));
+ L.chests=(def.ch||[]).map(p=>({x:MX(p[0])*TS+12,y:MY(p[1])*TS+12,got:false,pay:0,gpay:0,fly:null,cnt:0,cntT:0,gcnt:0,gcntT:0,openT:0}));
  // ...but a Gilded Vale level is allowed to have chests and NO vault doors (they are pure gold detours there), so the
  // "every chest found" toast has to know whether there is actually a door to swing open. See step().
  L.hasDoor=(def.r||[]).some(r=>r[0]=='D');
@@ -2349,16 +2400,38 @@ function drawRocketStuff(L,t){
 // through a death (it can never soft-lock a run), and because it stays open it also never pays twice in one run.
 const CHEST_PAY=10,CHEST_PAY_REPLAY=4;
 function chestPay(){const rec=S.lv[G.idx];return(G.mode=='story'&&!(rec&&rec.done))?CHEST_PAY:CHEST_PAY_REPLAY}
+// ---- GEMS IN THE GOLD CHESTS: the Gold Supporter Pack's headline perk (see PRODUCTS pack_gold).
+// After the coins, a chest coughs up a few GEMS too - a random handful per chest, not a fixed drip, so opening one
+// always has a small "what did I get" moment.
+// BALANCE, and why these numbers. A gem is worth roughly a cent ($0.99 = 80 gems), and the things gems buy cost 25-45
+// (a shop cosmetic) or 100 (a Premium Wheel spin). Gilded Vale holds 14 chests.
+//   first clear  4-8 gems  -> ~84 gems across the whole world, about one 80-gem pack: a real, felt welcome gift
+//   replay       1-2 gems  -> ~21 gems for a full 8-level sweep of a world you have already cleared
+// The replay rate is the one that has to hold the line, and it does: matching the 1,600-gem tier by replaying would
+// take ~76 complete runs of the world. That is far too slow to ever be the sane way to get gems, while still paying a
+// supporter something every single time they go back to the world they bought. First-clear is the generous number
+// precisely because it can only happen once.
+// Gated on owning the world (or dev): Gilded Vale is pack-locked anyway, so this only ever matters for dev mode.
+const CHEST_GEM=[4,8],CHEST_GEM_REPLAY=[1,2];
+function chestGems(){if(!S.goldworld&&!S.dev)return 0;const rec=S.lv[G.idx],r=(G.mode=='story'&&!(rec&&rec.done))?CHEST_GEM:CHEST_GEM_REPLAY;
+ return r[0]+Math.floor(Math.random()*(r[1]-r[0]+1))}
 function updChests(L,dt){if(!L.chests||!L.chests.length)return;let done=false;const gs=G.gs||1;
  for(const ch of L.chests){if(!ch.got)continue;
-  ch.openT=(ch.openT||0)+dt;if(ch.cntT>0)ch.cntT-=dt;
+  ch.openT=(ch.openT||0)+dt;if(ch.cntT>0)ch.cntT-=dt;if(ch.gcntT>0)ch.gcntT-=dt;
   if(ch.pay>0){ch.emit-=dt;                                   // one coin every ~0.11s: a stream, not a burst
    if(ch.emit<=0){ch.emit=0.11;ch.pay--;
     (ch.fly=ch.fly||[]).push({x:ch.x+rnd(-3,3),y:ch.y-7,vx:(ch.pay%2?-1:1)*rnd(45,115),vy:rnd(-250,-185)*gs,r:rnd(0,6.28),rv:rnd(-10,10),l:rnd(0.5,0.68)});
     sfx('coin')}}
+  // gems come AFTER the coin stream and fly slower and higher, so the two payouts never blur into one gold smear
+  else if(ch.gpay>0){ch.emit-=dt;
+   if(ch.emit<=0){ch.emit=0.17;ch.gpay--;
+    (ch.fly=ch.fly||[]).push({x:ch.x+rnd(-3,3),y:ch.y-8,vx:(ch.gpay%2?-1:1)*rnd(30,80),vy:rnd(-285,-225)*gs,r:0,rv:0,l:rnd(0.6,0.76),gem:1});
+    sfx('gem')}}
   if(ch.fly)for(let i=ch.fly.length-1;i>=0;i--){const f=ch.fly[i];f.l-=dt;f.vy+=980*dt*gs;f.x+=f.vx*dt;f.y+=f.vy*dt;f.r+=f.rv*dt;
-   if(f.l<=0){ch.fly.splice(i,1);ch.cnt=(ch.cnt||0)+addCoins(1);ch.cntT=0.24;burst(f.x,f.y,'#ffd45e',5);
-    if(ch.pay<=0&&!ch.fly.length)done=true}}}
+   if(f.l<=0){ch.fly.splice(i,1);
+    if(f.gem){S.bank++;S.earned++;ch.gcnt=(ch.gcnt||0)+1;ch.gcntT=0.24;burst(f.x,f.y,'#5ff4ff',5)}
+    else{ch.cnt=(ch.cnt||0)+addCoins(1);ch.cntT=0.24;burst(f.x,f.y,'#ffd45e',5)}
+    if(ch.pay<=0&&ch.gpay<=0&&!ch.fly.length)done=true}}}
  if(done)save()}                                              // one save per finished stream, not one per coin
 
 function step(dt){const L=G.L,p=G.player;G.t+=dt;
@@ -2452,8 +2525,8 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  // opened chest STAYS open through a death, so a chest can never be the thing that soft-locks a run.
  if(L.chests&&L.chests.length){let left=0,hit=false;
   for(const ch of L.chests){if(!ch.got&&Math.abs(ch.x-pcx)<19&&Math.abs(ch.y-pcy)<21){ch.got=true;hit=true;
-    // queue the coin stream (updChests pays it out one coin at a time) and kick the lid open
-    ch.pay=chestPay();ch.emit=0.22;ch.openT=0;ch.cnt=0;ch.cntT=0;
+    // queue the coin stream, then the gem handful (updChests pays both out one at a time), and kick the lid open
+    ch.pay=chestPay();ch.gpay=chestGems();ch.emit=0.22;ch.openT=0;ch.cnt=0;ch.cntT=0;ch.gcnt=0;ch.gcntT=0;
     sfx('coin');if(S.set.shake)G.shake=Math.max(G.shake,2);burst(ch.x,ch.y-4,'#ffd45e',20);burst(ch.x,ch.y-6,'#fff3b0',9)}
    if(!ch.got)left++}
   if(hit&&!G.keyGot){if(!left){G.keyGot=true;sfx('key');if(S.set.shake)G.shake=4;
@@ -2487,7 +2560,11 @@ const TRX={
  t_notes:{dt:0.17,sh:'note',pc:['#ff5c8a','#5ff4ff','#ffd45e','#b18cff'],mk:(x,y)=>({x:x+rnd(-5,5),y:y+rnd(-6,0),vx:rnd(-10,10),vy:rnd(-45,-30),l:1.1,ml:1.1,c:pick(TRX.t_notes.pc),s:rnd(4,5),g:0,sh:'note',sw:rnd(3,4.5)})},
  t_bolt:{dt:0.05,sh:'bolt',pc:['#ffe45e','#8fdcff'],mk:(x,y)=>({x:x+rnd(-8,8),y:y+rnd(-8,8),vx:rnd(-20,20),vy:rnd(-20,20),l:0.24,ml:0.24,c:pick(TRX.t_bolt.pc),s:rnd(4.5,7),g:0,sh:'bolt',r:rnd(-0.6,0.6)})},
  t_ghost:{dt:0.22,sh:'ghost',pc:['#f4f2ff'],mk:(x,y)=>({x:x+rnd(-5,5),y:y+rnd(-4,2),vx:rnd(-8,8),vy:rnd(-34,-22),l:1.3,ml:1.3,c:'#f4f2ff',s:rnd(4.5,5.5),g:0,sh:'ghost',sw:rnd(2,3)})},
- // World 6 bundle exclusive: small glowing space-dust trail, blue/white sparks
+ // ---- themed-pack trails (see ITEMS pack:). Monster: fat green blobs that sag and fall away like dripping slime.
+ t_slime:{dt:0.07,sh:'ci',pc:['#7bdc3b','#4f9a2a','#b6ff7a','#2e6b18'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-2,8),vx:rnd(-12,12),vy:rnd(-18,12),l:0.9,ml:0.9,c:pick(TRX.t_slime.pc),s:rnd(3,5.5),g:220,drag:1.4,sh:'ci',shrink:1})},
+ // Gold: fine warm sparks that hang in the air a moment - the in-level cousin of drawGoldMotes
+ t_gild:{dt:0.032,sh:'spark2',pc:['#ffd23f','#fff3b0','#ffb300','#ffe9a0'],mk:(x,y)=>({x:x+rnd(-7,7),y:y+rnd(-6,6),vx:rnd(-12,12),vy:rnd(-26,-4),l:0.62,ml:0.62,c:pick(TRX.t_gild.pc),s:rnd(3,5),g:30,sh:'spark2',r:rnd(0,6.28)})},
+ // Space Pack: small glowing space-dust trail, blue/white sparks
  t_meteor:{dt:0.03,sh:'glow',pc:['#8fa8ff','#c9d6ff','#5a6dc9','#ffffff'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-5,7),vx:rnd(-14,14),vy:rnd(-40,-12),l:0.55,ml:0.55,c:pick(TRX.t_meteor.pc),s:rnd(2.8,4.6),g:0,sh:'glow'})},
  // ---- Premium Wheel exclusives: richer/denser than a shop trail so they read as the rarest prizes in the game ----
  t_glimmer:{dt:0.026,sh:'glow',pc:['#5ff4ff','#ffffff','#bff4ff','#8fe8ff'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-5,7),vx:rnd(-16,16),vy:rnd(-48,-18),l:0.6,ml:0.6,c:pick(TRX.t_glimmer.pc),s:rnd(3,5),g:0,sh:'glow'})},
@@ -2669,7 +2746,8 @@ function colorOf(id,t){if(id=='c_dev')return'#232025';const it=ITEMS.find(i=>i.i
 // used to lift the air-jump pips clear of whatever's equipped; scale by s/24 at the call site, same as drawHat itself.
 const HAT_TOP={h_cap:9,h_party:24,h_phones:8,h_halo:15,h_horns:13,h_top:18,h_prop:17,h_crown:15,h_devil:10,
  h_beanie:17,h_chef:21,h_cowboy:16,h_bunny:23,h_flower:9,h_wizard:26,h_viking:18,h_astro:10,
- h_starforge:19,h_riftling:17,h_frostcrown:16,h_emberhood:19,h_stormveil:17,h_celestia:16,h_founder:19};
+ h_starforge:19,h_riftling:17,h_frostcrown:16,h_emberhood:19,h_stormveil:17,h_celestia:16,h_founder:19,
+ h_ogre:18,h_gild:17};
 function drawHat(id,s,t,face){const k=s/24;ctx.save();ctx.scale(k,k);
  switch(id){
  case'h_cap':ctx.fillStyle='#2b5fd9';ctx.beginPath();ctx.arc(0,1,10,Math.PI,0);ctx.fill();ctx.fillRect(face>0?2:-18,-2,16,4);ctx.fillStyle='#fff';ctx.fillRect(-2,-9,4,3);break;
@@ -2700,6 +2778,21 @@ function drawHat(id,s,t,face){const k=s/24;ctx.save();ctx.scale(k,k);
   const fl=[[-9,-1,'#ff8fab'],[-2.8,-3.4,'#fff6fb'],[3.8,-3.2,'#ffd166'],[9.8,-0.8,'#b69cff']];
   for(const f of fl){ctx.fillStyle=f[2];for(let i=0;i<5;i++){const a=i/5*Math.PI*2-Math.PI/2;ctx.beginPath();ctx.arc(f[0]+Math.cos(a)*2.1,f[1]+Math.sin(a)*2.1,1.9,0,7);ctx.fill()}
    ctx.fillStyle=f[2]=='#ffd166'?'#e76f51':'#ffc93c';ctx.beginPath();ctx.arc(f[0],f[1],1.3,0,7);ctx.fill()}break}
+ // ---- Monster Pack: a mossy green skullcap with two thick bone horns sweeping up and out. Deliberately BONE + MOSS,
+ // not the red demon shapes of h_horns, so the two never read as recolors of each other.
+ case'h_ogre':{ctx.fillStyle='#5d7a2b';ctx.beginPath();ctx.arc(0,2,10,Math.PI,0);ctx.fill();
+  ctx.fillStyle='#46601f';ctx.fillRect(-10.5,0,21,3);
+  for(const sd of[-1,1]){ctx.fillStyle='#efe6cd';ctx.beginPath();ctx.moveTo(sd*7,-3.5);ctx.quadraticCurveTo(sd*16,-7,sd*13,-17);ctx.quadraticCurveTo(sd*11,-8.5,sd*4,-6);ctx.closePath();ctx.fill();
+   ctx.strokeStyle='#b8a57e';ctx.lineWidth=1;ctx.stroke()}
+  ctx.fillStyle='#8fb53a';ctx.beginPath();ctx.arc(-4.5,-4,2.2,0,7);ctx.arc(4.5,-5.5,1.6,0,7);ctx.fill();break}
+ // ---- Gold Supporter Pack: the same crown language as crownIcon (gradient, gems, pearls) with a highlight that sweeps
+ // across the band, so it reads as the richest hat in the game next to the plain flat-gold h_crown trophy.
+ case'h_gild':{const g=ctx.createLinearGradient(0,-16,0,3);g.addColorStop(0,'#fff3b0');g.addColorStop(0.5,'#ffd23f');g.addColorStop(1,'#c58a0a');
+  ctx.fillStyle=g;ctx.strokeStyle='#8a5a00';ctx.lineWidth=1.4;ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(-12,3);ctx.lineTo(-12,-8);ctx.lineTo(-6,-2);ctx.lineTo(0,-16);ctx.lineTo(6,-2);ctx.lineTo(12,-8);ctx.lineTo(12,3);ctx.closePath();ctx.fill();ctx.stroke();
+  gemShape(0,-0.5,2.6,'#ff3b6b');gemShape(-7.5,0.5,1.8,'#5ff4ff');gemShape(7.5,0.5,1.8,'#5ff4ff');
+  ctx.fillStyle='#fff6c8';for(const q of[[-12,-8],[0,-16],[12,-8]]){ctx.beginPath();ctx.arc(q[0],q[1],1.6,0,7);ctx.fill()}
+  const sp=(t*0.9)%1;ctx.globalAlpha=Math.max(0,1-Math.abs(sp-0.5)*3.4);star5(-11+sp*22,1.4,2,'#fff6c8');ctx.globalAlpha=1;break}
  case'h_wizard':{if(face>0)ctx.scale(-1,1); // the floppy tip trails behind
   ctx.fillStyle='#4b3aa8';ctx.beginPath();ctx.moveTo(-9.5,0);ctx.quadraticCurveTo(-4,-12,3,-21);ctx.quadraticCurveTo(6,-25,10,-23);ctx.quadraticCurveTo(5,-20.5,5,-13);ctx.quadraticCurveTo(6,-5,9.5,0);ctx.closePath();ctx.fill();
   ctx.fillStyle='#ffd45e';ctx.fillRect(-8.6,-3.5,17.2,2.4);star5(-2,-9,2.6,'#ffd45e');star5(3,-16,1.6,'#fff3b0');ctx.fillStyle='#fff3b0';ctx.beginPath();ctx.arc(3.5,-7,0.9,0,7);ctx.fill();
@@ -2811,6 +2904,14 @@ const SKP={
  c_moon:(w,h,s)=>{sCrater(w*.22,h*.8,s*.12);sCrater(w*.72,h*.86,s*.08);if(s>=20){sCrater(w*.88,h*.62,s*.05);sCrater(w*.5,h*.66,s*.045);sCrater(w*.84,h*.14,s*.05)}},
  c_mars:(w,h,s)=>{ctx.fillStyle='rgba(120,30,10,.22)';ctx.beginPath();ctx.moveTo(0,h*.64);ctx.quadraticCurveTo(w*.5,h*.58,w,h*.68);ctx.lineTo(w,h*.78);ctx.quadraticCurveTo(w*.5,h*.7,0,h*.76);ctx.fill();sCrater(w*.24,h*.88,s*.09);sCrater(w*.78,h*.9,s*.06);if(s>=20)sCrater(w*.86,h*.2,s*.05)},
  c_comet:(w,h,s)=>{const hx=w*.66,hy=h*.8;ctx.lineCap='round';ctx.lineWidth=Math.max(1,s*.045);for(const[e,a]of[[[.08,.93],.55],[[.14,1.05],.4],[[.16,.8],.35]]){ctx.strokeStyle=`rgba(255,255,255,${a})`;ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(w*e[0],h*e[1]);ctx.stroke()}sSpark(hx,hy,s*.1,'#ffffff')},
+ // Astronaut: a smoked visor across the top of the suit (the eyes draw ON TOP of it, which reads as a face behind glass),
+ // a chest control panel and a shoulder stripe. The visor is what stops a white suit reading as a fourth pale rock
+ // beside c_moon/c_comet.
+ c_astro:(w,h,s)=>{ctx.fillStyle='rgba(22,30,52,.88)';rr(w*.13,h*.1,w*.74,h*.38,s*.11);ctx.fill();
+  ctx.fillStyle='rgba(150,205,255,.3)';rr(w*.2,h*.16,w*.28,h*.13,s*.05);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.14)';ctx.fillRect(0,h*.52,w,h*.05);
+  if(s>=20){ctx.fillStyle='#ff5c5c';ctx.fillRect(w*.1,h*.68,w*.15,h*.07);ctx.fillStyle='#5ff4ff';ctx.fillRect(w*.1,h*.79,w*.15,h*.07);
+   ctx.fillStyle='rgba(120,130,150,.5)';ctx.fillRect(w*.62,h*.66,w*.26,h*.05)}},
  c_zombie:(w,h,s)=>{sBlob(w*.18,h*.86,s*.16,s*.09,'rgba(70,95,50,.45)',.3);sBlob(w*.9,h*.62,s*.08,s*.11,'rgba(70,95,50,.4)');if(s>=20)sBlob(w*.6,h*.08,s*.1,s*.06,'rgba(70,95,50,.35)',-.2);
   ctx.strokeStyle='#3d2f2f';ctx.lineCap='round';ctx.lineWidth=Math.max(1,s*.035);ctx.beginPath();ctx.moveTo(w*.46,h*.72);ctx.lineTo(w*.86,h*.9);ctx.stroke();
   const n=s>=20?4:2;ctx.lineWidth=Math.max(.8,s*.025);ctx.beginPath();for(let i=0;i<n;i++){const k=(i+.5)/n,x=w*(.46+.4*k),y=h*(.72+.18*k),d=s*.06;ctx.moveTo(x+d*.4,y-d);ctx.lineTo(x-d*.4,y+d)}ctx.stroke()},
@@ -2941,40 +3042,160 @@ function drawW6Sky(cy){const li=w6SkyIdx();
  else if(li==6)drawJupiter(ax,ay,30); // Tidal Rift: Jupiter, the gas giant
  else{drawEarth(ax,ay,16);drawSun(VW*0.16,VH*0.24-cy*0.015,20);drawMars(VW*0.5,VH*0.2-cy*0.01,8)}} // Zero Hour finale: Earth + Sun + distant Mars
 // hy (optional): camera y used for the parallax hills only (Endless passes it relative to the level bottom)
-function drawBG(th,cx,cy,t,hy){const g=ctx.createLinearGradient(0,0,0,VH);g.addColorStop(0,th.bg[0]);g.addColorStop(0.55,th.bg[0]);g.addColorStop(1,th.bg[1]);ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);
- const dk=th.deco;
+// A world's sky is now FIVE stacked depths instead of one gradient: the baked sky plate (ramp + light + haze + sun /
+// nebula), a scrolling star tile on the night skies, two drifting cloud/haze bands, the three parallax ridge sprites,
+// and a bounded per-frame weather flourish. Everything static lives in an offscreen canvas built once, so the per-frame
+// cost here is ~15 drawImage calls plus <=16 fillRects - strictly LESS than the old code, which rebuilt two full-screen
+// gradients and drew 34 rotated rounded-rect paths plus 110 re-alpha'd stars every single frame.
+function drawBG(th,cx,cy,t,hy){const dk=th.deco,tix=Math.max(0,WORLDS.indexOf(th)),pcy=(hy!=null?hy:cy);
+ ctx.drawImage(skySpr(th,tix),0,0,VW,VH);
+ if(QUAL&&th.stars){const st=starTile(),sw=st.width,sh=st.height,sx0=-((((cx*0.05)%sw)+sw)%sw),sy0=-((((cy*0.05)%sh)+sh)%sh);
+  for(let x=sx0;x<VW;x+=sw)for(let y=sy0;y<VH;y+=sh)ctx.drawImage(st,x,y);
+  ctx.fillStyle='#fff';for(let i=0;i<16;i++){const k=Math.sin(t*2.1+i*1.73);if(k<0.55)continue; // twinkle, 16 rects max
+   ctx.globalAlpha=(k-0.55)*2;ctx.fillRect((((i*167.3-cx*0.05)%VW)+VW)%VW,(((i*97.1-cy*0.05)%VH)+VH)%VH,2.4,2.4)}
+  ctx.globalAlpha=1}
  // gilded vale: soft god-rays behind the terrain silhouette - screen-space (no G/camera dependency) so this is safe to
  // call from menu screens too, not just in-level
  if(QUAL&&dk==7)drawGoldRays(cx,t);
- if(QUAL&&dk!=4&&dk!=6){const gx=dk==3?VW*0.5:dk==5?VW*0.64:dk==2?VW*0.22:dk==8?VW*0.32:VW*0.76,gy=dk==3?VH*1.02:dk==5?VH*0.58:dk==2?VH*0.14:dk==8?VH*0.78:VH*0.2,gr=dk==3?420:dk==5?360:dk==2?280:dk==8?330:dk==7?300:240,
-   // World 8 (Monster Woods): low, ground-hugging violet glow instead of a sky glow - reads as eerie fog/foxfire, not sunlight
-   // World 7 (Gilded Vale): a bigger, richer warm-gold sun glow than the generic default - the sunniest sky in the game
-   gc=dk==3?'255,110,50':dk==5?'255,150,70':dk==2?'120,195,255':dk==1?'255,205,140':dk==8?'150,80,220':dk==7?'255,214,130':'255,250,210';
-  const gl=ctx.createRadialGradient(gx,gy-cy*0.015,10,gx,gy-cy*0.015,gr);gl.addColorStop(0,`rgba(${gc},.32)`);gl.addColorStop(1,`rgba(${gc},0)`);ctx.fillStyle=gl;ctx.fillRect(0,0,VW,VH)}
- if(th.stars){ctx.fillStyle='#fff';for(let i=0;i<(QUAL?110:40);i++){const x=(((i*137.5-cx*0.04)%VW)+VW)%VW,y=(((i*91.7-cy*0.04)%VH)+VH)%VH,s=i%7==0?2.5:1.5;ctx.globalAlpha=0.3+0.4*Math.sin(t*2+i);ctx.fillRect(x,y,s,s)}ctx.globalAlpha=1;
-  // World 6 (moonEarth): skip the purple/blue nebula tint entirely - real vacuum sky is black, not colored haze -
-  // and swap the small pale "moon" flourish for a recognizable blue/white Earth (the clearest "you are on the Moon" cue).
-  if(!th.moonEarth){const mg=ctx.createRadialGradient(VW*0.7,VH*0.3-cy*0.02,20,VW*0.7,VH*0.3-cy*0.02,300);mg.addColorStop(0,'rgba(140,90,240,.35)');mg.addColorStop(1,'rgba(140,90,240,0)');ctx.fillStyle=mg;ctx.fillRect(0,0,VW,VH)}
-  if(QUAL){const mx=VW*0.81,my=VH*0.17-cy*0.02;
-   if(th.moonEarth){
-    // earthshine: a cold blue-white wash spilling off the sky body in the top-right, and a faint lift along the lunar
-    // horizon where that light grazes the regolith. Replaces the warm sun glow every other world gets (deco 6 opts out
-    // above) - it is the one light source that makes the grey ground read as lit rather than just dark.
-    const eg=ctx.createRadialGradient(mx,my,12,mx,my,330);eg.addColorStop(0,'rgba(150,200,255,.22)');eg.addColorStop(0.5,'rgba(110,160,235,.08)');eg.addColorStop(1,'rgba(110,160,235,0)');
-    ctx.fillStyle=eg;ctx.fillRect(0,0,VW,VH);
-    const hz=ctx.createLinearGradient(0,VH*0.58,0,VH);hz.addColorStop(0,'rgba(120,150,190,0)');hz.addColorStop(1,'rgba(150,175,215,.13)');
-    ctx.fillStyle=hz;ctx.fillRect(0,VH*0.58,VW,VH*0.42);
-    drawW6Sky(cy)}
-   else{ctx.save();ctx.shadowColor='rgba(255,244,214,.85)';ctx.shadowBlur=24;ctx.fillStyle='#fff6df';ctx.beginPath();ctx.arc(mx,my,21,0,7);ctx.fill();ctx.restore();
-    ctx.fillStyle=th.far;ctx.globalAlpha=0.9;ctx.beginPath();ctx.arc(mx+8,my-4,19,0,7);ctx.fill();ctx.globalAlpha=1}}}
+ if(QUAL&&th.moonEarth)drawW6Sky(cy); // Low-G: WHICH planet hangs in the sky is per-level, so it can't go in the bake
+ // drifting cloud / haze banks: two tileable baked bands at different depths and speeds. These replaced the rotating
+ // rounded squares that used to be every world's only sky motion (the owner's "shapes and stuff").
+ if(QUAL&&dk!=6)for(let b=0;b<2;b++){const s=cloudSpr(th,tix,b),d=b?0.08:0.03,y=(b?VH*0.3:VH*0.03)+clamp(-pcy*d*0.35,-110,110),
+   ox=-((((cx*d+t*(b?9:3.5))%s.width)+s.width)%s.width);
+  ctx.globalAlpha=(b?0.8:0.52)*(dk==7?0.55:1);for(let x=ox;x<VW;x+=s.width)ctx.drawImage(s,x,y);ctx.globalAlpha=1}
  // parallax silhouette layers (pre-baked, tiled) — extra-far hazy ridge (-1) adds real depth behind the far(0)/near(1) pair
- const tix=Math.max(0,WORLDS.indexOf(th));
  for(let lay=QUAL?-1:1;lay<2;lay++){const d=lay==-1?0.045:lay?0.18:0.09,s=bgSpr(th,tix,lay);
-  let ox=-((cx*d)%s.width);if(ox>0)ox-=s.width;const oy=VH-s.height+40-(hy!=null?hy:cy)*d*0.25;
-  ctx.globalAlpha=lay==-1?0.4:lay?0.9:0.62;for(let x=ox-s.width;x<VW+s.width;x+=s.width)ctx.drawImage(s,x,oy);ctx.globalAlpha=1}
- if(QUAL){const dk=th.deco,drift=dk==3?t*46:dk==4?t*18:dk==5?t*22:dk==1?-t*14:0,
-   dcol=dk==3?'#ffb454':dk==4?'#cbb6ff':dk==1?'#f0d9a8':dk==5?'#dfe6ee':dk==2?'#bfe8ff':dk==7?'#ffe9a8':'#ffffff';
-  for(const b of BGS){const x=((b.x-cx*b.d)%1500+1500)%1500-250,y=(((b.y-drift*b.d*1.6-cy*b.d)%1000)+1000)%1000-200;ctx.save();ctx.globalAlpha=0.07+b.d*0.2;ctx.fillStyle=dcol;ctx.translate(x,y);ctx.rotate(b.r+t*b.vr);rr(-b.s/2,-b.s/2,b.s,b.s,b.s*0.22);ctx.fill();ctx.restore()}}}
+  let ox=-((cx*d)%s.width);if(ox>0)ox-=s.width;const oy=VH-s.height+40-pcy*d*0.25;
+  ctx.globalAlpha=lay==-1?0.4:lay?0.9:0.62;for(let x=ox;x<VW;x+=s.width)ctx.drawImage(s,x,oy);ctx.globalAlpha=1}
+ if(QUAL)bgFx(dk,cx,cy,t)}
+// mix that returns a HEX, so its result can be fed back into shade()/mix() (which only parse '#rrggbb')
+function mixh(a,b,k){const x=parseInt(a.slice(1),16),y=parseInt(b.slice(1),16);
+ const r=Math.round(((x>>16)&255)*(1-k)+((y>>16)&255)*k),g=Math.round(((x>>8)&255)*(1-k)+((y>>8)&255)*k),b2=Math.round((x&255)*(1-k)+(y&255)*k);
+ return'#'+((1<<24)+(r<<16)+(g<<8)+b2).toString(16).slice(1)}
+// hex -> rgba() string, so the bakers can fade one of the world's own palette colours out to nothing
+function hxa(h,a){const n=parseInt(h.slice(1),16);return'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'}
+// ---- SKY PLATE ----------------------------------------------------------------------------------------------------
+// The entire static sky for one world, baked once. Half resolution (480x270) is deliberate and invisible: everything in
+// here is a smooth ramp or a soft glow, and it keeps nine worlds' skies to ~0.5MB each. One drawImage per frame.
+function skySpr(th,ti){const key='sky'+ti+(QUAL?1:0);let s=SPR.get(key);if(s)return s;
+ const W=480,H=270,dk=th.deco,cvs=document.createElement('canvas');cvs.width=W;cvs.height=H;const g=cvs.getContext('2d'),R=mulberry(ti*7919+17);
+ // five-stop ramp with a deepened zenith. A flat two-colour wash is the single biggest "this is a shape, not a place"
+ // tell; a dark top falling through a warm mid into the horizon colour reads as air, depth and time of day at a glance.
+ const sg=g.createLinearGradient(0,0,0,H);
+ // Magma Core's sky colour is a pale peach; left alone it makes a volcano read as a pastel morning, so its zenith is
+ // pulled right down into smoke and the heat is concentrated at the horizon where the caldera is.
+ sg.addColorStop(0,shade(th.bg[0],dk==3?0.4:dk==1?0.8:0.72));sg.addColorStop(0.3,dk==3?shade(th.bg[0],0.72):th.bg[0]);
+ sg.addColorStop(0.62,mix(th.bg[0],th.bg[1],0.3));sg.addColorStop(0.84,mix(th.bg[0],th.bg[1],0.68));sg.addColorStop(1,th.bg[1]);
+ g.fillStyle=sg;g.fillRect(0,0,W,H);
+ // faint far stars baked straight into the plate on the two night skies; the bright scrolling layer is starTile()
+ if(th.stars){g.fillStyle='#fff';for(let i=0;i<200;i++){const x=R()*W,y=R()*H*0.94,v=R();g.globalAlpha=0.08+v*0.26;g.fillRect(x,y,v>0.93?1.5:1,v>0.93?1.5:1)}g.globalAlpha=1}
+ if(dk==4){ // THE TOP: a real nebula - overlapping coloured clouds instead of the old single flat purple wash
+  for(const c of[[0.68,0.28,150,'150,95,245'],[0.3,0.18,115,'70,120,230'],[0.46,0.58,170,'92,58,172'],[0.86,0.62,95,'196,84,196']]){
+   const ng=g.createRadialGradient(W*c[0],H*c[1],3,W*c[0],H*c[1],c[2]);ng.addColorStop(0,`rgba(${c[3]},.3)`);ng.addColorStop(0.5,`rgba(${c[3]},.11)`);ng.addColorStop(1,`rgba(${c[3]},0)`);g.fillStyle=ng;g.fillRect(0,0,W,H)}}
+ if(dk==6){ // LOW-G: vacuum stays BLACK (no colour wash) - depth comes from a milky-way band and earthshine instead
+  g.save();g.translate(W*0.52,H*0.4);g.rotate(-0.44);
+  const mw=g.createLinearGradient(0,-64,0,64);mw.addColorStop(0,'rgba(196,210,240,0)');mw.addColorStop(0.5,'rgba(196,210,240,.075)');mw.addColorStop(1,'rgba(196,210,240,0)');
+  g.fillStyle=mw;g.fillRect(-W,-64,W*2,128);
+  g.fillStyle='#e2ecff';for(let i=0;i<140;i++){const x=(R()*2-1)*W,y=(R()+R()+R()-1.5)*42;g.globalAlpha=0.07+R()*0.24;g.fillRect(x,y,1,1)}g.globalAlpha=1;g.restore();
+  // earthshine: the cold blue-white wash spilling off the sky body, and the lift it puts along the lunar horizon - the
+  // one light source that makes the grey regolith read as lit rather than just dark
+  const eg=g.createRadialGradient(W*0.81,H*0.17,6,W*0.81,H*0.17,165);eg.addColorStop(0,'rgba(150,200,255,.22)');eg.addColorStop(0.5,'rgba(110,160,235,.08)');eg.addColorStop(1,'rgba(110,160,235,0)');
+  g.fillStyle=eg;g.fillRect(0,0,W,H);
+  const hz=g.createLinearGradient(0,H*0.58,0,H);hz.addColorStop(0,'rgba(120,150,190,0)');hz.addColorStop(1,'rgba(150,175,215,.13)');g.fillStyle=hz;g.fillRect(0,H*0.58,W,H*0.42)}
+ if(dk!=4&&dk!=6){ // the world's light source as a broad glow (same positions and tints the live version used)
+  const gx=W*(dk==3?0.5:dk==5?0.64:dk==2?0.22:dk==8?0.32:0.76),gy=H*(dk==3?0.84:dk==5?0.58:dk==2?0.14:dk==8?0.78:0.2),
+   gr=(dk==3?420:dk==5?360:dk==2?280:dk==8?330:dk==7?300:240)*0.5,
+   // World 8 (Monster Woods): low, ground-hugging violet glow instead of a sky glow - reads as eerie fog/foxfire
+   // World 7 (Gilded Vale): a bigger, richer warm-gold glow than the generic default - the sunniest sky in the game
+   gc=dk==3?'255,110,50':dk==5?'255,150,70':dk==2?'120,195,255':dk==1?'255,205,140':dk==8?'150,80,220':dk==7?'255,214,130':'255,250,210';
+  const gl=g.createRadialGradient(gx,gy,5,gx,gy,gr);gl.addColorStop(0,`rgba(${gc},.34)`);gl.addColorStop(1,`rgba(${gc},0)`);g.fillStyle=gl;g.fillRect(0,0,W,H)}
+ // a committed light SOURCE, not just a glow: every world gets a visible sun or moon so the sky has somewhere the light
+ // comes FROM. Radii are half-res (x2 on screen). deco 6 is skipped - drawW6Sky hangs a per-level planet up there.
+ const DISC={0:[0.78,0.18,11,'#fffdf0','255,250,210',0],1:[0.62,0.22,13,'#ffe6b4','255,205,140',0],2:[0.22,0.15,9,'#eaf6ff','160,215,255',0],
+  3:[0.5,0.79,30,'#ff6a1e','255,96,36',0],4:[0.81,0.17,11,'#fff6df','255,244,214',1],5:[0.64,0.58,24,'#ffcf92','255,150,70',0],
+  7:[0.74,0.6,21,'#fff2c8','255,214,130',0],8:[0.72,0.15,11,'#d6e7b4','160,205,130',2]}[dk];
+ if(DISC){const fx=DISC[0],fy=DISC[1],r=DISC[2],col=DISC[3],gc2=DISC[4],kind=DISC[5],x=W*fx,y=H*fy;
+  const hg=g.createRadialGradient(x,y,r*0.55,x,y,r*3.6);hg.addColorStop(0,`rgba(${gc2},.42)`);hg.addColorStop(0.45,`rgba(${gc2},.13)`);hg.addColorStop(1,`rgba(${gc2},0)`);
+  g.fillStyle=hg;g.beginPath();g.arc(x,y,r*3.6,0,7);g.fill();
+  g.fillStyle=col;g.beginPath();g.arc(x,y,r,0,7);g.fill();
+  if(kind==1){g.fillStyle=hxa(th.far,0.92);g.beginPath();g.arc(x+r*0.42,y-r*0.2,r*0.92,0,7);g.fill()} // crescent bite (The Top)
+  else if(kind==2){g.fillStyle='rgba(96,120,72,.5)';for(let i=0;i<4;i++){const a=R()*6.28,d2=R()*r*0.62; // pitted sickly moon
+    g.beginPath();g.arc(x+Math.cos(a)*d2,y+Math.sin(a)*d2,r*(0.13+R()*0.16),0,7);g.fill()}}
+  else if(dk!=3){g.fillStyle='rgba(255,255,255,.5)';g.beginPath();g.arc(x-r*0.3,y-r*0.3,r*0.45,0,7);g.fill()}} // hot core
+ // aerial perspective: the bottom of the sky washes toward the horizon colour, which is exactly what makes the distant
+ // ridges sit BEHIND the air rather than pasted on top of it
+ const hb=g.createLinearGradient(0,H*0.46,0,H);hb.addColorStop(0,hxa(th.bg[1],0));hb.addColorStop(1,hxa(th.bg[1],dk==6?0.1:0.3));
+ g.fillStyle=hb;g.fillRect(0,H*0.46,W,H*0.54);
+ SPR.set(key,cvs);return cvs}
+// ---- STAR TILE ----------------------------------------------------------------------------------------------------
+// One shared tileable star plate for the night skies (The Top, Low-G). Blitted 4-9 times with a camera-parallax offset
+// instead of the old 110 per-frame alpha-toggling fillRects, and shared by both worlds so it costs 0.5MB total.
+function starTile(){let s=SPR.get('startile');if(s)return s;
+ const W=480,H=270,cvs=document.createElement('canvas');cvs.width=W;cvs.height=H;const g=cvs.getContext('2d'),R=mulberry(20240917);
+ for(let i=0;i<150;i++){const x=R()*W,y=R()*H,v=R(),r=v>0.96?1.8:v>0.8?1.2:0.8;
+  g.fillStyle=v>0.93?'#cfe0ff':v>0.86?'#ffe6c8':'#ffffff';g.globalAlpha=0.3+R()*0.6;g.fillRect(x,y,r*2,r*2)}
+ g.globalAlpha=1;
+ // a handful of bright anchor stars with a halo and cross flare, so the field has focal points instead of even noise
+ for(let i=0;i<7;i++){const x=R()*W,y=R()*H,hg=g.createRadialGradient(x,y,0.5,x,y,7);hg.addColorStop(0,'rgba(255,255,255,.5)');hg.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=hg;g.beginPath();g.arc(x,y,7,0,7);g.fill();
+  g.fillStyle='rgba(255,255,255,.75)';g.fillRect(x-4,y-0.5,8,1);g.fillRect(x-0.5,y-4,1,8)}
+ SPR.set('startile',cvs);return cvs}
+// ---- CLOUD / HAZE BANDS ---------------------------------------------------------------------------------------------
+// One tileable bank per world per depth. Soft edges come from stacking three translucent passes, each pass being ONE
+// path of seven ellipses so overlaps inside a pass don't double-darken - deliberately not ctx.filter blur, which isn't
+// safe on the older iOS Safari versions this ships to. Lighting is one vertical gradient across the whole band.
+function cloudSpr(th,ti,band){const key='cl'+ti+band;let s=SPR.get(key);if(s)return s;
+ const dk=th.deco,W=640,H=band?168:112,cvs=document.createElement('canvas');cvs.width=W;cvs.height=H;const g=cvs.getContext('2d'),R=mulberry(ti*3301+band*97+11);
+ // per world: lit colour, shadow colour, puffiness (1 = fat cumulus, 0.3 = flat strata / ground fog), how many banks
+ const CL={0:['#ffffff','#a9d8c0',1,4],1:['#fff0d6','#c79a68',0.7,4],2:['#f2f9ff','#a9c4e6',0.55,5],3:['#ff9a5e','#3a1826',0.4,4],
+  4:['#6a4fb8','#241a4d',0.5,3],5:['#ffc78f','#6b3a63',0.42,4],7:['#ffe7b8','#6d4d15',0.5,3],8:['#7b8a6d','#22202f',0.28,4]}[dk]||['#ffffff','#bbbbbb',1,4];
+ const lit=CL[0],shd=CL[1],puff=CL[2],n=CL[3];
+ const bg2=g.createLinearGradient(0,0,0,H);bg2.addColorStop(0,lit);bg2.addColorStop(0.5,mix(lit,shd,0.4));bg2.addColorStop(1,shd);
+ g.fillStyle=bg2;
+ const bank=(bx,by,bw,bh,al,j)=>{
+  for(let p=0;p<3;p++){const k=p==0?1.45:p==1?1:0.62,dy=p==2?-bh*0.34:0;
+   g.globalAlpha=p==0?al*0.18:p==1?al:al*0.45;g.beginPath();
+   for(let i=0;i<7;i++){const u=(i/6-0.5)*2,rx=bw*(0.15+j[i]*0.1)*k*0.7/puff,ry=Math.max(2,bh*(0.3+0.7*Math.cos(u*1.25))*puff*k);
+    g.ellipse(bx+u*bw*0.5,by+dy+(j[i]-0.5)*bh*0.16,rx,ry,0,0,7)}
+   g.fill()}
+  g.globalAlpha=1};
+ for(let i=0;i<n;i++){const j=[];for(let q=0;q<7;q++)j.push(R());
+  const bx=(i+R()*0.6)*(W/n),by=H*(0.36+R()*0.3),bw=W*(0.3+R()*0.2),bh=H*(0.26+R()*0.26)*(band?1:0.72),al=(band?0.5:0.36)*(0.7+R()*0.5);
+  bank(bx,by,bw,bh,al,j);bank(bx-W,by,bw,bh,al,j);bank(bx+W,by,bw,bh,al,j)} // 3 copies so the band tiles seamlessly
+ SPR.set(key,cvs);return cvs}
+// ---- PER-FRAME WEATHER ----------------------------------------------------------------------------------------------
+// Hard budget: no allocations, no gradients, no per-particle save/restore, <=16 primitives per world. Everything else in
+// the background is a blit of something baked at load time. BGS supplies the fixed scatter table.
+function bgFx(dk,cx,cy,t){ctx.save();
+ if(dk==3){ctx.globalCompositeOperation='lighter'; // magma core: embers rising off the caldera plus ash flecks
+  for(let i=0;i<16;i++){const b=BGS[i],x=(((b.x-cx*0.05+Math.sin(t*0.7+i)*20)%VW)+VW)%VW,y=(((b.y-t*26*(0.4+b.d)-cy*0.05)%VH)+VH)%VH,sz=1.4+b.d*2.4;
+   ctx.globalAlpha=0.18+b.d*0.5;ctx.fillStyle=i%3?'#ff8c33':'#ffd98a';ctx.fillRect(x,y,sz,sz)}}
+ else if(dk==8){ctx.globalCompositeOperation='lighter'; // monster woods: spores and foxfire drifting between the trunks
+  for(let i=0;i<14;i++){const b=BGS[i+4],x=(((b.x+t*4*b.d-cx*0.04)%VW)+VW)%VW,y=(((b.y+Math.sin(t*0.5+i*1.3)*26-t*5*b.d-cy*0.04)%VH)+VH)%VH,sz=1.2+b.d*2;
+   ctx.globalAlpha=0.1+0.16*(0.5+0.5*Math.sin(t*1.7+i));ctx.fillStyle=i%4?'#8fe36b':'#c08bff';ctx.fillRect(x,y,sz,sz)}}
+ else if(dk==1){ // saw mill: sawdust hanging in the shafts of light
+  for(let i=0;i<14;i++){const b=BGS[i+8],x=(((b.x-t*9*b.d-cx*0.05)%VW)+VW)%VW,y=(((b.y+t*7*b.d+Math.sin(t*0.6+i)*18-cy*0.05)%VH)+VH)%VH,sz=1.5+b.d*1.6;
+   ctx.globalAlpha=0.07+b.d*0.22;ctx.fillStyle='#ffe0ae';ctx.fillRect(x,y,sz,sz)}}
+ else if(dk==0){ // green fields: a small flock wheeling across the far sky, plus pollen closer in
+  ctx.strokeStyle='rgba(38,70,58,.3)';ctx.lineWidth=1.6;ctx.beginPath();
+  for(let i=0;i<5;i++){const x=((t*17+i*54-cx*0.03)%(VW+140)+VW+140)%(VW+140)-70,y=VH*0.16+Math.sin(t*0.5+i*1.1)*13+i*7,w=4.5+(i%2)*1.6,f=Math.sin(t*5.5+i)*2.4;
+   ctx.moveTo(x-w,y+f);ctx.quadraticCurveTo(x-w*0.4,y-f,x,y);ctx.quadraticCurveTo(x+w*0.4,y-f,x+w,y+f)}
+  ctx.stroke();ctx.fillStyle='#fffbe8';
+  for(let i=0;i<10;i++){const b=BGS[i+12],x=(((b.x+t*6*b.d-cx*0.06)%VW)+VW)%VW,y=(((b.y+Math.sin(t*0.8+i)*20-cy*0.06)%VH)+VH)%VH;
+   ctx.globalAlpha=0.1+b.d*0.3;ctx.fillRect(x,y,1.6,1.6)}}
+ else if(dk==2){ctx.globalCompositeOperation='lighter'; // laser lab: data motes streaking up through the facility air
+  for(let i=0;i<12;i++){const b=BGS[i+16],x=(((b.x-cx*0.05)%VW)+VW)%VW,y=(((b.y-t*14*b.d-cy*0.05)%VH)+VH)%VH;
+   ctx.globalAlpha=0.1+b.d*0.35;ctx.fillStyle=i%3?'#8fd6ff':'#ffffff';ctx.fillRect(x,y,1.4,1.4+b.d*4)}}
+ else if(dk==5){ctx.globalCompositeOperation='lighter'; // rocket yard: launch sparks carried up off the pads
+  for(let i=0;i<14;i++){const b=BGS[i+10],x=(((b.x-cx*0.05)%VW)+VW)%VW,y=(((b.y-t*20*(0.3+b.d)-cy*0.05)%VH)+VH)%VH;
+   ctx.globalAlpha=0.13+b.d*0.4;ctx.fillStyle=i%3?'#ffb347':'#fff0c4';ctx.fillRect(x,y,1.5,1.5+b.d*3)}}
+ else if(dk==7){ctx.globalCompositeOperation='lighter'; // gilded vale: gold dust in the hall air (drawGoldMotes does the in-level layer)
+  for(let i=0;i<12;i++){const b=BGS[i+6],x=(((b.x-t*5*b.d-cx*0.04)%VW)+VW)%VW,y=(((b.y+Math.sin(t*0.4+i)*16-cy*0.04)%VH)+VH)%VH,sz=1.5+b.d*1.8;
+   ctx.globalAlpha=0.09+b.d*0.3;ctx.fillStyle='#ffeab0';ctx.fillRect(x,y,sz,sz)}}
+ else if(dk==4){ctx.globalCompositeOperation='lighter'; // the top: slow motes of light rising past the floating isles
+  for(let i=0;i<10;i++){const b=BGS[i+14],x=(((b.x-cx*0.04)%VW)+VW)%VW,y=(((b.y-t*8*b.d-cy*0.04)%VH)+VH)%VH;
+   ctx.globalAlpha=0.1+b.d*0.28;ctx.fillStyle=i%2?'#ffd45e':'#cbb6ff';ctx.fillRect(x,y,1.6,1.6)}}
+ ctx.restore()}
 function bgSpr(th,ti,lay){const key='bg'+ti+lay;let s=SPR.get(key);if(s)return s;
  const per=lay==-1?700:(lay?260:420),amp=lay==-1?55:(lay?60:90),abs=th.deco==1||th.deco==4;
  const W=Math.round((abs?Math.PI:2*Math.PI)*per),H=VH+260;
@@ -2982,8 +3203,16 @@ function bgSpr(th,ti,lay){const key='bg'+ti+lay;let s=SPR.get(key);if(s)return s
  const base=H-260+(lay==-1?-70:lay?70:0);
  // per-world ridge silhouette: each deco gets its own height function so worlds read as distinct shapes, not recolors
  const MAGMA_PTS=[0.12,0.85,0.22,0.55,0.95,0.18,0.68,0.3,0.9,0.15];
- const MONSTER_PTS=[0.15,0.92,0.25,0.8,0.1,0.65,0.3,0.95,0.05,0.55,0.2,0.88,0.12,0.7];
- const hAt=x=>{const o=x/per;
+ // monster woods: a LOW, soft forest floor. The skyline of a forest is made of its trees, not of the ground under them,
+ // so the ridge here stays quiet and the trees baked on top of it (deco==8 below) do the silhouetting.
+ const MONSTER_PTS=[0.3,0.44,0.26,0.52,0.34,0.22,0.46,0.3,0.4,0.24];
+ // hand-drawn irregularity: a sum of sines at INTEGER multiples of the sprite's own period, so the ridge wobbles like a
+ // drawn line yet still wraps seamlessly at x=W. Landscapes get a healthy dose; the built worlds (lab racks, gantries,
+ // the gold ziggurat) get none at all, because their skylines have to stay straight to read as architecture.
+ const m=abs?2:1,NP=[],NK=[1,2,3,5,8],NR=mulberry(ti*617+lay*29+3);for(let k=0;k<5;k++)NP.push(NR()*6.283);
+ const wob=o=>{let v=0;for(let k=0;k<5;k++)v+=Math.sin(o*m*NK[k]+NP[k])/NK[k];return v*0.45};
+ const NZ=[0.2,0.07,0,0.16,0.13,0,0.14,0,0.18][th.deco]||0;
+ const hRaw=x=>{const o=x/per;
   if(th.deco==1){const tri=Math.abs(((o%Math.PI)/Math.PI)*2-1);return amp*(0.28+0.72*tri)} // sawmill: zigzag factory roofline
   if(th.deco==3){const n=MAGMA_PTS.length,op=((o%(2*Math.PI))+2*Math.PI)%(2*Math.PI),f=op/(2*Math.PI)*n,i=Math.floor(f)%n,frac=f-Math.floor(f);
    return lerp(MAGMA_PTS[i],MAGMA_PTS[(i+1)%n],frac)*amp*1.2} // magma: jagged zigzag rock silhouette (straight-line spikes, not a smooth curve)
@@ -2991,7 +3220,8 @@ function bgSpr(th,ti,lay){const key='bg'+ti+lay;let s=SPR.get(key);if(s)return s
   if(th.deco==2){const SV=[0.22,0.85,0.4,0.6,0.3,1,0.5,0.7,0.25,0.9,0.45],op=((o%(2*Math.PI))+2*Math.PI)%(2*Math.PI),seg=Math.floor(op/(2*Math.PI/SV.length))%SV.length;return SV[seg]*amp} // laser lab: stepped server-rack/circuit skyline (hard rectangular steps, not a wavy curve)
   if(th.deco==5){const op=((o%(2*Math.PI))+2*Math.PI)%(2*Math.PI),st=Math.floor(op/(Math.PI/3))%6,hv=[0.3,0.32,0.95,0.5,0.3,0.72];return amp*hv[st]} // rocket yard: gantry towers
   if(th.deco==6){ // low-g zone / Moon: mostly-flat cratered plain, punctuated by round bowl-shaped craters with a raised rim lip
-   const per2=Math.PI/1.4,op=((o%per2)+per2)%per2,cw=per2*0.44,cc=per2*0.5,dx=Math.abs(op-cc),plain=amp*0.6,rim=amp*0.95,dip=amp*0.1;
+   // exactly 3 craters per tile, so the sprite wraps without a step
+   const per2=2*Math.PI/3,op=((o%per2)+per2)%per2,cw=per2*0.44,cc=per2*0.5,dx=Math.abs(op-cc),plain=amp*0.6,rim=amp*0.95,dip=amp*0.1;
    if(dx<cw*0.7){const u=dx/(cw*0.7);return lerp(dip,rim,u*u)} // inside the crater: rises from a deep center up to the rim
    if(dx<cw){const u=(dx-cw*0.7)/(cw*0.3);return lerp(rim,plain,u)} // rim lip tapering back down to the plain
    return plain}
@@ -3001,22 +3231,30 @@ function bgSpr(th,ti,lay){const key='bg'+ti+lay;let s=SPR.get(key);if(s)return s
   if(th.deco==7){const ZG=[0.30,0.46,0.62,0.80,0.96,0.80,0.62,0.46,0.30,0.40,0.56,0.40],
    op=((o%(2*Math.PI))+2*Math.PI)%(2*Math.PI),seg=Math.floor(op/(2*Math.PI/ZG.length))%ZG.length;return ZG[seg]*amp*1.1}
   if(th.deco==8){const n=MONSTER_PTS.length,op=((o%(2*Math.PI))+2*Math.PI)%(2*Math.PI),f=op/(2*Math.PI)*n,i=Math.floor(f)%n,frac=f-Math.floor(f);
-   return lerp(MONSTER_PTS[i],MONSTER_PTS[(i+1)%n],frac)*amp*1.3} // monster woods: jagged, spiky dead-tree canopy
+   return lerp(MONSTER_PTS[i],MONSTER_PTS[(i+1)%n],frac)*amp*0.72} // monster woods: low rolling forest floor
   return(Math.sin(o)*0.5+0.5)*amp}; // green fields: rolling hill
+ const hAt=x=>hRaw(x)+(NZ?wob(x/per)*amp*NZ:0);
  // sample the ridge on a grid that lands exactly on x=W with the wrapped (x=0) height, so tiled copies meet with no seam
- const xs=[],hs=[];for(let x=0;x<W;x+=6){xs.push(x);hs.push(hAt(x))}xs.push(W);hs.push(hAt(0));
+ // (4px, not 6: the wobble above carries detail a coarser grid would just smooth away)
+ const xs=[],hs=[];for(let x=0;x<W;x+=4){xs.push(x);hs.push(hAt(x))}xs.push(W);hs.push(hAt(0));
  const ridgeTop=base-Math.max(...hs);
  // vertical gradient fill per layer (not a flat silhouette): rim-lit tint near the ridge fading to a grounded shade at the base;
  // the extra-far(-1) layer additionally blends toward the horizon color for aerial-perspective haze
- const baseCol=lay==-1?mix(th.far,th.bg[1],0.55):(lay?th.mid:th.far);
- const topTint=lay==-1?mix(baseCol,th.bg[1],0.4):shade(baseCol,1.28);
- const botTint=lay==-1?shade(baseCol,0.85):shade(baseCol,0.68);
+ // ATMOSPHERIC PERSPECTIVE, properly: the further a ridge is the more it washes toward the horizon colour and the less
+ // contrast it carries, and the NEAR ridge is the darkest thing in the backdrop. That ordering is what sells depth, and
+ // it is also what keeps the backdrop quieter than the platforms, hazards and pickups drawn on top of it.
+ // (Every argument here is a hex literal from the palette - mix/shade only parse '#rrggbb'.)
+ // Magma Core is the one world whose far/mid are PALE pinks; used raw they turn a volcano into a pastel hillside, so its
+ // rock is pulled down toward the world's near-black tile colour and only the rim light stays hot.
+ const farH=th.deco==3?mixh(th.mid,th.tile,0.5):th.far,midH=th.deco==3?mixh(th.tile,th.mid,0.2):th.mid;
+ const topTint=lay==-1?mix(farH,th.bg[1],0.68):(lay?shade(midH,0.95):mix(farH,th.bg[1],0.3));
+ const botTint=lay==-1?mix(farH,th.bg[1],0.34):(lay?shade(midH,0.5):shade(farH,0.6));
  const fg=g.createLinearGradient(0,ridgeTop-20,0,H);fg.addColorStop(0,topTint);fg.addColorStop(1,botTint);
  g.fillStyle=fg;g.beginPath();g.moveTo(0,H);
  for(let i=0;i<hs.length;i++)g.lineTo(xs[i],base-hs[i]);
  g.lineTo(W,H);g.closePath();g.fill();
  // rim light along the ridge, tinted with the world's accent so each skyline pops against its sky
- g.strokeStyle=th.acc||th.top;g.globalAlpha=lay==-1?0.14:lay?0.5:0.24;g.lineWidth=lay==-1?1:lay?2.5:1.4;g.lineJoin='round';
+ g.strokeStyle=th.acc||th.top;g.globalAlpha=lay==-1?0.12:lay?0.34:0.2;g.lineWidth=lay==-1?1:lay?2.5:1.4;g.lineJoin='round';
  g.beginPath();for(let i=0;i<hs.length;i++){const x=xs[i],y=base-hs[i];i?g.lineTo(x,y):g.moveTo(x,y)}g.stroke();g.globalAlpha=1;
  // fine grain baked into the silhouette so it reads as textured rock/foliage rather than a flat cutout, cheap since it's cached
  g.save();g.beginPath();g.moveTo(0,H);for(let i=0;i<hs.length;i++)g.lineTo(xs[i],base-hs[i]);g.lineTo(W,H);g.closePath();g.clip();
@@ -3025,7 +3263,16 @@ function bgSpr(th,ti,lay){const key='bg'+ti+lay;let s=SPR.get(key);if(s)return s
  g.globalAlpha=1;g.restore();
  if(lay!=-1){ // decorative silhouette details stay off the hazy extra-far layer so it reads as soft depth, not clutter
  if(th.deco==0){g.fillStyle=shade(th.mid,0.9);for(let x=20;x<W;x+=180){const o=x/per,h=(Math.sin(o)*0.5+0.5)*amp,big=(x/180|0)%2==0,r=big?14:9,ty=base-h-(big?26:18);g.fillRect(x-(big?4:3),base-h-(big?20:14),big?8:6,big?24:16);g.beginPath();g.arc(x+(big?4:3),ty,r,0,7);g.fill()}}
- if(th.deco==1){g.fillStyle=shade(th.mid,0.8);for(let x=70;x<W;x+=260){const h=hAt(x);g.fillRect(x-9,base-h-46,18,46);g.beginPath();g.ellipse(x,base-h-46,11,6,0,0,7);g.fill();
+ // mill sheds standing along the roofline: pitched roof, plank siding, a band of lit windows. Without an actual BUILDING
+ // on it the sawmill's dune-coloured zigzag just reads as desert, which is exactly what it used to do.
+ if(th.deco==1){const nM=Math.max(2,Math.round(W/(per*0.5))),sM=W/nM;
+  for(let i=0;i<nM;i++){const x=(i+0.5)*sM,gy0=base-hAt(x),bw3=lay?58:38,bh3=lay?42:28;
+   g.fillStyle=shade(th.mid,lay?0.58:0.76);g.fillRect(x-bw3/2,gy0-bh3,bw3,bh3);
+   g.beginPath();g.moveTo(x-bw3/2-6,gy0-bh3);g.lineTo(x,gy0-bh3-(lay?21:14));g.lineTo(x+bw3/2+6,gy0-bh3);g.closePath();g.fill();
+   g.fillStyle='rgba(255,236,190,.13)';for(let q=1;q<6;q++)g.fillRect(x-bw3/2+q*bw3/6,gy0-bh3+3,1.4,bh3-6);
+   g.fillStyle='rgba(48,28,12,.3)';g.fillRect(x-bw3/2,gy0-bh3,bw3,2.5);
+   g.fillStyle=lay?'rgba(255,196,96,.6)':'rgba(255,196,96,.34)';for(let q=0;q<3;q++)g.fillRect(x-bw3*0.34+q*bw3*0.3,gy0-bh3*0.64,bw3*0.16,bh3*0.22)}
+  g.fillStyle=shade(th.mid,0.8);for(let x=70;x<W;x+=260){const h=hAt(x);g.fillRect(x-9,base-h-46,18,46);g.beginPath();g.ellipse(x,base-h-46,11,6,0,0,7);g.fill();
    if(lay){g.globalAlpha=0.3;g.beginPath();g.arc(x-3,base-h-60,9,0,7);g.arc(x+4,base-h-68,7,0,7);g.fill();g.globalAlpha=1}}
   if(lay){for(let x=170;x<W;x+=320){const h=hAt(x),r=16,cy0=base-h-r;
     for(let i=0;i<3;i++){const lx=x+(i-1)*r*1.15,ly=cy0-(i==1?r*0.85:0);
@@ -3059,37 +3306,109 @@ function bgSpr(th,ti,lay){const key='bg'+ti+lay;let s=SPR.get(key);if(s)return s
  // course, arched openings punched through it, fluted columns with capitals standing on the terraces, and (near layer
  // only) hanging chains with pennant banners plus heaped coin piles on the ledges. All of it is baked into the cached
  // parallax sprite exactly like every other world's silhouette detail, so none of it costs anything per frame.
- if(th.deco==7){const bh=lay?21:14,bw=lay?50:33;
+ // low-g zone: distant STATION HARDWARE parked out on the regolith - a hab lander on splayed legs, a dish antenna on a
+ // mast, a solar array. A crater plain with nothing built on it reads as "grey ground"; three bits of kit and a red
+ // hazard lamp turn it into somewhere people came to.
+ if(th.deco==6){const nS=Math.max(2,Math.round(W/(per*1.5))),sS=W/nS,sc=lay?1:0.66;
+  for(let i=0;i<nS;i++){const x=(i+0.5)*sS,gy0=base-hAt(x),k=i%3,S2=v=>v*sc;
+   g.strokeStyle=shade(th.top,0.95);g.lineWidth=lay?2:1.4;g.fillStyle=shade(th.top,0.6);
+   if(k==0){g.fillRect(x-S2(16),gy0-S2(30),S2(32),S2(22));
+    g.fillStyle=shade(th.top,0.88);g.fillRect(x-S2(16),gy0-S2(30),S2(32),S2(4));
+    g.fillStyle='rgba(120,190,255,.6)';g.fillRect(x-S2(10),gy0-S2(24),S2(7),S2(7));g.fillRect(x+S2(3),gy0-S2(24),S2(7),S2(7));
+    g.beginPath();g.moveTo(x-S2(13),gy0-S2(8));g.lineTo(x-S2(22),gy0);g.moveTo(x+S2(13),gy0-S2(8));g.lineTo(x+S2(22),gy0);g.moveTo(x,gy0-S2(8));g.lineTo(x,gy0);g.stroke()}
+   else if(k==1){g.beginPath();g.moveTo(x,gy0);g.lineTo(x,gy0-S2(26));g.stroke();
+    g.beginPath();g.ellipse(x+S2(2),gy0-S2(32),S2(13),S2(9),-0.5,0,7);g.fill();
+    g.fillStyle=shade(th.top,1.02);g.beginPath();g.ellipse(x+S2(1),gy0-S2(33),S2(9),S2(6),-0.5,0,7);g.fill();
+    g.fillStyle=shade(th.top,0.5);g.fillRect(x-S2(5),gy0-S2(5),S2(10),S2(5))}
+   else{g.beginPath();g.moveTo(x,gy0);g.lineTo(x,gy0-S2(20));g.stroke();
+    for(const sd of[-1,1]){const px2=x+(sd<0?-S2(30):S2(4));g.fillStyle='rgba(44,66,122,.9)';g.fillRect(px2,gy0-S2(28),S2(26),S2(14));
+     g.strokeStyle='rgba(150,190,255,.45)';g.lineWidth=1;g.beginPath();
+     for(let q=1;q<4;q++){g.moveTo(px2+q*S2(6.5),gy0-S2(28));g.lineTo(px2+q*S2(6.5),gy0-S2(14))}g.stroke();
+     g.strokeStyle=shade(th.top,0.95);g.lineWidth=lay?2:1.4}}
+   g.fillStyle='rgba(255,90,80,.85)';g.beginPath();g.arc(x,gy0-S2(38),S2(2.2),0,7);g.fill()}}
+ if(th.deco==7){const bh=lay?22:15,bw=lay?46:31,BR=mulberry(ti*911+lay*13),
+   nA=Math.max(4,Math.round(W/(per*0.75))),sA=W/nA; // bay spacing divides W exactly, so the arcade wraps with no seam
   g.save();g.beginPath();g.moveTo(0,H);for(let i=0;i<hs.length;i++)g.lineTo(xs[i],base-hs[i]);g.lineTo(W,H);g.closePath();g.clip();
-  g.strokeStyle='rgba(54,30,2,.4)';g.lineWidth=lay?2:1.2;
-  for(let by2=ridgeTop;by2<H;by2+=bh){g.beginPath();g.moveTo(0,by2);g.lineTo(W,by2);
-   const off=(Math.round((by2-ridgeTop)/bh))%2?bw/2:0;for(let x=off;x<W;x+=bw){g.moveTo(x,by2);g.lineTo(x,by2+bh)}g.stroke();
-   g.fillStyle=lay?'rgba(255,214,120,.24)':'rgba(255,224,150,.16)';g.fillRect(0,by2+1.4,W,lay?2.4:1.5)}
-  // arched vault openings: a deep shadow recess with a warm rim, spaced along the wall
-  for(let x=per*0.55;x<W;x+=per*1.5){const aw=lay?30:20,ay=base-amp*0.22;
-   g.fillStyle='rgba(14,9,2,.55)';g.beginPath();g.moveTo(x-aw,ay);g.lineTo(x-aw,ay-aw*0.75);g.arc(x,ay-aw*0.75,aw,Math.PI,0);g.lineTo(x+aw,ay);g.closePath();g.fill();
-   g.strokeStyle='rgba(255,214,110,.32)';g.lineWidth=lay?3:2;g.stroke()}
+  // individually BEVELLED gold blocks: mortar poured first, then a face per block with a lit top and a shadowed underside.
+  // Limited to the band just under the ridge (below that the wall is in its own shadow anyway) so the one-time bake stays
+  // in the low milliseconds instead of stamping tens of thousands of rects.
+  const lim=Math.min(H,ridgeTop+(lay?340:240));
+  g.fillStyle='rgba(38,21,2,.6)';g.fillRect(0,ridgeTop-bh,W,lim-ridgeTop+bh);
+  for(let by2=ridgeTop-bh;by2<lim;by2+=bh){const off=(Math.round((by2-ridgeTop)/bh)%2?bw/2:0)-bw;
+   for(let x=off;x<W;x+=bw){const v=BR();
+    g.fillStyle=shade(th.tile,(lay?0.26:0.3)+v*0.12);g.fillRect(x+1.5,by2+1.5,bw-3,bh-3);
+    g.fillStyle='rgba(255,238,172,.13)';g.fillRect(x+1.5,by2+1.5,bw-3,2);
+    g.fillStyle='rgba(44,23,0,.34)';g.fillRect(x+1.5,by2+bh-3.5,bw-3,2)}}
+  const fd=g.createLinearGradient(0,lim-70,0,lim+160);fd.addColorStop(0,'rgba(24,13,0,0)');fd.addColorStop(1,'rgba(20,11,0,.88)');
+  g.fillStyle=fd;g.fillRect(0,lim-70,W,H-lim+70);
+  // the arcade: round-arched vaults punched clean through the wall, with an impost band across each springing point
+  for(let i=0;i<nA;i++){const x=(i+0.5)*sA,aw=lay?34:23,ay=base-hAt(x)+(lay?104:70);
+   g.fillStyle='rgba(10,6,0,.66)';g.beginPath();g.moveTo(x-aw,ay);g.lineTo(x-aw,ay-aw*0.8);g.arc(x,ay-aw*0.8,aw,Math.PI,0);g.lineTo(x+aw,ay);g.closePath();g.fill();
+   g.strokeStyle='rgba(255,220,126,.38)';g.lineWidth=lay?4:2.6;g.stroke();
+   g.fillStyle='rgba(255,230,156,.22)';g.fillRect(x-aw-6,ay-aw*0.8-5,aw*2+12,5)}
   g.restore();
-  // fluted columns standing proud on the terraces (drawn outside the clip so they break the silhouette edge)
-  for(let x=per*0.3;x<W;x+=per*0.75){const h=hAt(x),ch=lay?62:40,cw=lay?13:9,ty=base-h-ch;
-   g.fillStyle=shade(th.mid,lay?0.78:0.88);g.fillRect(x-cw/2,ty,cw,ch);
-   g.fillRect(x-cw*0.85,ty-7,cw*1.7,7);g.fillRect(x-cw*0.85,base-h-6,cw*1.7,6);
-   g.fillStyle='rgba(255,232,165,.26)';g.fillRect(x-cw*0.34,ty,2.4,ch);g.fillRect(x-cw*0.85,ty-7,cw*1.7,2);
-   g.fillStyle='rgba(38,21,2,.32)';g.fillRect(x+cw*0.14,ty,2,ch)}
-  if(lay){ // hanging chains + pennants, and coin heaps piled on the terrace edges
-   for(let x=per*0.62;x<W;x+=per*1.05){const y0=base-hAt(x)-3;
-    g.strokeStyle='rgba(180,134,36,.75)';g.lineWidth=2;g.beginPath();g.moveTo(x,y0);g.lineTo(x,y0+30);g.stroke();
-    g.fillStyle='rgba(255,208,96,.7)';for(let k=5;k<30;k+=6){g.beginPath();g.arc(x,y0+k,2.2,0,7);g.fill()}
-    g.fillStyle=shade(th.acc,0.85);g.beginPath();g.moveTo(x-9,y0+30);g.lineTo(x+9,y0+30);g.lineTo(x+9,y0+52);g.lineTo(x,y0+45);g.lineTo(x-9,y0+52);g.closePath();g.fill();
-    g.fillStyle='rgba(255,246,200,.35)';g.fillRect(x-9,y0+30,18,3)}
-   for(let x=per*0.18;x<W;x+=per*0.62){const yy=base-hAt(x);
-    g.fillStyle='rgba(224,168,42,.95)';for(let i=0;i<7;i++){const hx2=x+(i%4-1.5)*8,hy2=yy-2-(i>3?5:0);g.beginPath();g.arc(hx2,hy2,5.5,0,7);g.fill()}
-    g.fillStyle='rgba(255,252,220,.75)';for(let i=0;i<3;i++){g.beginPath();g.ellipse(x-6+i*7,yy-10-i*2,4,2.2,0.3,0,7);g.fill()}}}}
- if(th.deco==8){g.strokeStyle=shade(th.mid,0.55);g.lineWidth=lay?2.2:1.4;
-  for(let x=40;x<W;x+=150){const h=hAt(x);let cx2=x;g.beginPath();g.moveTo(x,base+4);
-   for(let k=0;k<4;k++){cx2+=(k%2?5:-5);g.lineTo(cx2,base-h*(k+1)/4)}g.stroke(); // gnarled, wavy trunk instead of a straight one
-   if(lay){const ty=base-h;g.beginPath();g.moveTo(cx2,ty+6);g.lineTo(cx2-10,ty-6);g.moveTo(cx2,ty+10);g.lineTo(cx2+9,ty-4);g.stroke(); // bare twisted branches
-    if(Math.random()<0.4){g.fillStyle='rgba(190,130,255,.6)';g.beginPath();g.arc(cx2+(Math.random()<0.5?-6:6),ty,1.7,0,7);g.fill()}}}} // stray glowing eye in the canopy
+  // terrace cornice: a thick lit slab capping every step of the ziggurat - the single strongest "this was BUILT" cue in
+  // the layer, and the thing that stops the stepped skyline reading as rock
+  const cz=lay?10:6.5;
+  g.fillStyle=shade(th.tile,lay?0.5:0.56);g.beginPath();g.moveTo(0,base-hs[0]);
+  for(let i=0;i<hs.length;i++)g.lineTo(xs[i],base-hs[i]);
+  for(let i=hs.length-1;i>=0;i--)g.lineTo(xs[i],base-hs[i]+cz);
+  g.closePath();g.fill();
+  g.fillStyle='rgba(255,246,204,.26)';g.beginPath();g.moveTo(0,base-hs[0]);
+  for(let i=0;i<hs.length;i++)g.lineTo(xs[i],base-hs[i]);
+  for(let i=hs.length-1;i>=0;i--)g.lineTo(xs[i],base-hs[i]+cz*0.3);
+  g.closePath();g.fill();
+  // WIDE square piers with capital and base standing on the terraces. The old version used 13px-wide fluted columns with
+  // a blob capital, which silhouetted as tree trunks - hence "the gold world looks like trees". These are squat and
+  // deliberately masonry-proportioned (30x54 on the near layer) so they can only read as architecture.
+  for(let i=0;i<nA;i++){const x=(i+0.02)*sA,h=hAt(x),pw=lay?30:20,ph2=lay?54:36,ty=base-h-ph2;
+   g.fillStyle=shade(th.mid,lay?0.9:1.02);g.fillRect(x-pw/2,ty,pw,ph2);
+   g.fillStyle='rgba(255,238,174,.22)';g.fillRect(x-pw/2,ty,3,ph2);
+   g.fillStyle='rgba(40,22,0,.32)';g.fillRect(x+pw/2-3,ty,3,ph2);
+   for(let k=1;k<4;k++){g.fillStyle='rgba(38,20,0,.2)';g.fillRect(x-pw/2+k*pw/4,ty+4,1.6,ph2-8)} // shallow fluting
+   g.fillStyle=shade(th.tile,0.8);g.fillRect(x-pw*0.64,ty-9,pw*1.28,9);g.fillRect(x-pw*0.64,base-h-8,pw*1.28,8);
+   g.fillStyle='rgba(255,244,190,.32)';g.fillRect(x-pw*0.64,ty-9,pw*1.28,2.6);g.fillRect(x-pw*0.64,base-h-8,pw*1.28,2.2)}
+  if(lay){ // near layer only: the hoard itself, and the torches lighting the masonry
+   for(let i=0;i<nA;i++){const x=(i+0.34)*sA,yy=base-hAt(x); // stacked ingots - the most literal treasury read there is
+    for(let r2=0;r2<3;r2++)for(let c2=0;c2<3-r2;c2++){const ix=x-(3-r2)*9+c2*18+9,iy=yy-7-r2*9;
+     g.fillStyle=shade(th.top,0.5);g.beginPath();g.moveTo(ix-8,iy+7);g.lineTo(ix-6,iy);g.lineTo(ix+6,iy);g.lineTo(ix+8,iy+7);g.closePath();g.fill();
+     g.fillStyle='rgba(255,250,214,.3)';g.fillRect(ix-6,iy,12,1.8)}}
+   for(let i=0;i<nA;i++){const x=(i+0.68)*sA,yy=base-hAt(x); // loose coin heaps spilling over the ledge
+    g.fillStyle='rgba(170,124,28,.95)';for(let k=0;k<7;k++){g.beginPath();g.arc(x+(k%4-1.5)*8,yy-2-(k>3?5:0),5.5,0,7);g.fill()}
+    g.fillStyle='rgba(255,236,170,.45)';for(let k=0;k<3;k++){g.beginPath();g.ellipse(x-6+k*7,yy-10-k*2,4,2.2,0.3,0,7);g.fill()}}
+   for(let i=0;i<nA;i++){const x=(i+0.5)*sA,y0=base-hAt(x)+44; // bracketed wall torches
+    const tg=g.createRadialGradient(x,y0-5,2,x,y0-5,30);tg.addColorStop(0,'rgba(255,200,90,.28)');tg.addColorStop(1,'rgba(255,200,90,0)');
+    g.fillStyle=tg;g.fillRect(x-30,y0-35,60,60);
+    g.fillStyle='rgba(58,32,2,.85)';g.fillRect(x-3,y0,6,15);g.fillRect(x-7,y0-2,14,4);
+    g.fillStyle='rgba(255,196,70,.9)';g.beginPath();g.ellipse(x,y0-6,4,7.5,0,0,7);g.fill();
+    g.fillStyle='rgba(255,248,212,.95)';g.beginPath();g.ellipse(x,y0-6,1.8,3.8,0,0,7);g.fill()}}}
+ // monster woods: a dark, CROWDED forest rather than a row of stick figures. Every tree is a filled, tapering trunk
+ // (one polygon, wide at the root and thin at the crown) that leans and bends as it climbs, hung with tapered branches.
+ // The far layer gets a ragged canopy mass on top so the treeline reads as a wall of foliage; the near layer gets root
+ // flares, a brush fringe along the floor and the odd pair of eyes watching out of the dark. All baked, as usual.
+ if(th.deco==8){const TR=mulberry(ti*733+lay*19),n8=Math.max(8,Math.round(W/(lay?84:60))),s8=W/n8,
+   trunkC=lay?shade(th.tile,0.75):mix(th.mid,th.bg[0],0.3),canC=lay?shade(th.top,0.3):mix(th.far,th.bg[0],0.45);
+  for(let i=0;i<n8;i++){const x=(i+0.5)*s8,gy0=base-hAt(x),h=(lay?96:64)*(0.8+TR()*0.7),bw2=(lay?9:6)*(0.6+TR()*0.9),lean=(TR()-0.5)*(lay?26:16),gn=(TR()-0.5)*10;
+   const tx=b=>x+lean*b*b+Math.sin(b*3.1+gn)*4;
+   g.fillStyle=trunkC;g.beginPath();g.moveTo(x-bw2*1.7,gy0+12);
+   for(let k=0;k<=6;k++){const b=k/6;g.lineTo(tx(b)-bw2*(1-b*0.78),gy0-h*b)}
+   for(let k=6;k>=0;k--){const b=k/6;g.lineTo(tx(b)+bw2*(1-b*0.78),gy0-h*b)}
+   g.closePath();g.fill();
+   g.strokeStyle=trunkC;g.lineCap='round';
+   for(let k=0;k<3;k++){const b=0.5+k*0.16,sx2=tx(b),sy2=gy0-h*b,dir=(k%2?1:-1)*(1+TR()*0.7),ln=(lay?28:18)*(0.7+TR()*0.7);
+    g.lineWidth=(lay?3.6:2.4)*(1-k*0.22);g.beginPath();g.moveTo(sx2,sy2);g.quadraticCurveTo(sx2+dir*ln*0.6,sy2-ln*0.35,sx2+dir*ln,sy2-ln*(0.5+TR()*0.5));g.stroke()}
+   g.fillStyle=canC;g.globalAlpha=lay?0.9:0.7;g.beginPath(); // canopy mass: what actually makes the treeline a treeline
+   for(let k=0;k<5;k++)g.ellipse(tx(1)+(k-2)*bw2*2.2,gy0-h-4+(TR()-0.5)*16,bw2*(2.2+TR()),bw2*(1.4+TR()*0.8),0,0,7);
+   g.fill();g.globalAlpha=1;
+   if(lay){g.fillStyle=trunkC;g.beginPath();g.moveTo(x-bw2*4,gy0+12);g.lineTo(x-bw2*1.3,gy0-18);g.lineTo(x+bw2*1.3,gy0-18);g.lineTo(x+bw2*4,gy0+12);g.closePath();g.fill(); // root flare
+    if(TR()<0.45){const ex=x+(TR()<0.5?-1:1)*(14+TR()*16),ey=gy0-h*(0.2+TR()*0.3); // something watching from the dark
+     g.fillStyle='rgba(190,255,130,.75)';g.beginPath();g.ellipse(ex-3.4,ey,2.3,1.6,0,0,7);g.ellipse(ex+3.4,ey,2.3,1.6,0,0,7);g.fill()}}}
+  if(lay){g.fillStyle=shade(th.tile,0.6);g.beginPath();g.moveTo(0,H); // undergrowth fringe, so the floor isn't a clean cut
+   for(let x=0;x<=W;x+=8){const u2=x/per;g.lineTo(x,base-hAt(x)+4-(6+Math.abs(Math.sin(u2*6))*13+Math.sin(u2*14)*5))}
+   g.lineTo(W,H);g.closePath();g.fill()}
+  // low fog caught between the trunks - the layer that turns "a forest" into "a forest you don't want to be in"
+  const fg2=g.createLinearGradient(0,base-amp*0.55,0,base+40);fg2.addColorStop(0,'rgba(122,150,124,0)');fg2.addColorStop(1,'rgba(130,160,130,'+(lay?0.15:0.26)+')');
+  g.fillStyle=fg2;g.fillRect(0,base-amp*0.55,W,amp*0.55+40)} // stray glowing eye in the canopy
  } // end lay!=-1 decoration guard
  SPR.set(key,cvs);return cvs}
 let nPat=null,LAVG=null,GOLDG=null;
@@ -3158,11 +3477,17 @@ function drawChest(c,t){const op=c.got?clamp((c.openT||0)/0.3,0,1):0,oe=ease(op)
 // The coin stream an opened chest is spitting out, plus its running "+N" tally - drawn in world space beside the chest
 // (see updChests). The tally pops each time a coin lands and drifts up as the pile grows, so the payout reads as a
 // count, not a single lump sum.
+// The gem tally (Gold Supporter Pack perk) rides ABOVE the coin one in cyan, so "+12" gold and "+6" cyan read as two
+// separate payouts at a glance rather than one number that mysteriously changes colour.
 function drawChestPayout(c){if(!c.got)return;
- if(c.fly)for(const f of c.fly)coinIcon(f.x,f.y,5.5,f.r);
- if(c.cnt){const k=1+clamp(c.cntT||0,0,0.24)*1.5,paying=c.pay>0||(c.fly&&c.fly.length);
-  ctx.save();ctx.translate(c.x,c.y-36-Math.min(12,c.cnt*0.8));ctx.scale(k,k);ctx.globalAlpha=paying?1:clamp(2.2-(c.openT||0)*0.6,0,1);
-  otxt('+'+c.cnt,0,0,16,'#ffe9a0','rgba(56,26,0,.8)',5);ctx.restore();ctx.globalAlpha=1}}
+ const paying=c.pay>0||c.gpay>0||(c.fly&&c.fly.length),fade=clamp(2.2-(c.openT||0)*0.6,0,1);
+ if(c.fly)for(const f of c.fly){if(f.gem)gemShape(f.x,f.y,5,'#5ff4ff');else coinIcon(f.x,f.y,5.5,f.r)}
+ if(c.cnt){const k=1+clamp(c.cntT||0,0,0.24)*1.5;
+  ctx.save();ctx.translate(c.x,c.y-36-Math.min(12,c.cnt*0.8));ctx.scale(k,k);ctx.globalAlpha=paying?1:fade;
+  otxt('+'+c.cnt,0,0,16,'#ffe9a0','rgba(56,26,0,.8)',5);ctx.restore();ctx.globalAlpha=1}
+ if(c.gcnt){const k=1+clamp(c.gcntT||0,0,0.24)*1.5;
+  ctx.save();ctx.translate(c.x,c.y-58-Math.min(12,c.cnt*0.8));ctx.scale(k,k);ctx.globalAlpha=paying?1:fade;
+  gemShape(-15,-1,5.5,'#5ff4ff');otxt('+'+c.gcnt,5,0,16,'#bff4ff','rgba(6,40,56,.8)',5);ctx.restore();ctx.globalAlpha=1}}
 // Gilded Vale in-level dust motes: soft warm circles drifting slowly around the camera, screen-space-ish (camera-
 // relative so they read as part of the world, not a screen overlay) - the "drifting golden dust motes" ambient touch,
 // separate from the sparser ambient() particle spawner so the world always reads as hazy/sunlit, not just occasionally.
@@ -3602,16 +3927,10 @@ function ownedBonusWorlds(){return S.dev?BONUS_WORLDS:BONUS_WORLDS.filter(b=>S[b
 // only). Reached from the menu ("+ More Worlds") and the story level select. Everything shown is read from BONUS_WORLDS /
 // WORLDS / LEVELS / PRODUCTS, so a new bonus world shows up here automatically.
 function bwProducts(b){return PRODUCTS.filter(p=>p[b.flag])}
-function bwIncludes(b,p){
- // the All 3 Bonus Worlds bundle appears on every world's card, so it describes ALL three worlds, not just this one
- if(p.allworlds){const wds=BONUS_WORLDS.map(w=>w.wd),n=LEVELS.filter(l=>wds.includes(l.wd)).length,sv=allWorldsSaving();
-  return 'All '+BONUS_WORLDS.length+' bonus worlds + '+n+' levels + every bundle skin'+(sv?' - save '+sv:'')}
- const n=LEVELS.filter(l=>l.wd==b.wd).length,parts=[n+' bonus levels'];
- const its=(p.items||[]).concat(p.item?[p.item]:[]).map(id=>ITEMS.find(i=>i.id==id)).filter(Boolean);
- const sk=its.filter(i=>i.cat=='c').map(i=>i.n),ot=its.filter(i=>i.cat!='c').map(i=>i.n+(i.cat=='h'?' hat':''));
- if(sk.length)parts.push(sk.join(', ')+(sk.length>1?' skins':' skin'));ot.forEach(x=>parts.push(x));
- if(p.cards)for(const k in p.cards)parts.push(p.cards[k]+' '+CARD_NAMES[k]+(p.cards[k]>1?' charges':' charge'));
- return parts.join(' + ')}
+// After the store collapse each bonus world is sold by exactly ONE product (its themed pack), so this no longer has to
+// describe a cross-world bundle. packBlurb is the same count the Shop's Packs tab prints, joined onto one line.
+function bwIncludes(b,p){const n=LEVELS.filter(l=>l.wd==b.wd).length;
+ return [n+' bonus levels'].concat(packBlurb(p).slice(1)).join(' + ')}
 function bwPreview(b,x,y,w,h){const th=WORLDS[b.wd],p=bwProducts(b).find(q=>q.item||q.items),sk=p?(p.item||p.items.find(id=>{const it=ITEMS.find(i=>i.id==id);return it&&it.cat=='c'})):null;
  ctx.save();rr(x,y,w,h,14);ctx.clip();const g=ctx.createLinearGradient(0,y,0,y+h);g.addColorStop(0,th.bg[0]);g.addColorStop(1,th.bg[1]);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
  if(th.stars)for(let i=0;i<18;i++){ctx.fillStyle='rgba(255,255,255,.7)';ctx.fillRect(x+(i*53)%w,y+(i*37)%(h*0.6),2,2)}
@@ -3640,9 +3959,8 @@ SCREENS.worlds={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;mus
    bwPreview(b,x+9,y+9,cw-18,98);
    txt(th.n,x+cw/2,y+130,21,'#fff');txt('World '+b.wd+'  ·  '+lv+' levels',x+cw/2,y+152,14,th.top,undefined,false);
    ctx.strokeStyle='rgba(255,255,255,.16)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x+16,y+168);ctx.lineTo(x+cw-16,y+168);ctx.stroke();
-   // summarise the richest world-specific bundle (not the cross-world one), so every card lists real contents rather
-   // than World 6's bare "8 bonus levels" unlock
-   const ps=bwProducts(b),main=ps.find(p=>!p.allworlds&&(p.items||p.item||p.cards))||ps.find(p=>!p.allworlds)||ps[0];
+   // exactly one product per world since the store collapse (its themed pack), so there is nothing to choose between
+   const ps=bwProducts(b),main=ps[0];
    txt('WHAT YOU GET',x+cw/2,y+186,11,'#b9b6c6',undefined,false);
    wrapText(main?bwIncludes(b,main):lv+' bonus levels',cw-26,13).slice(0,3).forEach((l,k)=>txt(l,x+cw/2,y+206+k*17,13,'#d8d5ea',undefined,false));
    const AY=y+262,BY=y+CH-12,slot=(BY-AY)/maxP;
@@ -3787,7 +4105,8 @@ SCREENS.cards={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;if(t
   else txt('One card at a time. Playing any card means this level is not timed for a record.',VW/2,524,14,'rgba(255,255,255,.72)',undefined,false)},
  onBtn(id){if(id=='back'){if(this.from=='play')return cardsResume();if(this.from=='pause')return go('pause');return go('menu')}
   if(id.slice(0,4)=='use_'){const t=id.slice(4),blk=cardBlock(t);
-   if(blk){this.msg=blk=='none'?'No '+CARD_NAMES[t]+' cards left - the Shop sells more.':blk=='busy'?CARD_NAMES[G.cardActive]+' is still running. One card at a time.':blk=='story'?'Cards only work in Story Mode levels.':'Wait until you are back on your feet.';this.mt=2.6;return}
+   // the Card Pack product was retired in the store collapse: the wheels are where cards come from now
+   if(blk){this.msg=blk=='none'?'No '+CARD_NAMES[t]+' cards left - win more on the Prize Wheel.':blk=='busy'?CARD_NAMES[G.cardActive]+' is still running. One card at a time.':blk=='story'?'Cards only work in Story Mode levels.':'Wait until you are back on your feet.';this.mt=2.6;return}
    cardsResume();useCard(t)}}};
 
 SCREENS.courses={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('modes')},
@@ -3979,40 +4298,78 @@ const MARAS={title:'MARATHON',wd:4,sub:'Every level back to back on one timer. N
  {n:'MARATHON',d:'All '+STORY_ORDER.length+' story levels in one run.',ok:()=>!!S.finale||!!S.dev,lock:'Reach THE TOP to unlock',stat:()=>'Best '+fmtT(S.speedBest),go:()=>startSpeed()},
  {n:'HARD MARATHON',d:'All '+NL+' hard levels, modifiers and all.',ok:()=>!!S.dev||!!(S.hard[NL-1]&&S.hard[NL-1].done),lock:'Clear Hard Mode THE TOP to unlock',stat:()=>'Best '+fmtT(S.hspeedBest),go:()=>startHSpeed()}]};
 
-// price tag under an item: coins, gems, wheel-only, or lock
-// 14px floor: the small variants used to bottom out at 12px, which is unreadable on a phone
+// ================= SHOP TAXONOMY =================
+// The shop was reorganised alongside the store collapse (see the note above PRODUCTS). Two rules drive everything below:
+//
+//  1. GROUP BY WHAT A THING IS. Top tabs are Skins / Hats / Trails / Packs / Gems - five kinds of thing, no "Store"
+//     drawer with a different kind of content hiding inside it.
+//  2. NEVER HIDE AN ITEM, AND NEVER SHOW AN EMPTY SHELF. The old grid filtered out every pack/premium item until it was
+//     owned, which is exactly why the owner found "Special" empty and said nothing explained it. Now every cosmetic in
+//     the game is always on its shelf; a locked one is greyed and captioned with WHERE IT COMES FROM ("Space Pack",
+//     "Premium Wheel", "Club"). A locked item is an advert, not a hole.
+//
+// srcOf(it) is the single source of truth for "how do you get this", and everything else - the sub-tab an item lands in,
+// its caption, its detail line - is derived from it, so the three can never disagree.
+//   buy    coins/gems in this shop        reward  world clear or a trophy
+//   wheel  the free Prize Wheel           prem    the Premium Wheel (gems)
+//   club   Hopscraper Club                pack    one of the three themed packs
+// Order matters: ach/world outrank pack, so h_astro (trophy AND in the Space Pack) shows its free trophy route.
+function srcOf(it){if(it.coins!=null||it.cost!=null)return'buy';
+ if(it.ach||it.world!=null)return'reward';
+ if(it.wheel)return'wheel';
+ if(it.pack)return'pack';
+ if(it.club)return'club';
+ return'prem'}
+// the sub-tab an item sits under. Premium Wheel and Club items share the "Wheel" shelf: both are spin-or-subscribe
+// exclusives, and splitting them made a 2-item shelf next to a 12-item one.
+function subOf(it){const s=srcOf(it);return s=='buy'?'buy':s=='reward'?'earn':s=='pack'?'pack':'spin'}
+const SUBCATS={c:[['buy','Buy'],['earn','Earn'],['spin','Wheel'],['pack','Packs']],
+ h:[['buy','Buy'],['earn','Earn'],['spin','Wheel'],['pack','Packs']],
+ t:[['buy','Buy'],['earn','Earn'],['spin','Wheel'],['pack','Packs']]};
+// what a LOCKED item's card says underneath it, and the colour that goes with it. Short enough for a 96px card.
+function srcTag(it){const s=srcOf(it);
+ // just the theme word ("Space", not "Space Pack"): these only ever appear on the Packs shelf, where "Pack" is already
+ // said twice over, and the full name crowds a 96px card at the 14px floor. The detail panel says it in full.
+ if(s=='pack')return[it.pack.charAt(0).toUpperCase()+it.pack.slice(1),'#ff9f45'];
+ if(s=='wheel')return['Wheel','#9b3dbf'];
+ if(s=='prem')return['Premium','#c98a12'];
+ if(s=='club')return['Club','#e0a32a'];
+ if(s=='reward')return[it.ach?'Trophy':'World '+(it.world+1),'#b06a00'];
+ return['Free','#27865b']} // a 'buy' item with a 0 price (No Hat, Dust, ...) that somehow isn't owned yet
+// price tag under an item: owned/equipped, a coin or gem price, or - for anything locked - a lock plus where it comes
+// from. 14px floor: the small variants used to bottom out at 12px, which is unreadable on a phone.
 function priceTag(it,x,y,fs){fs=Math.max(14,fs||15);const own=!!S.own[it.id],eq=S.eq[it.cat]==it.id,sm=Math.max(14,fs-2);
  if(eq)txt('ON',x,y,Math.max(14,fs-1),'#27b865','center',false);else if(own)txt('owned',x,y,sm,'#5d5c6b','center',false);
  else if(it.coins){coinIcon(x-19,y-1,6.5,0);txt(''+it.coins,x-9,y,fs,'#1d1a2e','left',false)}
  else if(it.cost){gemShape(x-14,y-1,6,'#20b8c9');txt(''+it.cost,x-4,y,fs,'#1d1a2e','left',false)}
- else if(it.wheel){tixIcon(x-22,y,6);txt('Wheel',x-12,y,Math.max(14,fs-3),'#9b3dbf','left',false)}
- else lockIcon(x,y,14)}
-// shop sub-categories: keeps the grid from getting crowded now that there are lots of skins/hats/trails.
-// skins go by how they're unlocked/how detailed they are; hats & trails go by price tier.
-const SKIN_COLORS=['c_red','c_sky','c_lime','c_sun','c_grape','c_mint','c_gum','c_coal'];
-function subOf(it){if(it.cat=='c')return it.iap?'special':(SKIN_COLORS.includes(it.id)?'colors':'themed');
- if(it.cat=='h'||it.cat=='t')return(it.coins!=null||it.cost===0)?'basic':((it.ach||it.wheel)?'exclusive':'fancy');
- return''}
-const SUBCATS={c:[['colors','Colors'],['themed','Themed'],['special','Special']],
- h:[['basic','Basic'],['fancy','Fancy'],['exclusive','Exclusive']],
- t:[['basic','Basic'],['fancy','Fancy'],['exclusive','Exclusive']]};
-function shopItems(cat,sub){return ITEMS.filter(i=>i.cat==cat&&(!(i.pack||i.iap)||S.own[i.id])&&(sub==null||subOf(i)==sub))}
+ else{const g=srcTag(it),lw=txtW(g[0],14);lockIcon(x-lw/2-7,y-1,12,g[1]);txt(g[0],x-lw/2+5,y,14,g[1],'left',false)}}
+// every cosmetic of this kind, locked ones included - see rule 2 above
+function shopItems(cat,sub){return ITEMS.filter(i=>i.cat==cat&&(sub==null||subOf(i)==sub))}
+// the "this shelf is empty for you" copy. It is never a bare "nothing here yet": each sub-tab knows how its items are
+// obtained, so an empty shelf explains the route instead of shrugging. (With locked items now always shown, a shelf can
+// only really be empty if a future build removes a whole group - but the promise holds either way.)
+// top-level tabs: three kinds of cosmetic, then the two kinds of real-money thing. 'p'/'g' replaced the old single
+// 'Store' tab, which was a drawer holding four unrelated kinds of product.
+const SHOP_TABS=[['c','Skins'],['h','Hats'],['t','Trails'],['p','Packs'],['g','Gems']];
+const SUB_EMPTY={buy:['Nothing to buy here yet','Coins come from playing levels, gems from finding them and earning new stars.'],
+ earn:['No rewards of this kind yet','These unlock by clearing worlds and earning trophies - just keep climbing.'],
+ spin:['No wheel prizes of this kind','Win these on the free Prize Wheel, the Premium Wheel, or as a Hopscraper Club member.'],
+ pack:['No pack items of this kind','These come with the Space, Monster and Gold Supporter packs - see the Packs tab.']};
 // Daily Pick: one ordinary shop item spotlighted per day, same for everyone (deterministic from todaySeed(), like the daily tower).
 // Spotlight only, no price change - keeps this safe for items with a real-money-adjacent price system.
 let _dp={d:'',it:null};
 function dailyPickItem(){const d=todayStr();if(_dp.d!=d){const pool=ITEMS.filter(it=>(it.coins||it.cost)&&!it.pack&&!it.iap);
   const R=mulberry(todaySeed()+777);_dp={d,it:pool.length?pool[Math.floor(R()*pool.length)]:null}}return _dp.it}
-SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=this.sub||(SUBCATS[this.cat]||[['','']])[0][0];this.pg=0;this.msg='';this.mt=0;FX.length=0;musicPlay(0)},
+SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.sub=this.sub||(SUBCATS[this.cat]||[['','']])[0][0];this.pg=0;this.msg='';this.mt=0;FX.length=0;musicPlay(0)},
  // one place to wipe the panel's transient state: the message, and the "you already tapped this card once" memory that
  // makes a second tap buy. Both belong to a single card, so changing tab/section/page has to drop them.
  clr(){this.msg='';this.mt=0;UI.clickId=null;UI.wasSel=false},
  update(dt){uiNav(this);if(pressed.ESC)go('menu');this.mt-=dt;const s=UI.selId||'';
   if(!UI.kb){} // tabs/sections follow the selection only for keyboard navigation; the mouse has to click them
   else if(s.startsWith('tab_')){const nc=s.slice(4);if(nc!=this.cat){this.cat=nc;this.sub=(SUBCATS[nc]||[['','']])[0][0];this.pg=0;this.clr()}}
-  else if(s.startsWith('sec_')&&s.slice(4)!=this.sec){this.sec=s.slice(4);this.pg=0;this.clr()}
   else if(s.startsWith('sub_')&&s.slice(4)!=this.sub){this.sub=s.slice(4);this.pg=0;this.clr()}
   // a "tap again to buy" prompt belongs to whichever card is selected: once the selection leaves every card it is orphaned
-  if(this.mt>0&&/again to buy/.test(this.msg)&&!(s.startsWith('it_')||s.startsWith('pr_')||s.startsWith('pk_')))this.clr();
+  if(this.mt>0&&/again to buy/.test(this.msg)&&!(s.startsWith('it_')||s.startsWith('pr_')))this.clr();
   updParts(FX,dt)},
  draw(){drawBG(WORLDS[1],gtime*20,0,gtime);backBtn();header('SHOP');
   hudPill(VW-336,18,150,42);coinIcon(VW-312,39,10,gtime*2);txt(curTxt(S.coins),VW-294,40,22,'#fff','left');
@@ -4020,26 +4377,29 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=t
   // no countdown here: the spotlight rotates daily but carries no discount, so a ticking clock would be fake urgency
   {const dp=dailyPickItem();if(dp)button('pick',145,18,240,42,'',{fs:14,bg:'#ffd45e',draw:()=>{txt('★ FEATURED',0,-9,14,'#3a1470','center',false);
     const nm=dp.n.length>20?dp.n.slice(0,19)+'…':dp.n;txt(nm,0,11,14,'#3a1470','center',false)}})}
-  if(this.cat=='s'&&!storeOn())this.cat='c';
-  [['c','Skins'],['h','Hats'],['t','Trails'],['s','Store']].filter(c=>c[0]!='s'||storeOn()).forEach((c,i)=>button('tab_'+c[0],24+i*128,88,120,42,c[1],{fs:18,bg:this.cat==c[0]?'#ffd45e':c[0]=='s'?'#c8f5cf':'#ffffff'}));
+  // five tabs, one per KIND of thing. The old 'Store' tab (a drawer of unrelated products) split into Packs and Gems.
+  if((this.cat=='p'||this.cat=='g')&&!storeOn())this.cat='c';
+  SHOP_TABS.filter(c=>'pg'.indexOf(c[0])<0||storeOn()).forEach((c,i)=>button('tab_'+c[0],24+i*104,88,96,42,c[1],{fs:17,bg:this.cat==c[0]?'#ffd45e':'pg'.indexOf(c[0])>=0?'#c8f5cf':'#ffffff'}));
   ctx.fillStyle='rgba(15,12,30,.45)';rr(560,88,360,420,22);ctx.fill();
-  if(this.cat=='s')return this.drawStore();
+  if(this.cat=='p')return this.drawPacks();
+  if(this.cat=='g')return this.drawGems();
   const subs=SUBCATS[this.cat]||[];
-  subs.forEach((sc,i)=>button('sub_'+sc[0],24+i*112,136,104,34,sc[1],{fs:15,bg:this.sub==sc[0]?'#8dd3ff':'#ffffff'}));
+  subs.forEach((sc,i)=>button('sub_'+sc[0],24+i*130,136,122,34,sc[1],{fs:15,bg:this.sub==sc[0]?'#8dd3ff':'#ffffff'}));
   const full=shopItems(this.cat,this.sub),PCOLS=5,PROWS=3,PP=PCOLS*PROWS;
   const pages=Math.max(1,Math.ceil(full.length/PP));if(this.pg>pages-1)this.pg=pages-1;
   const list=full.slice(this.pg*PP,this.pg*PP+PP),n=list.length,cols=PCOLS,rows=Math.max(1,Math.ceil(n/cols)),cw=Math.floor((512-(cols-1)*8)/cols),ch=90,GY=184;
-  // Special skins (iap:1) can't be bought with coins/gems; explain where each kind really comes from until one is owned
-  if(!full.length&&this.cat=='c'&&this.sub=='special'){ctx.fillStyle='rgba(15,12,30,.55)';rr(24,184,512,236,18);ctx.fill();
-   txt('SPECIAL SKINS',280,212,20,'#ffd45e');txt("These can't be bought with coins or gems. Get them from:",280,240,14,'#fff',undefined,false);
-   [['Premium Wheel','Legendary skins, the Celestia set and the Founder\'s jackpot'],['Hopscraper Club','3 Club skins, one unlocked each month'],['Store bundles','Starter, Supporter and Gilded Vale bundle skins']].forEach((r,i)=>{const y=276+i*38;star5(48,y+2,7,'#ffd45e');txt(r[0],62,y-7,15,'#ffd45e','left',false);txt(r[1],62,y+12,14,'#d8d5ea','left',false)});
-   txt('Once you own one, it shows up here.',280,394,14,'#b9b6c6',undefined,false);
-   // same gate as the wheel screen: no Premium shortcut until a free ticket has actually been spent
-   if(pwOn())button('gopw',180,430,200,36,'★ Premium Wheel',{fs:16,bg:'#2a1450',draw:(w,h,sel)=>txt('★ Premium Wheel',0,1,16,sel?'#3a1470':'#ffd45e','center',false)})}
-  else if(!full.length)txt('Nothing here yet.',270,260,18,'#d8d5ea',undefined,false);
+  // an empty shelf ALWAYS says how to fill it - never a bare "nothing here yet" (see SUB_EMPTY)
+  if(!full.length){const e=SUB_EMPTY[this.sub]||['Nothing here yet','Keep playing - more unlocks as you climb.'];
+   ctx.fillStyle='rgba(15,12,30,.55)';rr(24,184,512,150,18);ctx.fill();
+   txt(e[0],280,222,20,'#ffd45e');wrapText(e[1],450,15).slice(0,3).forEach((l,i)=>txt(l,280,252+i*22,15,'#d8d5ea',undefined,false));
+   if(this.sub=='spin')button('gopw',180,350,200,36,'★ Premium Wheel',{fs:16,bg:'#2a1450',draw:(w,h,sel)=>txt('★ Premium Wheel',0,1,16,sel?'#3a1470':'#ffd45e','center',false)});
+   if(this.sub=='pack'&&storeOn())button('gopack',180,350,200,36,'See the Packs',{fs:16,bg:'#c8f5cf'})}
   const pickId=dailyPickItem()?dailyPickItem().id:null;
+  // THREE card states, readable without looking at the caption: green = worn, white = yours or affordable right now,
+  // grey + dimmed art = locked. Anything locked still shows its art (you can see what you are missing) at 55% alpha.
   list.forEach((it,k)=>{const x=24+(k%cols)*(cw+8),y=GY+Math.floor(k/cols)*(ch+8),eq=S.eq[it.cat]==it.id,ps=ch>=80?30:24;
-   button('it_'+it.id,x,y,cw,ch,'',{bg:eq?'#c8f5cf':'#ffffff',draw:()=>{ctx.save();ctx.translate(0,-ch*0.1);if(it.cat=='t')drawItemPreview(it,-6,-4,ps*0.66);else{BLINKO=shopBlink(this,k%cols,Math.floor(k/cols),cols,rows,k,n);if(it.cat=='h'){const hs=ch>=80?26:22;drawSq(0,ch*0.6-hs,hs,gtime,{c:S.eq.c,h:it.id})}else drawItemPreview(it,0,-ps*0.6,ps);BLINKO=null}ctx.restore();priceTag(it,0,ch/2-13);
+   const own=!!S.own[it.id],pr=it.coins||it.cost,afford=S.dev||!pr||(it.coins?S.coins:S.bank)>=pr,lock=!own&&!(srcOf(it)=='buy'&&afford);
+   button('it_'+it.id,x,y,cw,ch,'',{bg:eq?'#c8f5cf':lock?'#cfccd8':'#ffffff',draw:()=>{ctx.save();if(lock)ctx.globalAlpha=0.55;ctx.translate(0,-ch*0.1);if(it.cat=='t')drawItemPreview(it,-6,-4,ps*0.66);else{BLINKO=shopBlink(this,k%cols,Math.floor(k/cols),cols,rows,k,n);if(it.cat=='h'){const hs=ch>=80?26:22;drawSq(0,ch*0.6-hs,hs,gtime,{c:S.eq.c,h:it.id})}else drawItemPreview(it,0,-ps*0.6,ps);BLINKO=null}ctx.restore();priceTag(it,0,ch/2-13);
     // badge shortened to PICK so the label can sit at the 14px floor instead of a 10px sliver
     if(it.id==pickId){ctx.fillStyle='#ffd45e';rr(-cw/2+3,-ch/2+3,48,20,7);ctx.fill();txt('PICK',-cw/2+27,-ch/2+14,14,'#3a1470','center',false)}}})}); // hats sit lower and a bit smaller so tall ones stay inside the card
   if(pages>1){const py=GY+PROWS*(ch+8)+10;button('pg_prev',24,py,60,28,'<',{fs:16,disabled:this.pg==0});txt('Page '+(this.pg+1)+'/'+pages,270,py+16,14,'#fff');button('pg_next',236,py,60,28,'>',{fs:16,disabled:this.pg>=pages-1})}
@@ -4050,51 +4410,84 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=t
    const X=TRX[tr];if(X&&Math.random()<0.028/X.dt)FX.push(X.mk(px,py-22));
    drawParts(FX);drawSq(px,py,44,gtime,{c:pc,h:ph,lx:-Math.sin(a)})}
   else{FX.length=0;const bob=Math.abs(Math.sin(gtime*3))*30;ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(740,296,40,7,0,0,7);ctx.fill();drawSq(740,296-bob,72,gtime,{c:pc,h:ph,lx:Math.sin(gtime)})}
+  // the detail line is the LONG answer to the same question the card's caption answers short - every route spelled out,
+  // including the pack an item belongs to, so nothing in the grid is ever unexplained
   if(it){txt(it.n,740,346,28,'#fff');const own=!!S.own[it.id],eq=S.eq[it.cat]==it.id,pr=it.coins||it.cost,have=it.coins?S.coins:S.bank,unit=it.coins?' coins':' gems';let st,col='#fff',sub='';
    if(eq)st='Equipped';else if(own)st=touchOn()?'Tap to wear':'Click or press ENTER to wear';
    else if(pr){st='Costs '+fmtN(pr)+unit;const ok=S.dev||have>=pr;col=ok?'#7bdc3b':'#ff8a8a';sub=ok?(touchOn()?'Tap again to buy':'Click again or press ENTER to buy'):'Need '+fmtN(pr-have)+' more'}
-   else if(it.wheel){st='Prize Wheel only';col='#ff8fd8';sub='Win it on the wheel'}
    else if(it.ach){st='Trophy: '+ACH.find(a=>a.id==it.ach).n;col='#ffd45e';sub=ACH.find(a=>a.id==it.ach).d}
    else if(it.world!=null){st='Reward for clearing World '+(it.world+1);col='#ffd45e'}
+   else if(it.wheel){st='Prize Wheel only';col='#ff8fd8';sub='Win it on the free Prize Wheel'}
+   else if(it.pack){st='Comes with the '+packLabel(it.pack);col='#ffb066';sub='Open the Packs tab to see everything inside'}
+   else if(it.club){st='Hopscraper Club skin';col='#ffd45e';sub='Members unlock one Club skin each month'}
+   else{st='Premium Wheel only';col='#ffd45e';sub=it.set?'Part of a full set - skin, hat and trail together':'Exclusive to the Premium Wheel, never sold'}
    txt(st,740,380,18,col,undefined,false);if(sub){let fs=15;ctx.font=`bold ${fs}px ${FONT}`;while(fs>14&&ctx.measureText(sub).width>330){fs--;ctx.font=`bold ${fs}px ${FONT}`}txt(sub,740,406,fs,'#d8d5ea',undefined,false)}}
   // nothing picked yet: this is the only place the game ever says where each currency actually comes from
   else{coinIcon(596,374,9,gtime*2);txt('Coins come from playing levels.',612,375,15,'#ffd45e','left',false);
    gemShape(596,402,9,'#5ff4ff');wrapText('Gems come from finding gems and earning new stars.',312,15).slice(0,2).forEach((l,k)=>txt(l,612,403+k*19,15,'#8dd3ff','left',false))}
   if(this.mt>0)txt(this.msg,740,434,17,'#ffd45e');
   button('wheel',580,452,320,42,'',{bg:(S.dev||S.tix>0)?'#ffe9a8':'#ffffff',draw:()=>{tixIcon(-120,0,11);txt('Prize Wheel',-98,1,18,'#1d1a2e','left',false);txt('x'+curTxt(S.tix),140,1,17,(S.dev||S.tix)?'#c2185b':'#6d6982','right',false)}})},
- // Store tab: sections (Subscription/Gems/Bundles/Cosmetic Packs) so the card wall stays scannable, each paged 6 at a time
- drawStore(){const secs=storeSections();if(!secs.find(s=>s.id==this.sec))this.sec=secs[0].id;const sec=secs.find(s=>s.id==this.sec);
-  let px=24;secs.forEach(sc=>{const w=Math.max(88,Math.round(sc.label.length*8.6+26));button('sec_'+sc.id,px,136,w,30,sc.label,{fs:14,bg:this.sec==sc.id?'#ffd45e':'#ffffff'});px+=w+8});
-  const PP=6,pages=Math.max(1,Math.ceil(sec.cards.length/PP));if(this.pg>pages-1)this.pg=pages-1;
-  const pageCards=sec.cards.slice(this.pg*PP,this.pg*PP+PP);
-  pageCards.forEach((c,k)=>{const x=24+(k%3)*174,y=182+Math.floor(k/3)*128;
-   button(c.id,x,y,164,118,'',{bg:c.p?(c.p.type=='sub'?'#2a1450':'#ffffff'):'#eef4ff',draw:(bw,bh,sel)=>{if(c.p){const p=c.p,own=prodOwned(p),ty=p.tag?-30:-42;
-     if(p.tag){ctx.fillStyle=p.tag=='BEST VALUE'?'#ffd45e':'#ff8fd8';rr(-72,-59,144,20,9);ctx.fill();txt(p.tag,0,-49,14,'#1d1a2e','center',false)}
-     // selecting this card repaints it gold, so its gold title and gold price chip have to flip to the dark ink or the
-     // name disappears and only the crown + price read
-     if(p.type=='sub'){const tc=sel?'#3a1470':'#ffd45e';crownIcon(0,-18,20);txt(p.n,0,14,16,tc,'center',false);
-      ctx.fillStyle=own?'#9a98aa':tc;rr(-44,30,88,26,13);ctx.fill();txt(own?'Member':priceTxt(p),0,43,14,own?'#fff':(sel?'#ffd45e':'#3a1470'),'center',false);return}
-     txt(p.n,0,ty,16,'#1d1a2e','center',false);
-     if(p.dbl){coinIcon(-14,4,15,0);txt('x2',10,6,24,'#c2185b','left',false)}
-     // All 3 Bonus Worlds: one representative skin per world reads as "three worlds", where slice(0,3) would show three Low-G skins
-     else if(p.allworlds){['c_moon','c_aurum','c_zombie'].forEach((iid,i)=>drawSq((i-1)*30,16,24,gtime+i,{c:iid,h:'h_none'}))}
-     else if(p.items){p.items.slice(0,3).forEach((iid,i)=>drawSq((i-(p.items.length-1)/2)*30,16,24,gtime+i,{c:iid,h:'h_none'}))}
-     else if(p.item){drawSq(-22,20,30,gtime,{c:p.item,h:'h_none'});if(p.coins)coinIcon(16,4,11,0);gemShape(p.coins?38:4,4,11,'#20b8c9')}
-     else if(p.cards)cardPackIcon(0,14,34);
-     else if(p.chaos)star5(0,10,20,'#20b8c9','#0c3a40',2);
-     else if(p.world6){ctx.fillStyle='#8f6bff';ctx.beginPath();ctx.arc(-2,16,15,0,7);ctx.fill();ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.arc(-9,10,3.2,0,7);ctx.arc(4,20,2.4,0,7);ctx.fill();star5(18,2,7,'#9fb4ff','#171233',1.5);star5(-16,-4,5,'#9fb4ff','#171233',1.5)}
-     else{const n=p.gems>=700?3:p.gems>=250?2:1;for(let i=0;i<n;i++)gemShape((i-(n-1)/2)*22,4+(i%2)*5,13,'#20b8c9')}
-     ctx.fillStyle=own?'#9a98aa':'#27b865';rr(-44,28,88,26,13);ctx.fill();txt(own?'Owned':priceTxt(p),0,41,16,'#fff','center',false)}
-    else{const pk=c.k,its=packItems(pk.id),own=packOwned(pk.id);txt(pk.n,0,-42,17,'#1d1a2e','center',false);
-     its.forEach((it,i)=>drawSq((i-(its.length-1)/2)*36,12,28,gtime+i,{c:it.id,h:'h_none'}));
-     if(own)txt('Owned',0,41,16,'#5d5c6b','center',false);else{gemShape(-14,40,7,'#20b8c9');txt(''+pk.cost,-4,41,17,'#1d1a2e','left',false)}}}})});
-  if(pages>1){button('pg_prev',24,420,60,28,'<',{fs:16,disabled:this.pg==0});txt('Page '+(this.pg+1)+'/'+pages,150,436,14,'#fff');button('pg_next',236,420,60,28,'>',{fs:16,disabled:this.pg>=pages-1})}
-  const s=UI.selId||'';let pv=null;if(s.startsWith('pr_'))pv={p:PRODUCTS[+s.slice(3)]};else if(s.startsWith('pk_'))pv={k:PACKS.find(p=>'pk_'+p.id==s)};
-  if(!pv){txt('STORE',740,150,30,'#fff');txt('Gems, packs and extras.',740,190,16,'#d8d5ea',undefined,false);txt('No ads. Ever.',740,216,16,'#7bdc3b',undefined,false)}
+ // ---- PACKS tab: the three themed packs, one tall card each, no sub-tabs and no paging. Three products is a SHELF,
+ // not a card wall, so each one gets room for its world name, its contents and an unmistakable Owned/price chip.
+ drawPacks(){const ps=packProducts(),n=ps.length,cw=Math.floor((512-(n-1)*10)/n);
+  txt('THREE PACKS. THAT IS THE WHOLE STORE.',280,152,15,'#ffd45e');
+  ps.forEach((p,k)=>{const x=24+k*(cw+10),own=prodOwned(p),th=WORLDS[bwWorldOf(p)];
+   button('pr_'+PRODUCTS.indexOf(p),x,170,cw,250,'',{bg:own?'#c8f5cf':'#ffffff',draw:(bw,bh,sel)=>{
+    // the world's own sky, so each pack card is instantly the colour of the thing it sells
+    ctx.save();rr(-bw/2+7,-bh/2+7,bw-14,66,10);ctx.clip();const g=ctx.createLinearGradient(0,-bh/2+7,0,-bh/2+73);
+    g.addColorStop(0,th.bg[0]);g.addColorStop(1,th.bg[1]);ctx.fillStyle=g;ctx.fillRect(-bw/2+7,-bh/2+7,bw-14,66);
+    ctx.fillStyle=th.mid;ctx.beginPath();ctx.ellipse(-bw*0.2,-bh/2+80,bw*0.4,26,0,0,7);ctx.fill();
+    ctx.fillStyle=th.tile;ctx.fillRect(-bw/2+7,-bh/2+62,bw-14,11);ctx.fillStyle=th.top;ctx.fillRect(-bw/2+7,-bh/2+62,bw-14,4);
+    drawSq(0,-bh/2+62,30,gtime,{c:(p.items||[])[0],h:'h_none'});ctx.restore();
+    if(p.tag){ctx.fillStyle='#ffd45e';rr(-bw/2+9,-bh/2+9,86,19,8);ctx.fill();txt(p.tag,-bw/2+52,-bh/2+19,13,'#3a1470','center',false)}
+    txt(p.n.replace(' Supporter',''),0,-bh/2+94,17,'#1d1a2e','center',false);
+    txt(th.n,0,-bh/2+114,13,'#6d6982','center',false);
+    // what is actually in it, counted by kind - the one line a player needs before opening the detail panel
+    packBlurb(p).forEach((l,i)=>txt(l,0,-bh/2+138+i*18,13,'#3f3b52','center',false));
+    ctx.fillStyle=own?'#9a98aa':'#27b865';rr(-52,bh/2-40,104,28,14);ctx.fill();
+    txt(own?'Owned':priceTxt(p),0,bh/2-26,16,'#fff','center',false)}})});
+  const s=UI.selId||'',p=s.startsWith('pr_')?PRODUCTS[+s.slice(3)]:null;
+  if(!p){txt('PACKS',740,150,30,'#fff');
+   wrapText('Each pack is one bonus world plus every cosmetic that belongs to it. Buy once, keep forever.',330,16).forEach((l,i)=>txt(l,740,190+i*22,16,'#d8d5ea',undefined,false));
+   txt('No ads. Ever.',740,290,16,'#7bdc3b',undefined,false);
+   txt('Already bought one? Restore below.',740,318,14,'#b9b6c6',undefined,false)}
+  else this.prodPanel(p);
+  if(this.mt>0)txt(this.msg,740,424,15,'#ffd45e');
+  button('restore',620,452,240,40,'Restore Purchases',{fs:16})},
+ // ---- GEMS tab: the four consumable tiers, plus the one subscription on its own row underneath them. Both are
+ // "currency and membership" rather than content, which is why they share a tab instead of each getting a half-empty one.
+ drawGems(){const gs=PRODUCTS.filter(p=>p.gems),sub=PRODUCTS.find(p=>p.type=='sub');
+  // one centred strapline, no left-hand "GEMS" label: the tab above already says Gems, and the two collided
+  txt('Spend them on skins, hats, trails and Premium Wheel spins.',280,152,14,'#d8d5ea');
+  gs.forEach((p,k)=>{const x=24+(k%2)*262,y=168+Math.floor(k/2)*106;
+   button('pr_'+PRODUCTS.indexOf(p),x,y,252,96,'',{bg:'#ffffff',draw:(bw,bh)=>{
+    if(p.tag){ctx.fillStyle='#ffd45e';rr(bw/2-96,-bh/2+7,88,19,8);ctx.fill();txt(p.tag,bw/2-52,-bh/2+17,13,'#3a1470','center',false)}
+    const n=p.gems>=700?3:p.gems>=250?2:1;for(let i=0;i<n;i++)gemShape(-bw/2+40+(i-(n-1)/2)*17,2+(i%2)*6,13,'#20b8c9');
+    txt(p.n,-bw/2+78,-6,19,'#1d1a2e','left',false);
+    ctx.fillStyle='#27b865';rr(bw/2-104,10,96,26,13);ctx.fill();txt(priceTxt(p),bw/2-56,23,16,'#fff','center',false)}})});
+  if(sub){const own=clubOn();
+   button('pr_'+PRODUCTS.indexOf(sub),24,382,514,72,'',{bg:'#2a1450',draw:(bw,bh,sel)=>{const tc=sel?'#3a1470':'#ffd45e';
+    crownIcon(-bw/2+40,-2,20);txt(sub.n,-bw/2+70,-11,19,tc,'left',false);
+    // clipped to the gap before the price chip so the perk line can never run underneath it
+    txt(fitStr('+10 gems a day · 2x coins · weekly Premium spin · monthly skin',bw-190,13),-bw/2+70,11,13,sel?'#3a1470':'#d8d5ea','left',false);
+    ctx.fillStyle=own?'#9a98aa':tc;rr(bw/2-112,-13,104,26,13);ctx.fill();
+    txt(own?'Member':priceTxt(sub),bw/2-60,0,15,own?'#fff':(sel?'#ffd45e':'#3a1470'),'center',false)}})}
+  const s=UI.selId||'',p=s.startsWith('pr_')?PRODUCTS[+s.slice(3)]:null;
+  if(!p){txt('GEMS & CLUB',740,150,28,'#fff');
+   coinIcon(600,196,9,gtime*2);txt('Coins come from playing levels.',616,197,15,'#ffd45e','left',false);
+   gemShape(600,226,9,'#5ff4ff');wrapText('Gems come from finding them, earning new stars and the Prize Wheel - buying is just faster.',300,15).slice(0,3).forEach((l,k)=>txt(l,616,227+k*19,15,'#8dd3ff','left',false));
+   txt('No ads. Ever.',740,310,16,'#7bdc3b',undefined,false)}
+  else this.prodPanel(p);
+  const isSub=p&&p.type=='sub';
+  if(!isSub&&this.mt>0)txt(this.msg,740,424,15,'#ffd45e');
+  button('restore',620,452,240,40,'Restore Purchases',{fs:16})},
+ // ---- the right-hand detail panel, shared by both product tabs. One function, so a pack and a gem tier can never
+ // drift into two different-looking panels.
+ prodPanel(p){
   // the panel stacks downward from the perk list instead of on fixed rows, so the price line and the "Click again to buy"
   // message keep a real gap however many lines the perks wrap to
-  else if(pv.p&&pv.p.type=='sub'){const p=pv.p,mem=clubOn();crownIcon(740,158,24);txt(p.n,740,202,28,'#ffd45e');
-   const perks=['+10 gems every day','2x coins (3x with Coin Doubler)','1 free Premium Wheel spin a week','3 exclusive Club skins, one unlocked each month','Gold Club name badge'];let py=230;
+  if(p.type=='sub'){const mem=clubOn();crownIcon(740,158,24);txt(p.n,740,202,28,'#ffd45e');
+   const perks=['+10 gems every day','2x coins (3x with the Coin Doubler)','1 free Premium Wheel spin a week','3 exclusive Club skins, one unlocked each month','Gold Club name badge'];let py=230;
    perks.forEach(l=>{const ln=wrapText(l,300,13);ctx.fillStyle='#7bdc3b';ctx.beginPath();ctx.arc(596,py-1,4,0,7);ctx.fill();ln.forEach(s=>{txt(s,608,py,13,'#fff','left',false);py+=16});py+=2});
    const prY=clamp(py+18,340,356);
    txt(mem?'You are a Club member':priceTxt(p),740,prY,24,mem?'#7bdc3b':'#ffd45e');
@@ -4104,29 +4497,26 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=t
    if(mem&&dayNum(S.clubDay)>=todaySeed()&&ny+20<=410)txt('Next +10 gems in '+cdStr(),740,ny+20,13,'#ffd45e',undefined,false);
    // Apple requires Terms of Use + Privacy Policy links on the subscription screen
    button('terms',588,418,164,28,'Terms of Use',{fs:14});button('privacy',756,418,164,28,'Privacy Policy',{fs:14});
-   if(S.dev)button('devclub',660,94,160,26,clubOn()?'DEV: unsub':'DEV: sub free',{fs:12,bg:'#c8f5cf'})}
-  // !allworlds: that bundle carries 8 items, which would overflow this skins-in-a-row layout - it uses the generic panel below
-  else if(pv.p&&pv.p.items&&!pv.p.allworlds){const p=pv.p,its=p.items.map(iid=>ITEMS.find(i=>i.id==iid));txt(p.n,740,130,28,'#fff');
-   its.forEach((it,i)=>{drawSq(740+(i-(its.length-1)/2)*96,250-Math.abs(Math.sin(gtime*3+i))*20,56,gtime+i,{c:it.id,h:'h_none'});txt(it.n,740+(i-(its.length-1)/2)*96,274,14,'#d8d5ea',undefined,false)});
-   txt(its.length+' skins, real money',740,310,17,'#fff',undefined,false);
-   txt(prodOwned(p)?'Owned':priceTxt(p),740,350,26,prodOwned(p)?'#b9b6c6':'#7bdc3b')}
-  else if(pv.p){const p=pv.p;txt(p.n,740,130,28,'#fff');
-   if(p.allworlds)['c_moon','c_aurum','c_zombie'].forEach((iid,i)=>drawSq(740+(i-1)*84,236-Math.abs(Math.sin(gtime*3+i))*16,54,gtime+i,{c:iid,h:'h_none'}));
-   else if(p.item)drawSq(740,262,70,gtime,{c:p.item,h:p.dbl?'h_none':S.eq.h});else if(p.dbl){coinIcon(712,220,34,gtime*2);txt('x2',760,222,44,'#ffd45e','left')}else if(p.cards)cardPackIcon(740,220,60);else if(p.chaos)star5(740,220,30,'#20b8c9','#0c3a40',2);else{gemShape(740,220,34,'#5ff4ff')}
-   const ln=wrapText(p.d,320,17);ln.forEach((l,i)=>txt(l,740,(p.allworlds?286:300)+i*24,17,'#fff',undefined,false));
-   // the saving is only ever shown when it can be computed from the live prices (see allWorldsSaving)
-   if(p.allworlds&&!prodOwned(p)){const sv=allWorldsSaving();if(sv)txt('Save '+sv+' vs buying the three separately',740,336,14,'#7bdc3b',undefined,false)}
-   txt(prodOwned(p)?'Owned':priceTxt(p),740,360,26,prodOwned(p)?'#b9b6c6':'#7bdc3b')}
-  else{const pk=pv.k,its=packItems(pk.id);txt(pk.n,740,130,28,'#fff');its.forEach((it,i)=>{drawSq(740+(i-(its.length-1)/2)*96,250-Math.abs(Math.sin(gtime*3+i))*20,56,gtime+i,{c:it.id,h:'h_none'});txt(it.n,740+(i-(its.length-1)/2)*96,274,14,'#d8d5ea',undefined,false)});
-   txt(its.length+' skins',740,310,17,'#fff',undefined,false);
-   if(packOwned(pk.id))txt('Owned',740,350,24,'#b9b6c6');else{gemShape(716,350,11,'#5ff4ff');txt(''+pk.cost,732,351,26,S.dev||S.bank>=pk.cost?'#7bdc3b':'#ff8a8a','left')}}
-  const isSub=pv&&pv.p&&pv.p.type=='sub';
-  if(!isSub&&this.mt>0)txt(this.msg,740,420,15,'#ffd45e');
-  button('restore',620,452,240,40,'Restore Purchases',{fs:16})},
+   if(S.dev)button('devclub',660,94,160,26,clubOn()?'DEV: unsub':'DEV: sub free',{fs:12,bg:'#c8f5cf'});return}
+  const own=prodOwned(p);txt(p.n,740,126,26,'#fff');
+  // a pack shows every cosmetic in it, ticked off one by one, so "what am I actually buying" is answered on the card
+  if(p.pk){const its=(p.items||[]).map(i=>ITEMS.find(x=>x.id==i)).filter(Boolean),per=Math.min(6,its.length),cw2=Math.min(60,Math.floor(330/Math.max(1,per)));
+   txt(WORLDS[bwWorldOf(p)].n+'  ·  '+LEVELS.filter(l=>l.wd==bwWorldOf(p)).length+' bonus levels',740,150,14,'#ffd45e',undefined,false);
+   its.forEach((it,i)=>{const x=740+(i-(its.length-1)/2)*cw2,y=200-Math.abs(Math.sin(gtime*3+i))*10;
+    const g=!!S.own[it.id];ctx.save();if(!g&&!own)ctx.globalAlpha=0.85;
+    if(it.cat=='t')drawItemPreview(it,x,y,20);else if(it.cat=='h')drawSq(x,y+14,26,gtime+i,{c:S.eq.c,h:it.id});else drawSq(x,y+6,34,gtime+i,{c:it.id,h:'h_none'});
+    ctx.restore();
+    txt(fitStr(it.n,cw2-4,11),x,y+30,11,g?'#7bdc3b':'#d8d5ea',undefined,false);
+    if(g){ctx.strokeStyle='#7bdc3b';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+cw2/2-13,y-16);ctx.lineTo(x+cw2/2-9,y-12);ctx.lineTo(x+cw2/2-2,y-21);ctx.stroke()}});
+   const ln=wrapText(p.d,330,14);ln.slice(0,5).forEach((l,i)=>txt(l,740,250+i*19,14,'#d8d5ea',undefined,false));
+   txt(own?'Owned':priceTxt(p),740,366,26,own?'#b9b6c6':'#7bdc3b')}
+  else{gemShape(740,214,34,'#5ff4ff');
+   const ln=wrapText(p.d,320,17);ln.forEach((l,i)=>txt(l,740,286+i*24,17,'#fff',undefined,false));
+   txt(priceTxt(p),740,356,26,'#7bdc3b')}},
  onBtn(id){if(id=='back')return go('menu');if(id=='pick'){const dp=dailyPickItem();if(dp){this.cat=dp.cat;this.sub=subOf(dp);this.pg=0;UI.selId='it_'+dp.id}return}
   if(id.startsWith('tab_')){const nc=id.slice(4);this.cat=nc;this.sub=(SUBCATS[nc]||[['','']])[0][0];this.pg=0;this.clr();return}
   if(id=='wheel')return go('wheel','shop');if(id=='gopw')return go('wheel',{from:'shop',prem:true});
-  if(id.startsWith('sec_')){this.sec=id.slice(4);this.pg=0;this.clr();return}
+  if(id=='gopack'){this.cat='p';this.pg=0;this.clr();UI.selId=null;return}
   if(id.startsWith('sub_')){this.sub=id.slice(4);this.pg=0;this.clr();return}
   if(id=='pg_prev'){this.pg=Math.max(0,this.pg-1);this.clr();return}
   if(id=='pg_next'){this.pg++;this.clr();return}
@@ -4136,17 +4526,18 @@ SCREENS.shop={enter(){this.cat=this.cat||'c';this.sec=this.sec||'sub';this.sub=t
    if(!UI.wasSel){this.msg=touchOn()?'Tap again to buy':'Click again to buy';this.mt=1.5;return}
    if(!cardPackRoom(p)){this.msg='Card stock full (max '+CARD_BUY_MAX+' each). Use some first';this.mt=2.5;sfx('no');return}
    if(!buyProduct(p.id))noNativeBuy();return}
-  if(id.startsWith('pk_')){const pk=PACKS.find(p=>'pk_'+p.id==id);if(packOwned(pk.id)){this.msg='You own this pack';this.mt=1.5;return}
-   if(!UI.wasSel){this.msg=touchOn()?'Tap again to buy':'Click again to buy';this.mt=1.5;return}
-   if(S.dev||S.bank>=pk.cost){if(!S.dev)S.bank-=pk.cost;packItems(pk.id).forEach(it=>S.own[it.id]=1);S.eq.c=packItems(pk.id)[0].id;sfx('buy');confetti(40);grant('shop');save();this.msg='Bought '+pk.n+'!';this.mt=2;return}
-   sfx('no');this.msg='Need '+(pk.cost-S.bank)+' more gems';this.mt=1.5;return}
   const it=ITEMS.find(i=>'it_'+i.id==id);if(!it)return;if(S.own[it.id]){S.eq[it.cat]=it.id;save();this.msg='Equipped!';this.mt=1.2;return}
+  // Dev Mode unlocks EVERYTHING, pack and Premium Wheel cosmetics included: one tap takes any locked item.
+  if(S.dev){S.own[it.id]=1;S.eq[it.cat]=it.id;sfx('buy');save();this.msg='DEV: unlocked '+it.n;this.mt=1.5;return}
   // first tap/click only selects (and previews) - buying needs a second tap on the same card, or ENTER
   if((it.coins||it.cost)&&!UI.wasSel)return;
   // single items get the same celebration a pack does - confetti + a toast that says it is already equipped
-  if(it.coins&&(S.dev||S.coins>=it.coins)){if(!S.dev)S.coins-=it.coins;S.own[it.id]=1;S.eq[it.cat]=it.id;sfx('buy');confetti(40);toast(it.n+' unlocked!','Equipped - you are wearing it now','ach');grant('shop');save();this.msg='Bought '+it.n+'!';this.mt=1.5;return}
-  if(it.cost&&(S.dev||S.bank>=it.cost)){if(!S.dev)S.bank-=it.cost;S.own[it.id]=1;S.eq[it.cat]=it.id;sfx('buy');confetti(40);toast(it.n+' unlocked!','Equipped - you are wearing it now','ach');grant('shop');save();this.msg='Bought '+it.n+'!';this.mt=1.5;return}
-  sfx('no');this.msg=it.coins?'Not enough coins':it.cost?'Not enough gems':it.wheel?'Win it on the Prize Wheel':'Locked';this.mt=1.2}};
+  if(it.coins&&S.coins>=it.coins){S.coins-=it.coins;S.own[it.id]=1;S.eq[it.cat]=it.id;sfx('buy');confetti(40);toast(it.n+' unlocked!','Equipped - you are wearing it now','ach');grant('shop');save();this.msg='Bought '+it.n+'!';this.mt=1.5;return}
+  if(it.cost&&S.bank>=it.cost){S.bank-=it.cost;S.own[it.id]=1;S.eq[it.cat]=it.id;sfx('buy');confetti(40);toast(it.n+' unlocked!','Equipped - you are wearing it now','ach');grant('shop');save();this.msg='Bought '+it.n+'!';this.mt=1.5;return}
+  // a locked item explains its route here too, in the same words the card and the detail panel use
+  sfx('no');this.msg=it.coins?'Not enough coins':it.cost?'Not enough gems':it.wheel?'Win it on the free Prize Wheel':
+   it.pack?'Comes with the '+packLabel(it.pack):it.club?'A Hopscraper Club skin':it.ach?'Earn the trophy for it':
+   it.world!=null?'Clear World '+(it.world+1)+' for it':'Win it on the Premium Wheel';this.mt=2}};
 
 // ================= PRIZE WHEEL =================
 function wheelPick(){let tot=0;for(const s of WHEEL)tot+=s.w;let r=Math.random()*tot;for(let i=0;i<WHEEL.length;i++){r-=WHEEL[i].w;if(r<0)return i}return 0}
@@ -4356,8 +4747,8 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    txt('You have '+curTxt(S.bank)+' gems. You keep whatever you win.',VW/2,y+148,15,'#d8d5ea',undefined,false);
    button('m_yes',x+30,y+182,220,54,'Spin for '+PWHEEL_COST,{fs:22,bg:'#7bdc3b',col:'#b6ff7a'});button('m_no',x+266,y+182,144,54,'Cancel',{fs:20})}
   else if(md.k=='nogems'){txt('Not enough gems',VW/2,y+44,28,'#fff');gemShape(VW/2,y+96,20,'#5ff4ff');
-   txt('A Premium spin costs '+PWHEEL_COST+' gems. You have '+curTxt(S.bank)+'.',VW/2,y+138,16,'#d8d5ea',undefined,false);txt(storeOn()?'Get more in the Store.':'Earn gems by clearing levels and collecting gems.',VW/2,y+160,16,'#ffd45e',undefined,false);
-   if(storeOn())button('m_store',x+30,y+186,220,52,'Open Store',{fs:22,bg:'#ffc93c'});button('m_no',storeOn()?x+266:VW/2-72,y+186,144,52,storeOn()?'Not now':'OK',{fs:20})}
+   txt('A Premium spin costs '+PWHEEL_COST+' gems. You have '+curTxt(S.bank)+'.',VW/2,y+138,16,'#d8d5ea',undefined,false);txt(storeOn()?"Earn them by playing, or buy some on the Shop's Gems tab.":'Earn gems by clearing levels and collecting gems.',VW/2,y+160,16,'#ffd45e',undefined,false);
+   if(storeOn())button('m_store',x+30,y+186,220,52,'Open Gems tab',{fs:20,bg:'#ffc93c'});button('m_no',storeOn()?x+266:VW/2-72,y+186,144,52,storeOn()?'Not now':'OK',{fs:20})}
   else{const segs=prem?PWHEEL:WHEEL;let tot=0;for(const s of segs)tot+=s.w;
    txt(prem?'PREMIUM WHEEL ODDS':'PRIZE WHEEL ODDS',VW/2,y+34,24,prem?'#ffd45e':'#fff');
    segs.forEach((s,i)=>{const ry=y+70+i*33;ctx.fillStyle=i%2?'rgba(255,255,255,.04)':'rgba(255,255,255,.09)';rr(x+20,ry-15,w-40,30,8);ctx.fill();
@@ -4374,7 +4765,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   if(id=='mode_p'||id=='gopremium'){this.prem=true;this.modal=null;UI.selId='spin';return}
   if(id=='odds')return this.openModal('odds');
   if(id=='m_no')return this.onBtn('back');
-  if(id=='getgems'||id=='m_store'){this.modal=null;go('shop');SCREENS.shop.cat='s';return}
+  if(id=='getgems'||id=='m_store'){this.modal=null;go('shop');SCREENS.shop.cat='g';return}
   if(id=='spin'&&!this.spin){
    if(!this.prem){if(!S.dev&&S.tix<=0)return;if(!S.dev)S.tix--;S.spun=1;save();const i=wheelPick();this.startSpin(i,awardWheel(i),false);return}
    return this.spinPremium()}
