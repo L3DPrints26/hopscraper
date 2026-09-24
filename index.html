@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260923-214501'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260923-221810'; // change this on every upload so open copies show "Update ready"
 // Where the Settings > Send Feedback button goes. Leave FEEDBACK_URL empty to email FEEDBACK_EMAIL instead;
 // paste a Google Form link into FEEDBACK_URL and it wins. Either way the build number rides along (see openFeedback).
 const FEEDBACK_URL='';  // Google Form URL - set before release
@@ -256,6 +256,10 @@ addEventListener('keydown',e=>{audioInit();if(e.ctrlKey||e.metaKey||e.altKey)ret
  if(!e.repeat&&/^(Digit|Numpad)[0-9]$/.test(e.code))typedDigit=e.code.slice(-1);
  if(!e.repeat&&e.code=='Backspace')typedDel=true;
  if(e.code=='Backquote')pressed.DEV=true;
+ // NEWKEY = a key that went down THIS frame, never an auto-repeat. pressed.ANY fires on every repeat, so anything that
+ // means "the player just did something" (the note card) has to read this instead, or a key already being held when the
+ // card appeared would wipe it a few frames later.
+ if(!e.repeat)pressed.NEWKEY=true;
  pressed.ANY=true});
 addEventListener('keyup',e=>{const k=KM[e.code];if(k){keys[k]=false;e.preventDefault()}});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
@@ -298,7 +302,7 @@ addEventListener('pointerup',e=>{if(!touchOn()||!navigator.maxTouchPoints||TILT.
 // left side: floating joystick where you touch, follows your thumb. right side: tap to jump (hold = higher).
 // Every touch event rebuilds state from the browser's real list of fingers, so a lost "finger up" can never leave you stuck.
 const PB={x:VW-38,y:84,r:22},RB={x:PB.x-60,y:PB.y,r:22},STR=62,DZ=14;
-const tp=new Map();let STK=null,uiTouch=null,tapBlock=0,noteSwipe=null;
+const tp=new Map();let STK=null,uiTouch=null,tapBlock=0;
 // Always true: this ships as an iOS app, so the mobile layout is the only layout and the on-screen controls are always
 // drawn. Kept as a function because ~25 call sites read it for copy and margins. Keyboard/mouse are NOT gated by this -
 // they run off their own global listeners (see INPUT), so a laptop can still play and test.
@@ -314,14 +318,15 @@ function tsync(){let L=false,R=false,D=false,J=false;
  if(STK){const dx=STK.kx-STK.bx,dy=STK.ky-STK.by;if(dx<-DZ)L=true;if(dx>DZ)R=true;if(dy>STR*0.55&&dy>Math.abs(dx)*1.6)D=true}
  for(const[k,v]of[['L',L],['R',R],['D',D],['J',J]]){if(v&&!keys[k])pressed[k]=true;keys[k]=v}}
 function tReconcile(list){const live=new Set();for(let i=0;i<list.length;i++)live.add(list[i].identifier);
- for(const id of[...tp.keys()])if(!live.has(id))tp.delete(id);if(STK&&!live.has(STK.id))STK=null;if(uiTouch&&!live.has(uiTouch.id))uiTouch=null;if(noteSwipe&&!live.has(noteSwipe.id))noteSwipe=null}
+ for(const id of[...tp.keys()])if(!live.has(id))tp.delete(id);if(STK&&!live.has(STK.id))STK=null;if(uiTouch&&!live.has(uiTouch.id))uiTouch=null}
 // touch handlers live on document (not the canvas) so the letterbox bars around the canvas work too
 document.addEventListener('touchstart',e=>{e.preventDefault();lastTouch=performance.now();audioInit();if(rotOn()){tReset();return}tReconcile(e.touches);
  for(const t of e.changedTouches){const p=tpos(t);
   if(touchOn()&&playing()){
-   // a note popup eats its own touches first: tap the X, or swipe it away like a notification
-   if(G.noteShow&&noteXHit(p.x,p.y)){G.noteShow=null;continue}
-   if(G.noteShow&&!noteSwipe&&noteBodyHit(p.x,p.y)){noteSwipe={id:t.identifier,y0:p.y,dy:0};continue}
+   // A note card NEVER eats a touch. Any finger down anywhere clears it AND still does its normal job (jump, stick,
+   // pause, cards) - that's how "tap and it goes away" and "don't swallow my jump" can both be true at once. The grace
+   // window stops the same burst of taps that walked you into the note from wiping it in the same breath.
+   if(G.noteShow&&gtime-G.noteShow.t0>NOTE_GRACE)G.noteShow=null;
    if(Math.hypot(p.x-PB.x,p.y-PB.y)<PB.r*1.7){pressed.ESC=true;continue}
    if(Math.hypot(p.x-RB.x,p.y-RB.y)<RB.r*1.7){pressed.RST=true;continue}
    // the Power Cards pill opens the full list (name + what it does + Use) instead of firing a mystery icon
@@ -332,12 +337,10 @@ document.addEventListener('touchstart',e=>{e.preventDefault();lastTouch=performa
 document.addEventListener('touchmove',e=>{e.preventDefault();lastTouch=performance.now();if(rotOn())return;tReconcile(e.touches);
  for(const t of e.changedTouches){const p=tpos(t);
   if(STK&&STK.id===t.identifier){STK.kx=p.x;STK.ky=p.y;const dx=p.x-STK.bx,dy=p.y-STK.by,d=Math.hypot(dx,dy);if(d>STR){STK.bx=p.x-dx/d*STR;STK.by=p.y-dy/d*STR}}
-  if(noteSwipe&&noteSwipe.id===t.identifier)noteSwipe.dy=p.y-noteSwipe.y0;
   if(uiTouch&&uiTouch.id===t.identifier&&Math.hypot(p.x-uiTouch.x,p.y-uiTouch.y)>22)uiTouch.moved=true}
  tsync()},{passive:false});
 function tEnd(e){e.preventDefault();lastTouch=performance.now();
  for(const t of e.changedTouches){
-  if(noteSwipe&&noteSwipe.id===t.identifier){if(noteSwipe.dy<-70)G.noteShow=null;noteSwipe=null}
   if(uiTouch&&uiTouch.id===t.identifier){const p=tpos(t);
   // menus fire on finger UP, only if the finger stayed put and the screen didn't just change
   if(e.type=='touchend'&&!uiTouch.moved&&performance.now()>tapBlock){mouse.x=p.x;mouse.y=p.y;mouse.click=true;pressed.ANY=true}uiTouch=null}}
@@ -864,41 +867,43 @@ function drawCardPill(){if(!cardPillOn())return;const P=CARD_PILL,act=G.cardActi
   ctx.fillStyle='#5ff4ff';rr(P.x+tx,y+h-13,Math.max(2,bw*fr),5,2.5);ctx.fill()}
  ctx.restore()}
 function cardPackIcon(x,y,s){ctx.save();ctx.translate(x,y);for(let i=0;i<4;i++){ctx.save();ctx.translate((i-1.5)*s*0.46,0);ctx.fillStyle='#eafcff';ctx.strokeStyle='#20b8c9';ctx.lineWidth=2;rr(-s*0.19,-s*0.28,s*0.38,s*0.56,s*0.08);ctx.fill();ctx.stroke();ctx.restore()}ctx.restore()}
-// one note hidden in every story level. first few help, then it turns into a story.
+// one note hidden in every story level. the first few are instructions, then it turns into a log.
+// Voice: someone who climbed this tower before you, writing in a hurry, tired, not trying to be funny.
+// Kept short on purpose - these are read on a card that must not cover the level (see drawNoteCard).
 const NOTES=[
- "Hey, new square! You can jump 2 more times in mid-air. Trust me. -G",
- "Touching a wall gives your air jumps back. Walls are friends. -G",
- "Spikes are NOT friends. I learned this 14 times. -G",
- "Down drops you through thin platforms. You're welcome. -G",
- "Gems buy hats. Hats don't make you faster. You'll feel faster though.",
- "Touched a flag. Felt important. Would recommend.",
- "Day 3 of climbing. Still no idea who built this tower.",
- "Asked a spike for directions. It didn't answer. Rude.",
- "Why are there saws?? Who needs this many saws??",
- "Someone scratched DON'T LOOK DOWN on the wall. I looked down.",
- "Crumble blocks sound sad when they break. I say sorry to each one.",
- "Some of these notes are older than me. A few are in MY handwriting.",
- "I can hear music up top. Bad music. But music.",
- "Tried to eat a gem. Not food. Just shiny rocks.",
- "The walls hum at night. Like they're... breathing?",
- "Met a circle. It rolled away. Circles never stay.",
- "Every block in this tower has a tiny face carved into it.",
- "The faces look like squares. Like US.",
- "Bounce pads: 10/10. Would bounce again.",
- "The lasers blink in a pattern. I think it spells H-O-P.",
- "Found a note that just says 'keep going.' I didn't write it. Or did I?",
- "Halfway up. My legs hurt. I don't have legs. Still hurts.",
- "Theory: squares who give up turn into blocks. That's how the tower grows.",
- "Past the worst of it. Writing fast. The lava's coming.",
- "Don't give up. I REALLY don't want to become a stair.",
- "The lava is warm. Too warm. Do not recommend.",
- "Dropped my hat somewhere back there. It's yours if you find it.",
- "The blocks below are cheering. Or that's the wind. Probably the wind.",
- "Almost there. If I don't make it, tell my trail I loved it.",
- "I can see the top. There's a door. And a pen.",
- "So every block I stand on used to be a square. Thanks, guys.",
- "Why is it ALWAYS saws at the end?",
- "You made it. The pen up here is for you. Leave a note for the next square. That's how this works. -Gerald, the first square"];
+ "Two extra jumps once you are in the air. Nobody mentions it. -GamerCrafter",
+ "Scrape a wall and the air jumps come back. Tested it plenty. -GamerCrafter",
+ "Spikes go through a square at any speed. Found that out at speed. -GamerCrafter",
+ "Hold down on a thin platform and you drop through it. -GamerCrafter",
+ "The gems sit in corners nobody walks into. Walk into the corners.",
+ "Flags hold your place. I have touched every flag in here twice.",
+ "Narrow shaft: jump, hit wall, jump again. Slow. It still goes up.",
+ "End of the grass. It stops being pleasant after this.",
+ "Counted the saws. Stopped at forty. Assume there are more.",
+ "The blades run on a timer. So does everything else in here.",
+ "Cracked blocks hold about a second. I have never needed two.",
+ "Watched the spinning ones do a full lap before moving. Cost me nothing.",
+ "Someone dug this shaft and then added saws. On purpose. I think about that.",
+ "The belts move whether you do or not. Use that.",
+ "Day four. The sawdust is in everything, including me.",
+ "Lost a glove here. I do not have hands. Still lost it.",
+ "Lasers blink. Count to three and go on the dark.",
+ "Gold doors need the key. There is always exactly one key.",
+ "Purple air cancels the extra jumps. Get your height before you enter it.",
+ "Striped orange is not there. Green is. Do not mix them up at speed.",
+ "Every door in here logs you. I am in a file somewhere, eleven levels back.",
+ "The lab is spotless. Nothing has walked here in years. Nothing but me.",
+ "Up the chimney by wall jumps. My arms would ache if I had any.",
+ "Found the room this tower is run from. Empty. Looks like it always was.",
+ "The floor is hot enough to read by. Writing fast.",
+ "The lava rises at a steady rate. Faster than reading this.",
+ "Stopped being scared of the lava around here. That is not progress.",
+ "Paper is curling. Keep it short. Both of us.",
+ "The cracked blocks give out quicker down here. Everything does.",
+ "Ceiling coming down, floor coming up. Nothing clever to add.",
+ "Long one. Pace yourself. I did not.",
+ "Bottom of the tower is the top of something else. I stopped asking.",
+ "There is a door up here, and a pen. I used the pen. Your turn. -GamerCrafter"];
 function notesFound(){let n=0;for(let i=0;i<NOTES.length;i++)if(S.notes[i])n++;return n}
 // a note sits a few steps from the spawn, on the way to the exit, on a spot you can walk to
 function placeNote(L){const g=L.g,sx=L.start.x,sy=L.start.y,dir=L.exit.x>=sx?1:-1;
@@ -919,20 +924,64 @@ function fitFont(str,maxW,size,min){min=min||14;let s=size;ctx.font=`bold ${s}px
 function txtW(str,size){ctx.font=`bold ${size}px ${FONT}`;return ctx.measureText(str).width}
 // truncate to fit a width, with an ellipsis (fitFont above shrinks instead; this one is for labels already at the floor)
 function fitStr(str,maxW,size){if(txtW(str,size)<=maxW)return str;let r=String(str);while(r.length>1&&txtW(r+'…',size)>maxW)r=r.slice(0,-1);return r+'…'}
-// note card: dismissible like a phone notification (tap the X, or swipe it off either side)
-function noteCardGeom(){const ns=G.noteShow;if(!ns)return null;const age=gtime-ns.t0;const lines=wrapText(NOTES[ns.i],520,17),h=46+lines.length*24;
- const k=age<0.3?ease(age/0.3):age>7?1-(age-7)/0.5:1;return{lines,h,y:96-(1-k)*40,k}}
-function noteXHit(mx,my){const g=noteCardGeom();if(!g)return false;return Math.hypot(mx-(VW/2+272),my-(g.y+16))<16}
-function noteBodyHit(mx,my){const g=noteCardGeom();if(!g)return false;return mx>=VW/2-290&&mx<=VW/2+290&&my>=g.y&&my<=g.y+g.h}
-function drawNoteCard(){const ns=G.noteShow;if(!ns)return;const age=gtime-ns.t0;if(age>7.5){G.noteShow=null;return}
- const g=noteCardGeom();if(!g)return;const{lines,h,y}=g;const k=g.k;
- const dy=noteSwipe?noteSwipe.dy:0,sk=1-Math.min(1,Math.abs(dy)/220);
- ctx.save();ctx.translate(0,Math.min(0,dy));ctx.globalAlpha=clamp(k*sk,0,1);
- ctx.fillStyle='rgba(0,0,0,.3)';rr(VW/2-290+4,y+5,580,h,10);ctx.fill();ctx.fillStyle='#fff3cf';rr(VW/2-290,y,580,h,10);ctx.fill();
- txt('NOTE '+(ns.i+1)+' / '+NOTES.length,VW/2-270,y+20,14,'#a08a55','left',false);txt(notesFound()+' found',VW/2+246,y+20,14,'#a08a55','right',false);
- lines.forEach((l,i)=>txt(l,VW/2,y+46+i*24,17,'#3a3020','center',false));
- const xx=VW/2+272,xy=y+16;ctx.fillStyle='rgba(0,0,0,.1)';ctx.beginPath();ctx.arc(xx,xy,11,0,7);ctx.fill();
- ctx.strokeStyle='#8a7a55';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(xx-4,xy-4);ctx.lineTo(xx+4,xy+4);ctx.moveTo(xx+4,xy-4);ctx.lineTo(xx-4,xy+4);ctx.stroke();
+// ---- NOTES: where each one comes from, and what it is drawn on ----------------------------------------------
+// S.notes is keyed by LEVEL INDEX and always has been - do not reindex it, old saves depend on it (see fixSave).
+// Notes exist for indexes 0..NOTES.length-1, i.e. Worlds 1-4 (8 each) plus THE TOP at NL-1.
+// lazy: NL and LEVELS are declared further down the file, so this cannot be a top-level const
+let NOTEG=null;
+function noteGroups(){return NOTEG||(NOTEG=[0,1,2,3].map(w=>({w,a:w*8,b:Math.min(NOTES.length,w*8+8)})).concat([{w:4,a:NL-1,b:NL}]).filter(g=>g.a<g.b&&g.b<=NOTES.length))}
+function noteFrom(i){return lvTitle(i,'  ')} // "2-3  Crumbly" / "THE TOP"
+// Procedural paper. Drawn around the current origin, a little BIGGER than w x h on every side so it also covers the
+// rounded button plate + shadow underneath it when a note is registered as a UI button (see SCREENS.notes).
+// Everything varies off the note's own index, so note 3 always looks like note 3 across sessions.
+const PAPER_MX=14,PAPER_MY=16;
+function paperPath(w,h,R){const L=-w/2-PAPER_MX,Rt=w/2+PAPER_MX,T=-h/2-PAPER_MY,B=h/2+PAPER_MY,nx=6,ny=4,j=()=>R()*6;
+ const p=[];for(let i=0;i<=nx;i++)p.push([L+(Rt-L)*i/nx,T+j()]);
+ for(let i=1;i<=ny;i++)p.push([Rt-j(),T+(B-T)*i/ny]);
+ for(let i=nx-1;i>=0;i--)p.push([L+(Rt-L)*i/nx,B-j()]);
+ for(let i=ny-1;i>=1;i--)p.push([L+j(),T+(B-T)*i/ny]);
+ ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath()}
+const PAPER_TINT=['#f6ead0','#f2e2c0','#fbf2dc','#efe0c2'];
+// blacked out = the page is still there, just burnt/inked over, with a question mark. Returns nothing; callers add text.
+// NOTE: leaves the page's tilt applied to the caller's transform, so whatever is written on it tilts with it.
+// Every caller already wraps this in its own ctx.save()/ctx.restore().
+function paperSeed(seed){return mulberry((seed|0)*2654435761+11)}
+function drawPaper(w,h,seed,dark){const R=paperSeed(seed);const rot=(R()-0.5)*0.055;
+ ctx.rotate(rot);
+ ctx.save();ctx.translate(3,5);ctx.fillStyle='rgba(0,0,0,.34)';paperPath(w,h,paperSeed(seed));ctx.fill();ctx.restore();
+ paperPath(w,h,paperSeed(seed));ctx.fillStyle=dark?'#17131f':PAPER_TINT[(seed|0)%4];ctx.fill();
+ ctx.save();ctx.clip();
+ const hw=w/2,hh=h/2;
+ if(dark){ctx.fillStyle='rgba(255,255,255,.05)';for(let i=0;i<3;i++)ctx.fillRect(-hw-14,-hh+10+i*(h/3),w+28,2)}
+ else{const rv=(seed|0)%3;
+  if(rv==0){ctx.strokeStyle='rgba(120,150,180,.35)';ctx.lineWidth=1;for(let y=-hh+22;y<hh;y+=15){ctx.beginPath();ctx.moveTo(-hw-10,y);ctx.lineTo(hw+10,y);ctx.stroke()}}
+  else if(rv==1){ctx.fillStyle='rgba(120,150,180,.3)';for(let y=-hh+14;y<hh;y+=13)for(let x=-hw-6;x<hw+10;x+=13)ctx.fillRect(x,y,1.5,1.5)}
+  else{ctx.strokeStyle='rgba(200,90,90,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-hw+10,-hh-14);ctx.lineTo(-hw+10,hh+14);ctx.stroke()}
+  ctx.fillStyle='rgba(150,120,60,.10)';for(let i=0;i<3;i++){const bx=(R()-0.5)*w,by=(R()-0.5)*h,br=4+R()*9;ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.fill()}}
+ ctx.restore();
+ // fastener / wear, one per note
+ const fv=(seed|0)%4;
+ if(fv==0){ctx.fillStyle='rgba(226,214,180,.72)';ctx.save();ctx.rotate(-0.5);ctx.fillRect(-hw-6,-hh-6,34,11);ctx.restore();
+  ctx.save();ctx.rotate(0.5);ctx.fillRect(hw-22,-hh-16,34,11);ctx.restore()}
+ else if(fv==1){ctx.fillStyle='rgba(0,0,0,.45)';for(let k=0;k<5;k++){ctx.beginPath();ctx.arc(-hw+12+k*(w-24)/4,-hh-4,3.2,0,7);ctx.fill()}}
+ else if(fv==2){ctx.fillStyle='#c0402f';ctx.beginPath();ctx.arc(0,-hh-4,6,0,7);ctx.fill();ctx.fillStyle='rgba(255,255,255,.55)';ctx.beginPath();ctx.arc(-1.8,-hh-6,2,0,7);ctx.fill()}
+ else{ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.moveTo(hw+6,hh-8);ctx.lineTo(hw+6,hh+10);ctx.lineTo(hw-12,hh+10);ctx.closePath();ctx.fill();
+  ctx.fillStyle=dark?'#241e30':'#e4d3aa';ctx.beginPath();ctx.moveTo(hw+6,hh-8);ctx.lineTo(hw+6,hh+10);ctx.lineTo(hw-12,hh+10);ctx.closePath();ctx.fill()}
+ return rot}
+// In-level note card. NON-BLOCKING: the level keeps running underneath, so it lives in the thin band under the HUD
+// (and under the tip banner when one is up) and never reaches the middle of the screen where the player is.
+const NOTE_HOLD=6.2,NOTE_GRACE=0.4; // GRACE: the very jump/step that collected it must not also dismiss it
+function noteCardGeom(){const ns=G.noteShow;if(!ns)return null;const age=gtime-ns.t0;
+ const lines=wrapText(NOTES[ns.i],470,16).slice(0,3),h=32+lines.length*21;
+ const hg=(G.tipT>0.3)?hintGeom():null,y=hg?hg.y+hg.h+8:58;
+ const k=age<0.28?ease(age/0.28):age>NOTE_HOLD?1-(age-NOTE_HOLD)/0.45:1;return{lines,w:520,h,y,k}}
+function drawNoteCard(){const ns=G.noteShow;if(!ns)return;const age=gtime-ns.t0;if(age>NOTE_HOLD+0.45){G.noteShow=null;return}
+ const g=noteCardGeom();if(!g)return;const{lines,w,h,y,k}=g;
+ ctx.save();ctx.globalAlpha=clamp(k,0,1);ctx.translate(VW/2,y+h/2-(1-k)*14);
+ drawPaper(w-2*PAPER_MX,h-2*PAPER_MY,ns.i,false);
+ txt(noteFrom(ns.i),-w/2+14,-h/2+12,13,'#9a7f4a','left',false);
+ txt('tap anywhere to close',w/2-14,-h/2+12,12,'rgba(120,100,60,.8)','right',false);
+ lines.forEach((l,i)=>txt(l,0,-h/2+34+i*21,16,'#33291a','center',false));
  ctx.restore();ctx.globalAlpha=1}
 const ACH=[
  {id:'first',n:'First Hop',d:'Beat your first level'},
@@ -4162,11 +4211,13 @@ SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
   if(id.startsWith('lv')){const i=+id.slice(2);if(this.hard)this.lastH=this.tab;else this.last=this.tab;startLevel(i,this.mode())}}};
 
 SCREENS.play={enter(){},
- update(dt){if(G.noteShow&&mouse.click&&(noteXHit(mouse.x,mouse.y)||noteBodyHit(mouse.x,mouse.y))){G.noteShow=null;mouse.click=false}
+ update(dt){
+  // A note never pauses the level and never consumes an input. Any fresh key, click or finger makes it go away, and
+  // that same input still moves/jumps as normal (touchstart clears it directly - see the TOUCH section).
+  // NEWKEY, not ANY: a direction key the player was ALREADY holding when they walked into the note must not count.
+  if(G.noteShow&&gtime-G.noteShow.t0>NOTE_GRACE&&(pressed.NEWKEY||mouse.click))G.noteShow=null;
   if(pressed.ESC&&!G.won){go('pause');return}if(pressed.RST&&!G.won){restartLevel();return}
   if(mouse.click&&!G.won&&Math.hypot(mouse.x-RB.x,mouse.y-RB.y)<RB.r*1.7){mouse.click=false;restartLevel();return}
-  // an open note holds the level: the timer, the player and every hazard freeze until it's tapped/swiped away
-  if(G.noteShow&&!G.won){G.acc=0;updParts(G.parts,dt);return}
   if(mouse.click&&!G.won&&cardPillHit(mouse.x,mouse.y)){mouse.click=false;go('cards',{from:'play'});return}
   // Power Cards: countdown + keyboard activation (digit keys 1-5 = shield/slowmo/xjump/magnet/goldrush). Story Mode only — cardsAllowed()/useCard() re-check G.mode themselves.
   if(G.mode=='story'&&G.cardActive){G.cardT-=dt;if(G.cardT<=0){if(G.cardActive=='goldrush'&&G.L)G.L.grCoins=[];G.cardActive=null;G.cardT=0}}
@@ -4967,16 +5018,60 @@ SCREENS.trophies={enter(){},update(){uiNav(this);if(pressed.ESC)go('menu')},onBt
     else r.ln.forEach((l,k)=>txt(l,x+392,cy-(r.ln.length-1)*8+k*16,14,dc,'right',false));
     y+=r.h+gap})}}};
 
-SCREENS.notes={enter(){this.pg=0},update(){uiNav(this);if(pressed.ESC)go('trophies')},
- onBtn(id){if(id=='back')return go('trophies');if(id=='prev')this.pg=Math.max(0,this.pg-1);if(id=='next')this.pg=Math.min(Math.ceil(NOTES.length/6)-1,this.pg+1)},
- draw(){drawBG(WORLDS[1],gtime*20,0,gtime);backBtn();header('NOTES  '+notesFound()+'/'+NOTES.length);const np=Math.ceil(NOTES.length/6);
-  // dark scrim behind the whole list + opaque row fills: an unfound row has to stay readable over the pale Saw Mill sky
-  ctx.fillStyle='rgba(10,8,22,.82)';rr(VW/2-372,80,744,396,16);ctx.fill();
-  for(let j=0;j<6;j++){const i=this.pg*6+j;if(i>=NOTES.length)break;const got=!!S.notes[i],y=92+j*64;ctx.fillStyle=got?'#fff3cf':'#3b3654';rr(VW/2-360,y,720,56,10);ctx.fill();
-   txt('#'+(i+1),VW/2-340,y+28,16,got?'#a08a55':'#cfcae3','left',false);
-   if(got){const ln=wrapText(NOTES[i],610,15);ln.slice(0,2).forEach((l,k)=>txt(l,VW/2-290,y+(ln.length>1?17+k*21:28),15,'#3a3020','left',false))}else txt('Not found yet. Hidden somewhere in level '+lvLabel(i)+'.',VW/2-290,y+28,15,'#cfcae3','left',false)}
-  if(this.pg>0)button('prev',VW/2-230,VH-54,140,40,'< Prev',{fs:18});if(this.pg<np-1)button('next',VW/2+90,VH-54,140,40,'Next >',{fs:18});
-  txt((this.pg+1)+' / '+np,VW/2,VH-34,16,'#fff')}};
+// ================= NOTES GALLERY =================
+// One tab per world (that IS the paging - never more than 8 notes on screen, every one a full-size tap target).
+// Each note is a physical page: found ones are readable paper, missing ones are the same page blacked out with a "?".
+// Tapping a found note opens it big; tapping a missing one just says you have not collected it yet.
+const NOTE_CELL_W=192,NOTE_CELL_H=142,NOTE_STEP_X=228,NOTE_STEP_Y=176;
+function noteCellRect(g,j){const n=g.b-g.a,cols=Math.min(4,n),rows=Math.ceil(n/cols);
+ const x0=Math.round((VW-((cols-1)*NOTE_STEP_X+NOTE_CELL_W))/2),y0=rows>1?154:236;
+ return{x:x0+(j%cols)*NOTE_STEP_X,y:y0+Math.floor(j/cols)*NOTE_STEP_Y,w:NOTE_CELL_W,h:NOTE_CELL_H}}
+SCREENS.notes={enter(){this.tab=0;this.open=null;this.mt=0;this.mi=0},
+ update(dt){
+  // the enlarged page swallows nothing and registers no buttons: any tap or key closes it and that is all it does
+  if(this.open!=null){if(mouse.click||pressed.NEWKEY){this.open=null;mouse.click=false}return}
+  uiNav(this);if(SCR!==this)return;if(this.mt>0)this.mt-=dt;
+  if(pressed.ESC)return go('trophies');
+  const s=UI.selId||'';if(UI.kb&&s.startsWith('wt'))this.tab=+s.slice(2)},
+ onBtn(id){if(id=='back')return go('trophies');
+  if(id.startsWith('wt')){this.tab=+id.slice(2);return}
+  if(id.startsWith('n')){const i=+id.slice(1);if(S.notes[i]){this.open=i;sfx('check')}else{this.mi=i;this.mt=2.4;sfx('no')}}},
+ draw(){const G0=noteGroups(),g=G0[Math.min(this.tab,G0.length-1)]||G0[0];
+  drawBG(WORLDS[g.w],gtime*20,0,gtime);
+  // the pages sit on a dark board so pale paper reads against Green Fields AND near-black The Top
+  ctx.fillStyle='rgba(10,8,22,.62)';ctx.fillRect(0,0,VW,VH);
+  // The enlarged page registers NO buttons on purpose: with nothing in UI.list there is nothing behind it a stray
+  // tap could hit, which is what lets "tap anywhere to close" be literally anywhere.
+  if(this.open!=null){const i=this.open;ctx.fillStyle='rgba(8,6,18,.72)';ctx.fillRect(0,0,VW,VH);
+   ctx.save();ctx.translate(VW/2,VH/2+6);drawPaper(556,258,i,false);
+   txt(lvTitle(i,'  '),0,-104,20,'#8a6f3a',undefined,false);
+   ctx.strokeStyle='rgba(140,115,60,.4)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-240,-86);ctx.lineTo(240,-86);ctx.stroke();
+   const ln=wrapText(NOTES[i],470,22).slice(0,5);ln.forEach((l,k)=>txt(l,0,-52+k*30+(5-ln.length)*8,22,'#2e2415',undefined,false));
+   txt('Note '+(i+1)+' of '+NOTES.length,0,108,14,'#9a7f4a',undefined,false);ctx.restore();
+   txt('Tap anywhere to close',VW/2,VH-26,15,'#d8d5ea',undefined,false);return}
+  backBtn();header('NOTES  '+notesFound()+'/'+NOTES.length,44);
+  txt('Left by whoever climbed this tower first. One hidden in every story level.',VW/2,78,15,'#d8d5ea',undefined,false);
+  const nt=G0.length,TGAP=8,tw=Math.min(150,Math.floor((VW-28-(nt-1)*TGAP)/nt)),tsp=tw+TGAP,tx0=Math.round(VW/2-(nt*tw+(nt-1)*TGAP)/2);
+  G0.forEach((q,k)=>{let f=0;for(let i=q.a;i<q.b;i++)if(S.notes[i])f++;
+   const lab=q.w<4?(q.w+1)+'  '+WORLDS[q.w].n:'★  The Top',lfs=fitFont(lab,tw-10,15,14);
+   button('wt'+k,tx0+k*tsp,96,tw,44,'',{fs:15,bg:this.tab==k?WORLDS[q.w].top:'#ffffff',col:WORLDS[q.w].top,
+    draw:()=>{txt(lab,0,-7,lfs,'#1d1a2e','center',false);txt(f+'/'+(q.b-q.a),0,13,14,f>=q.b-q.a?'#1a7a45':'#4b4860','center',false)}})});
+  for(let j=0;j<g.b-g.a;j++){const i=g.a+j,r=noteCellRect(g,j),got=!!S.notes[i];
+   button('n'+i,r.x,r.y,r.w,r.h,'',{bg:'#ffffff',col:'#ffffff',draw:(w,h,sel)=>{
+    drawPaper(w,h,i,!got);
+    if(sel){paperPath(w,h,paperSeed(i));ctx.strokeStyle='#ffd45e';ctx.lineWidth=3;ctx.stroke()}
+    const hw=w/2,hh=h/2;
+    txt(lvTitle(i,'  '),0,-hh+13,fitFont(lvTitle(i,'  '),w-16,13,10),got?'#9a7f4a':'#8b86a6','center',false);
+    ctx.strokeStyle=got?'rgba(140,115,60,.35)':'rgba(255,255,255,.14)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-hw+12,-hh+24);ctx.lineTo(hw-12,-hh+24);ctx.stroke();
+    if(got){const ln=wrapText(NOTES[i],w-30,12).slice(0,5);ln.forEach((l,k)=>txt(l,0,-hh+42+k*15,12,'#33291a','center',false))}
+    else{txt('?',0,10,54,'rgba(255,255,255,.3)','center',false)}}})}
+  if(this.mt>0){const k=Math.min(1,this.mt*4),w=392,h=96,x=VW/2-w/2,y=VH/2-h/2;
+   ctx.save();ctx.globalAlpha=clamp(k,0,1);
+   ctx.fillStyle='rgba(0,0,0,.45)';rr(x+4,y+6,w,h,14);ctx.fill();ctx.fillStyle='#2a2440';rr(x,y,w,h,14);ctx.fill();
+   ctx.strokeStyle='#ffd45e';ctx.lineWidth=2;rr(x,y,w,h,14);ctx.stroke();
+   txt('You have not collected this one yet',VW/2,y+34,17,'#ffd45e',undefined,false);
+   txt('Hidden in '+lvTitle(this.mi,'  '),VW/2,y+62,15,'#d8d5ea',undefined,false);ctx.restore()}
+  txt('Tap a page to read it.  Every note names the level it came from.',VW/2,VH-22,15,'#d8d5ea',undefined,false)}};
 
 SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(this.conf&&gtime-this.confT>3)this.conf=0;if(pressed.ESC)go('menu')},
  draw(){drawBG(WORLDS[0],gtime*20,0,gtime);backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
