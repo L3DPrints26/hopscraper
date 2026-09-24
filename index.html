@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260923-222455'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260924-172334'; // change this on every upload so open copies show "Update ready"
 // Where the Settings > Send Feedback button goes. Leave FEEDBACK_URL empty to email FEEDBACK_EMAIL instead;
 // paste a Google Form link into FEEDBACK_URL and it wins. Either way the build number rides along (see openFeedback).
 const FEEDBACK_URL='https://docs.google.com/forms/d/e/1FAIpQLSec8ZqpP9d7S8UD6wIwxoaDgJojhNFq6IkY529GwPfrzO_h4A/viewform';  // blank this to fall back to the mailto
@@ -68,11 +68,15 @@ const SKEY='hopscraper_save_v1';
 // "Reduce Flashing & Motion" setting defaults to the system's reduced-motion preference (see RM())
 function prefersRM(){try{return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?1:0}catch(e){return 0}}
 function RM(){try{return !!S.set.rm}catch(e){return false}}
-function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,gfx:'auto',rm:prefersRM()},
+function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,ui:1,vmas:1,vmus:0.8,vsfx:0.8,vui:0.8,shake:1,gfx:'auto',rm:prefersRM()},
+ // AUDIO MIX: vmas/vmus/vsfx/vui are 0..1 slider positions (SCREENS.settings' Audio section -> applyVol). music/sfx/ui
+ // stay as the on-off truth every other call site already reads (`if(!S.set.music)`, sfx()'s gate, the M key) and are
+ // kept in sync with their slider: 0 = off, dragging up from 0 turns the category back on. Old saves pick the defaults
+ // up through parseSave's per-key Object.assign on `set`, so a pre-slider save just lands on the new default mix.
  // ver = save format version. tixDay/dtix/clubDay are day numbers (todaySeed-style) and clubMonth a month number, so a
  // clock set backwards grants nothing. clubExp = Club expiry (ms, 0 = no expiry known). txDone = App Store transactions
  // already delivered, iap = one-time products owned (both survive Reset Save, see resetSave()).
- // pw = Premium Wheel pity counter (spins since the last jackpot, see PW_PITY/pwPick). tixBuyDay/tixBuy = today's
+ // pw = Premium Wheel jackpot-guarantee counter (spins since the last jackpot, see PW_PITY). tixBuyDay/tixBuy = today's
  // coins-for-tickets exchange count (see buyTix); tixBuyDay is a day number too, so the clock rule above covers it.
  // spun = has the player ever spent a free Prize Wheel ticket. The paid Premium Wheel stays hidden until then.
  // cardTip = the one-time "Power Card ready" explainer has been shown (see startLevel)
@@ -105,6 +109,10 @@ function parseSave(r){const o=JSON.parse(r);if(!isObj(o))throw new Error('bad sa
  if(typeof s.clubSpinWeek!='number'||!isFinite(s.clubSpinWeek))s.clubSpinWeek=-1;if(typeof s.clubMonth!='number'||!isFinite(s.clubMonth))s.clubMonth=-1;
  s.tixDay=dayNum(s.tixDay);s.dtix=dayNum(s.dtix);s.clubDay=dayNum(s.clubDay);s.tixBuyDay=dayNum(s.tixBuyDay);s.ver=2;
  delete s.set.touch; // dropped: the Computer/Mobile switch is gone and the layout is always mobile (see touchOn)
+ // audio sliders: anything that isn't a real 0..1 number (missing on a pre-slider save, or hand-edited) falls back to
+ // the default, then the on-off flag is re-derived so a muted category can never show a raised slider
+ {const ds=defSave().set;for(const k of['vmas','vmus','vsfx','vui'])s.set[k]=(typeof s.set[k]=='number'&&isFinite(s.set[k]))?clamp(s.set[k],0,1):ds[k];
+  for(const[v,f]of[['vmus','music'],['vsfx','sfx'],['vui','ui']]){if(!s.set[v])s.set[f]=0;s.set[f]=s.set[f]?1:0}}
  for(const k of['shield','slowmo','xjump','magnet','goldrush'])if(typeof s.cards[k]!='number'||!isFinite(s.cards[k])||s.cards[k]<0)s.cards[k]=0;
  return s}
 // STORE_OK: localStorage works at all. SAVE_LAST: the last good save string (becomes SKEY+'_bak' on the next write).
@@ -139,6 +147,10 @@ function dailyTix(){const d=todaySeed(),last=dayNum(S.tixDay);if(d<=last)return;
 // coins -> Prize Wheel tickets. Coins are otherwise a shop-only currency, so this gives late-game coins somewhere to go.
 // Capped per day (TIX_BUY_MAX) on the same forward-only day number as dailyTix, so a clock set back never refills it.
 const TIX_COST=500,TIX_BUY_MAX=3;
+// hidden notes -> Prize Wheel tickets. One ticket every NOTE_TIX notes found (owner's call: was 3, now 4). With 33
+// notes in the game that is 8 tickets over a whole playthrough instead of 11. Every place that grants or DESCRIBES
+// this rate reads the constant, so the wheel screen's "Get tickets" list can never drift from what the code does.
+const NOTE_TIX=4;
 function tixBuyUsed(){return todaySeed()>dayNum(S.tixBuyDay)?0:Math.max(0,S.tixBuy|0)}
 function tixBuyLeft(){return Math.max(0,TIX_BUY_MAX-tixBuyUsed())}
 function canBuyTix(){return tixBuyLeft()>0&&(!!S.dev||S.coins>=TIX_COST)}
@@ -153,7 +165,7 @@ function chkUpd(){if(UPD||!/^https?:$/.test(location.protocol)||!window.fetch)re
 if(/^https?:$/.test(location.protocol)){setInterval(chkUpd,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)chkUpd()})}
 
 // ================= AUDIO =================
-let AC=null,master=null,musGain=null,sfxGain=null;
+let AC=null,master=null,musGain=null,sfxGain=null,uiGain=null;
 const mus={song:-1,want:null,step:0,next:0,timer:null};
 let verb=null;
 function impulse(sec,decay){const n=Math.floor(AC.sampleRate*sec),b=AC.createBuffer(2,n,AC.sampleRate);
@@ -162,12 +174,18 @@ function audioInit(){if(AC){if(AC.state!=='running'&&!document.hidden)AC.resume(
  const comp=AC.createDynamicsCompressor();comp.threshold.value=-16;comp.knee.value=26;comp.ratio.value=4;comp.attack.value=0.006;comp.release.value=0.22;
  master=AC.createGain();master.gain.value=0.7;master.connect(comp);comp.connect(AC.destination);
  verb=AC.createConvolver();verb.buffer=impulse(1.5,3.2);const vg=AC.createGain();vg.gain.value=0.5;verb.connect(vg);vg.connect(master);
- const mf=AC.createBiquadFilter();mf.type='lowpass';mf.frequency.value=2000;mf.Q.value=0.3;
+ // music was being run through a 2kHz lowpass, which took every harmonic off the lead and made the bed read as distant
+ // even before its bus gain was raised. 3.4k keeps it soft-edged but present against the effects.
+ const mf=AC.createBiquadFilter();mf.type='lowpass';mf.frequency.value=3400;mf.Q.value=0.3;
  musGain=AC.createGain();musGain.connect(mf);mf.connect(master);
  const ms=AC.createGain();ms.gain.value=0.22;musGain.connect(ms);ms.connect(verb);
- const sf=AC.createBiquadFilter();sf.type='lowpass';sf.frequency.value=7000;sf.Q.value=0.2;
+ // effects go the other way: 7k -> 5.6k takes the glassy top off the pickup bells, which is most of what made them
+ // jump out of the mix at the same nominal gain as everything else
+ const sf=AC.createBiquadFilter();sf.type='lowpass';sf.frequency.value=5600;sf.Q.value=0.2;
  sfxGain=AC.createGain();sfxGain.connect(sf);sf.connect(master);
  const ss=AC.createGain();ss.gain.value=0.16;sfxGain.connect(ss);ss.connect(verb);
+ // UI bus: menu clicks/ticks get their own fader and stay DRY (no reverb send) so they read as interface, not as world
+ uiGain=AC.createGain();uiGain.connect(sf);
  applyVol();if(mus.want!=null)musicPlay(mus.want)}catch(e){AC=null}}
 // suspend audio while the page is hidden, resume when it comes back
 document.addEventListener('visibilitychange',()=>{if(!AC)return;try{(document.hidden?AC.suspend():AC.resume()).catch(()=>{})}catch(e){}});
@@ -190,7 +208,16 @@ function puff(o){if(!AC)return;const t=AC.currentTime+(o.d||0),len=o.len||0.1;
  if(o.fc2)f.frequency.exponentialRampToValueAtTime(Math.max(80,o.fc2),t+len);
  const g=AC.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(o.v||0.1,t+0.008);g.gain.exponentialRampToValueAtTime(0.0006,t+len);
  s.connect(f);f.connect(g);g.connect(o.dest||sfxGain);s.start(t)}
-function applyVol(){if(!AC)return;musGain.gain.value=S.set.music?0.16:0;sfxGain.gain.value=S.set.sfx?0.6:0}
+// one slider position, clamped, with a fallback for a save that predates it
+function vnum(k,d){const v=S.set[k];return (typeof v=='number'&&isFinite(v))?clamp(v,0,1):d}
+// Bus trims (the numbers a slider at 1.0 reaches). The old mix was music 0.16 / sfx 0.60 - nearly a 4x gap before any
+// per-sound gain, which is exactly the "collecting sounds are much louder than the music" the owner heard. The bed now
+// sits ABOVE the effects bus and the effects themselves were pulled down individually on top of that (see SFX).
+const VMUS=0.52,VSFX=0.42,VUI=0.34;
+function applyVol(){if(!AC)return;const m=vnum('vmas',1);
+ musGain.gain.value=(S.set.music?1:0)*vnum('vmus',0.8)*m*VMUS;
+ sfxGain.gain.value=(S.set.sfx?1:0)*vnum('vsfx',0.8)*m*VSFX;
+ if(uiGain)uiGain.gain.value=(S.set.ui?1:0)*vnum('vui',0.8)*m*VUI}
 function tone(f,d,type,v,slide,delay,dest,det){if(!AC)return;const t=AC.currentTime+(delay||0),vol=v||0.2;
  const o=AC.createOscillator(),g=AC.createGain();o.type=type||'triangle';if(det)o.detune.value=det;
  o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+d*0.9);
@@ -199,30 +226,39 @@ function tone(f,d,type,v,slide,delay,dest,det){if(!AC)return;const t=AC.currentT
 function chord(fs,d,type,v,delay,dest){fs.forEach((f,i)=>tone(f,d,type,v,0,(delay||0)+i*0.004,dest,i?7:-7))}
 function noise(d,v,delay,hp,dest){if(!AC)return;const t=AC.currentTime+(delay||0);const len=Math.max(1,Math.floor(AC.sampleRate*d));const b=AC.createBuffer(1,len,AC.sampleRate);const a=b.getChannelData(0);for(let i=0;i<len;i++)a[i]=(Math.random()*2-1)*(1-i/len);const s=AC.createBufferSource();s.buffer=b;const f=AC.createBiquadFilter();f.type='highpass';f.frequency.value=hp||800;const g=AC.createGain();g.gain.value=v||0.2;s.connect(f);f.connect(g);g.connect(dest||sfxGain);s.start(t);}
 // bell = two sines an octave+fifth apart, fast decay (clean, not buzzy)
-function bell(f,len,v,d){voice({f,len,v,w:'sine',d,fc:6000});voice({f:f*2,len:len*0.6,v:v*0.35,w:'sine',d,fc:8000});voice({f:f*3,len:len*0.3,v:v*0.12,w:'sine',d})}
+function bell(f,len,v,d,dest){voice({f,len,v,w:'sine',d,fc:6000,dest});voice({f:f*2,len:len*0.6,v:v*0.35,w:'sine',d,fc:8000,dest});voice({f:f*3,len:len*0.3,v:v*0.12,w:'sine',d,dest})}
+// MIX NOTES. Three tiers, loudest first, so nothing here has to be guessed at again:
+//   RARE PAYOFF (win/ach/star/boom/die) is allowed to sit on top of the music - it happens once.
+//   CONSTANT (jump/air/land/wall/bounce) is trimmed hardest: it fires several times a second and is what makes a mix
+//   tiring. It is low-frequency, so the same number here is much quieter to the ear than it is on a bell.
+//   PICKUPS (gem/coin/key/check) are bright bells at 1.5-2.6kHz, right where hearing peaks - the actual reason they read
+//   as "much louder" at nominally the same gain as everything else. Roughly halved, on top of the bus cut.
+// UI sounds (click/move/tick/no/buy) route to uiGain so menu feedback survives turning game sound down.
 const SFX={
- jump(){voice({f:180,f2:420,len:0.17,v:0.2,w:'sine',pt:0.09,fc:2200});puff({fc:900,fc2:2600,len:0.1,v:0.035,q:0.8})},
- air(){voice({f:300,f2:640,len:0.14,v:0.15,w:'sine',pt:0.08,fc:2600});puff({fc:1600,fc2:4200,len:0.1,v:0.04,q:0.7})},
- wall(){voice({f:240,f2:430,len:0.13,v:0.14,w:'triangle',pt:0.07,fc:1800});puff({fc:1100,len:0.07,v:0.05})},
- land(){voice({f:150,f2:70,len:0.12,v:0.17,w:'sine',pt:0.07});puff({fc:500,fc2:200,len:0.09,v:0.05,q:0.6})},
- die(){voice({f:380,f2:70,len:0.55,v:0.2,w:'sine',pt:0.45,fc:1800,fc2:400});voice({f:190,f2:45,len:0.6,v:0.1,w:'triangle',pt:0.5,fc:900});puff({fc:800,fc2:150,len:0.3,v:0.07,q:0.5})},
- gem(){bell(1568,0.35,0.1);bell(2349,0.28,0.05,0.045)},
- key(){[784,1047,1319].forEach((f,i)=>bell(f,0.45,0.09,i*0.075))},
- check(){bell(880,0.4,0.1);bell(1319,0.5,0.07,0.1)},
- bounce(){voice({f:150,f2:520,len:0.28,v:0.2,w:'sine',pt:0.16,fc:2400});voice({f:300,f2:1040,len:0.2,v:0.05,w:'triangle',pt:0.14,d:0.01})},
- crumble(){puff({fc:700,fc2:220,len:0.25,v:0.07,q:0.5});voice({f:110,f2:60,len:0.2,v:0.07,w:'sine'})},
- click(){voice({f:900,len:0.05,v:0.06,w:'sine',fc:3000});puff({fc:2600,len:0.03,v:0.015})},
- move(){voice({f:620,len:0.035,v:0.035,w:'sine',fc:2400})},
- win(){[523,659,784,1047].forEach((f,i)=>bell(f,0.5,0.1,i*0.085));bell(1568,1.2,0.08,0.36)},
- star(i){const b=1047*Math.pow(1.26,i);bell(b,0.55,0.1);bell(b*1.5,0.4,0.05,0.05)},
- ach(){[659,880,1319].forEach((f,i)=>bell(f,0.6,0.09,i*0.09));bell(1760,1,0.05,0.3)},
- buy(){bell(880,0.3,0.09);bell(1319,0.45,0.07,0.08)},
- coin(){bell(1976,0.16,0.07);bell(2637,0.3,0.06,0.055)},
- tick(){voice({f:1500,len:0.035,v:0.05,w:'triangle',fc:4200})},
- no(){voice({f:220,f2:150,len:0.22,v:0.12,w:'triangle',fc:1200})},
- boom(){voice({f:120,f2:40,len:0.6,v:0.22,w:'sine',pt:0.35});puff({fc:400,fc2:90,len:0.5,v:0.09,q:0.4})}
+ jump(){voice({f:180,f2:420,len:0.17,v:0.21,w:'sine',pt:0.09,fc:2200});puff({fc:900,fc2:2600,len:0.1,v:0.03,q:0.8})},
+ air(){voice({f:300,f2:640,len:0.14,v:0.16,w:'sine',pt:0.08,fc:2600});puff({fc:1600,fc2:4200,len:0.1,v:0.032,q:0.7})},
+ wall(){voice({f:240,f2:430,len:0.13,v:0.15,w:'triangle',pt:0.07,fc:1800});puff({fc:1100,len:0.07,v:0.04})},
+ land(){voice({f:150,f2:70,len:0.12,v:0.16,w:'sine',pt:0.07});puff({fc:500,fc2:200,len:0.09,v:0.04,q:0.6})},
+ die(){voice({f:380,f2:70,len:0.55,v:0.26,w:'sine',pt:0.45,fc:1800,fc2:400});voice({f:190,f2:45,len:0.6,v:0.13,w:'triangle',pt:0.5,fc:900});puff({fc:800,fc2:150,len:0.3,v:0.08,q:0.5})},
+ gem(){bell(1568,0.35,0.055);bell(2349,0.28,0.026,0.045)},
+ key(){[784,1047,1319].forEach((f,i)=>bell(f,0.45,0.055,i*0.075))},
+ check(){bell(880,0.4,0.062);bell(1319,0.5,0.04,0.1)},
+ bounce(){voice({f:150,f2:520,len:0.28,v:0.19,w:'sine',pt:0.16,fc:2400});voice({f:300,f2:1040,len:0.2,v:0.045,w:'triangle',pt:0.14,d:0.01})},
+ crumble(){puff({fc:700,fc2:220,len:0.25,v:0.08,q:0.5});voice({f:110,f2:60,len:0.2,v:0.08,w:'sine'})},
+ click(){voice({f:900,len:0.05,v:0.085,w:'sine',fc:3000,dest:uiGain});puff({fc:2600,len:0.03,v:0.02,dest:uiGain})},
+ move(){voice({f:620,len:0.035,v:0.05,w:'sine',fc:2400,dest:uiGain})},
+ win(){[523,659,784,1047].forEach((f,i)=>bell(f,0.5,0.085,i*0.085));bell(1568,1.2,0.065,0.36)},
+ star(i){const b=1047*Math.pow(1.26,i);bell(b,0.55,0.072);bell(b*1.5,0.4,0.036,0.05)},
+ ach(){[659,880,1319].forEach((f,i)=>bell(f,0.6,0.07,i*0.09));bell(1760,1,0.04,0.3)},
+ buy(){bell(880,0.3,0.1,0,uiGain);bell(1319,0.45,0.075,0.08,uiGain)},
+ coin(){bell(1976,0.16,0.038);bell(2637,0.3,0.03,0.055)},
+ tick(){voice({f:1500,len:0.035,v:0.07,w:'triangle',fc:4200,dest:uiGain})},
+ no(){voice({f:220,f2:150,len:0.22,v:0.15,w:'triangle',fc:1200,dest:uiGain})},
+ boom(){voice({f:120,f2:40,len:0.6,v:0.2,w:'sine',pt:0.35});puff({fc:400,fc2:90,len:0.5,v:0.085,q:0.4})}
 };
-function sfx(n,a){if(!AC||!S.set.sfx)return;try{SFX[n](a)}catch(e){}}
+// which SFX names ride the UI bus, so sfx() gates them on the UI switch instead of the game-sound one
+const UISFX={click:1,move:1,tick:1,no:1,buy:1};
+function sfx(n,a){if(!AC)return;if(UISFX[n]?!S.set.ui:!S.set.sfx)return;try{SFX[n](a)}catch(e){}}
 const SONGS=[
  {bpm:108,root:45,prog:[0,5,3,7],bass:[0,-1,0,-1,7,-1,0,-1,0,-1,0,-1,7,-1,5,-1],lead:[12,-1,16,-1,19,-1,16,-1,24,-1,19,-1,16,-1,-1,-1],hat:1},
  {bpm:126,root:48,prog:[0,5,7,5],bass:[0,-1,0,12,0,-1,7,-1,0,-1,0,12,5,-1,7,-1],lead:[12,16,19,16,24,19,16,12,14,17,21,17,24,21,17,14],hat:1},
@@ -242,11 +278,13 @@ const mtof=m=>440*Math.pow(2,(m-69)/12);
 function musicPlay(i){mus.want=i;if(!AC)return;if(mus.song===i&&mus.timer)return;mus.song=i;mus.step=0;mus.next=AC.currentTime+0.08;if(!mus.timer)mus.timer=setInterval(musTick,25)}
 function musTick(){if(!AC||mus.song<0)return;const s=SONGS[mus.song],st=60/s.bpm/4;if(mus.next<AC.currentTime-5)mus.next=AC.currentTime+0.05;while(mus.next<AC.currentTime){mus.next+=st;mus.step++}
  if(!S.set.music||AC.state!=='running'){while(mus.next<AC.currentTime+0.15){mus.next+=st;mus.step++}return}
- while(mus.next<AC.currentTime+0.15){const i=mus.step%16,tr=s.prog[Math.floor(mus.step/16)%4],dl=mus.next-AC.currentTime;const b=s.bass[i];if(b>=0)voice({f:mtof(s.root+b+tr),len:st*1.7,v:0.26,w:'sine',a:0.03,fc:900,dest:musGain,d:dl});
- const l=s.lead[i];if(l>=0){const f=mtof(s.root+12+l+tr);voice({f,len:st*1.1,v:0.075,w:'triangle',a:0.015,fc:3200,fc2:900,dest:musGain,d:dl});voice({f,len:st*0.9,v:0.03,w:'sine',det:6,a:0.02,dest:musGain,d:dl})}
+ // internal balance: the bed used to be bass 0.26 against a lead of 0.075, so raising the music bus alone would only
+ // have made the boom louder. Bass comes down and the melody comes up, because "the music" a player hears is the tune.
+ while(mus.next<AC.currentTime+0.15){const i=mus.step%16,tr=s.prog[Math.floor(mus.step/16)%4],dl=mus.next-AC.currentTime;const b=s.bass[i];if(b>=0)voice({f:mtof(s.root+b+tr),len:st*1.7,v:0.2,w:'sine',a:0.03,fc:900,dest:musGain,d:dl});
+ const l=s.lead[i];if(l>=0){const f=mtof(s.root+12+l+tr);voice({f,len:st*1.1,v:0.115,w:'triangle',a:0.015,fc:3200,fc2:900,dest:musGain,d:dl});voice({f,len:st*0.9,v:0.045,w:'sine',det:6,a:0.02,dest:musGain,d:dl})}
  if(s.hat&&i%4==2)puff({fc:7000,len:0.02,v:0.018,q:1.2,dest:musGain,d:dl});
  if(s.hat>1&&i%8==4)puff({fc:1800,fc2:700,len:0.06,v:0.05,q:0.7,dest:musGain,d:dl});
- if(s.hat&&i%8==0)voice({f:95,f2:52,len:0.16,v:0.22,w:'sine',pt:0.08,dest:musGain,d:dl});mus.next+=st;mus.step++}}
+ if(s.hat&&i%8==0)voice({f:95,f2:52,len:0.16,v:0.18,w:'sine',pt:0.08,dest:musGain,d:dl});mus.next+=st;mus.step++}}
 
 // ================= INPUT =================
 const keys={},pressed={};
@@ -332,12 +370,15 @@ document.addEventListener('touchstart',e=>{e.preventDefault();lastTouch=performa
    // the Power Cards pill opens the full list (name + what it does + Use) instead of firing a mystery icon
    if(cardPillHit(p.x,p.y)){go('cards',{from:'play'});continue}
    if(p.x<VW*0.45&&!STK){STK={id:t.identifier,bx:p.x,by:p.y,kx:p.x,ky:p.y};tp.set(t.identifier,'stick')}else{tp.set(t.identifier,'jump');pressed.J=true}} // every new jump finger is a fresh press, even if another is down
-  else if(!uiTouch){uiTouch={id:t.identifier,x:p.x,y:p.y,moved:false};mouse.x=p.x;mouse.y=p.y;mouse.moved=true}}
+  // px/py = where the menu finger is RIGHT NOW (x/y stay at the touch-down point, which is what the tap test needs).
+  // Sliders read this rather than PTR so a drag works from the raw touch stream, whatever the browser does with
+  // pointer events once touchstart has been preventDefault()ed.
+  else if(!uiTouch){uiTouch={id:t.identifier,x:p.x,y:p.y,px:p.x,py:p.y,moved:false};mouse.x=p.x;mouse.y=p.y;mouse.moved=true}}
  tsync()},{passive:false});
 document.addEventListener('touchmove',e=>{e.preventDefault();lastTouch=performance.now();if(rotOn())return;tReconcile(e.touches);
  for(const t of e.changedTouches){const p=tpos(t);
   if(STK&&STK.id===t.identifier){STK.kx=p.x;STK.ky=p.y;const dx=p.x-STK.bx,dy=p.y-STK.by,d=Math.hypot(dx,dy);if(d>STR){STK.bx=p.x-dx/d*STR;STK.by=p.y-dy/d*STR}}
-  if(uiTouch&&uiTouch.id===t.identifier&&Math.hypot(p.x-uiTouch.x,p.y-uiTouch.y)>22)uiTouch.moved=true}
+  if(uiTouch&&uiTouch.id===t.identifier){uiTouch.px=p.x;uiTouch.py=p.y;if(Math.hypot(p.x-uiTouch.x,p.y-uiTouch.y)>22)uiTouch.moved=true}}
  tsync()},{passive:false});
 function tEnd(e){e.preventDefault();lastTouch=performance.now();
  for(const t of e.changedTouches){
@@ -422,15 +463,36 @@ const ITEMS=[
  {id:'c_gum',cat:'c',n:'Bubblegum',col:'#ff8fd8',coins:145},
  {id:'c_coal',cat:'c',n:'Coal',col:'#302d2e',coins:145},
  {id:'c_gold',cat:'c',n:'Gold',col:'#ffd700',ach:'perfect'},
- {id:'c_rainbow',cat:'c',n:'Rainbow',col:'rainbow',ach:'top'},
+ // THE TOP's reward. It used to be a colour-CYCLING rainbow; the game now keeps exactly ONE colour-cycling skin
+ // (c_aurora, Premium Wheel only - see the note there), so this became its own thing instead: a night-sky square with
+ // the mountain you just finished climbing painted on it, a summit flag and a slow star twinkle (see SKP.c_rainbow).
+ // The id is deliberately unchanged so every old save that earned it keeps it without a migration.
+ {id:'c_rainbow',cat:'c',n:'Summit',col:'#20306e',ach:'top'},
  {id:'c_void',cat:'c',n:'Void',col:'#1a0630',ach:'nightmare'},
  {id:'c_ice',cat:'c',n:'Frost',col:'#bff4ff',ach:'mountain'},
  {id:'c_paper',cat:'c',n:"Gerald's Paper",col:'#fff3cf',ach:'notes'},
  {id:'c_rocket',cat:'c',n:'Rocket',col:'#ff6b35',ach:'rocket'},
+ // ---- wheel:1 = the free Prize Wheel's Mystery Item pool, and NOTHING else hands these out. The pool is deliberately
+ // deep (see WHEEL's Mystery weight and the ticket maths above dailyTix): a small pool plus a generous ticket rate
+ // empties the wheel in a fortnight and the Prize Wheel stops being worth opening.
  {id:'c_lava',cat:'c',n:'Lava',col:'#ff5a1f',wheel:1},
  {id:'c_neon',cat:'c',n:'Neon',col:'#39ff14',wheel:1},
  {id:'c_galaxy',cat:'c',n:'Galaxy',col:'#6a3de8',wheel:1},
  {id:'c_choco',cat:'c',n:'Choco',col:'#7b4a2e',wheel:1},
+ {id:'c_candy',cat:'c',n:'Candy Cane',col:'#fff2f5',wheel:1},
+ {id:'c_bee',cat:'c',n:'Bumblebee',col:'#ffc93c',wheel:1},
+ {id:'c_ocean',cat:'c',n:'Deep Sea',col:'#0f6fa8',wheel:1},
+ {id:'c_pumpkin',cat:'c',n:'Pumpkin',col:'#ff8c1a',wheel:1},
+ {id:'c_denim',cat:'c',n:'Denim',col:'#3f6fa8',wheel:1},
+ {id:'c_jade',cat:'c',n:'Jade',col:'#2f9e6e',wheel:1},
+ // ---- ordinary shop skins added alongside them, so the coin/gem shelves grew too and the wheel isn't the only
+ // place new cosmetics come from
+ {id:'c_lilac',cat:'c',n:'Lilac',col:'#b69cff',coins:110},
+ {id:'c_sand',cat:'c',n:'Dune',col:'#e0c187',coins:130},
+ {id:'c_ink',cat:'c',n:'Ink',col:'#1f2a44',cost:35},
+ {id:'c_steel',cat:'c',n:'Steel',col:'#8c97a8',ach:'ironman'},
+ {id:'c_sprout',cat:'c',n:'Sprout',col:'#6cc05e',ach:'w1'},
+ {id:'c_cinder',cat:'c',n:'Cinder',col:'#5a3730',ach:'w4'},
  // The neon pair used to be a pack (the retired pack_neon product / gem Neon Pack). The store collapse dropped both, so
  // they became ordinary gem-priced skins rather than vanish - see the store-collapse note above PRODUCTS.
  {id:'c_npink',cat:'c',n:'Hot Pink',col:'#ff2bd6',cost:40},
@@ -459,8 +521,14 @@ const ITEMS=[
  // players who earned the trophy skin can still tell the two apart at a glance.
  {id:'c_aurum',cat:'c',n:'Aurum',col:'#ffe066',pack:'gold'},
  // Premium Wheel legendaries + Hopscraper Club monthly skins (simple recolors for now; iap:1 keeps them hidden in the grid until owned)
- {id:'c_aurora',cat:'c',n:'Aurora',col:'#39d6c8',anim:[165,295,82,58,2.2],premium:1,legend:1,iap:1},
- {id:'c_nova',cat:'c',n:'Supernova',col:'#ff9a2e',anim:[8,52,95,58,3.4],premium:1,legend:1,iap:1},
+ // ---- THE ONE COLOUR-CHANGING SKIN. There used to be five (a rainbow THE TOP reward plus four anim: skins that each
+ // cycled through a slightly different slice of the wheel), which made "colour changing" feel like a recolour rather
+ // than a prize. There is now exactly ONE in the whole game, it sweeps the FULL spectrum, and it is a Premium Wheel
+ // legendary - no trophy, no pack, no shop, no free wheel. Anything else with an anim: key is a bug.
+ {id:'c_aurora',cat:'c',n:'Prismatic',col:'#39d6c8',anim:[0,360,90,62,0.9],premium:1,legend:1,iap:1},
+ // the other legendary is now a FIXED design instead of a second colour-cycler: a white-hot core bleeding into deep
+ // orange with an expanding shock ring (see SKP.c_nova)
+ {id:'c_nova',cat:'c',n:'Supernova',col:'#ff7a1f',premium:1,legend:1,iap:1},
  {id:'c_club1',cat:'c',n:'Club Amethyst',col:'#8a3ffc',premium:1,club:1,iap:1},
  {id:'c_club2',cat:'c',n:'Club Emerald',col:'#12b886',premium:1,club:1,iap:1},
  {id:'c_club3',cat:'c',n:'Club Ruby',col:'#e0245e',premium:1,club:1,iap:1},
@@ -475,10 +543,12 @@ const ITEMS=[
  {id:'t_embercore',cat:'t',n:'Ember Core',col:'#ff6a2e',premium:1,combo:'ember',iap:1},
  {id:'h_stormveil',cat:'h',n:'Storm Veil',col:'#7c8cff',premium:1,combo:'storm',iap:1},
  {id:'t_stormtrail',cat:'t',n:'Storm Trail',col:'#7c8cff',premium:1,combo:'storm',iap:1},
- {id:'c_celestia',cat:'c',n:'Celestia',col:'#6a5cff',anim:[220,280,80,60,2],premium:1,set:'celestia',iap:1},
+ // fixed deep-indigo night sky with its own constellation (SKP.c_celestia) - was a colour-cycler, see c_aurora above
+ {id:'c_celestia',cat:'c',n:'Celestia',col:'#4a3fb0',premium:1,set:'celestia',iap:1},
  {id:'h_celestia',cat:'h',n:'Celestia Halo',col:'#8a7cff',premium:1,set:'celestia',iap:1},
  {id:'t_celestia',cat:'t',n:'Celestia Trail',col:'#8a7cff',premium:1,set:'celestia',iap:1},
- {id:'c_founder',cat:'c',n:"Founder's Gold",col:'#ffd700',anim:[0,360,85,60,1.4],premium:1,set:'founder',iap:1},
+ // the jackpot skin: still gold, but engraved rather than colour-cycling (SKP.c_founder) - see c_aurora above
+ {id:'c_founder',cat:'c',n:"Founder's Gold",col:'#ffd700',premium:1,set:'founder',iap:1},
  {id:'h_founder',cat:'h',n:"Founder's Crown",col:'#ffd700',premium:1,set:'founder',iap:1},
  {id:'t_founder',cat:'t',n:"Founder's Trail",col:'#ffd700',premium:1,set:'founder',iap:1},
  {id:'h_none',cat:'h',n:'No Hat',cost:0},
@@ -498,9 +568,21 @@ const ITEMS=[
  {id:'h_flower',cat:'h',n:'Flower Crown',cost:35},
  {id:'h_wizard',cat:'h',n:'Wizard Hat',cost:45},
  {id:'h_viking',cat:'h',n:'Viking Helmet',wheel:1},
- // h_astro is reachable TWO ways on purpose: the fly5k trophy (free) and the Space Pack. subOf ranks ach above pack, so
- // it lives in Rewards and the pack simply hands it over early - buying a pack never takes a trophy route away.
- {id:'h_astro',cat:'h',n:'Space Helmet',ach:'fly5k'},
+ {id:'h_cactus',cat:'h',n:'Cactus Pot',wheel:1},
+ {id:'h_donut',cat:'h',n:'Donut',wheel:1},
+ {id:'h_boat',cat:'h',n:'Paper Boat',wheel:1},
+ // ---- PACK EXCLUSIVITY. h_astro used to be reachable TWO ways - the fly5k trophy AND the Space Pack - and that was
+ // wrong: anything carried by a pack must have exactly ONE route, the pack itself. The Space Helmet is Space Pack only
+ // now, and the 5,000-jump trophy pays out h_tramp instead. Old saves that already earned the helmet keep it
+ // (migrateItems never takes anything away) and are handed the trampoline hat as well, so nobody ends up worse off.
+ {id:'h_astro',cat:'h',n:'Space Helmet',pack:'space'},
+ // the 5,000-jump trophy's own hat: a real mini trampoline strapped on, its mat squashing on the springs (drawHat)
+ {id:'h_tramp',cat:'h',n:'Trampoline Hat',ach:'fly5k'},
+ {id:'h_bucket',cat:'h',n:'Bucket Hat',coins:180},
+ {id:'h_pirate',cat:'h',n:'Pirate Hat',coins:320},
+ {id:'h_antenna',cat:'h',n:'Antennae',cost:28},
+ {id:'h_mush',cat:'h',n:'Mushroom Cap',ach:'w1'},
+ {id:'h_goggles',cat:'h',n:'Work Goggles',ach:'w2'},
  // the two pack hats (see drawHat/HAT_TOP for their art)
  {id:'h_ogre',cat:'h',n:'Ogre Horns',pack:'monster'},
  {id:'h_gild',cat:'h',n:'Gilded Crown',pack:'gold'},
@@ -518,6 +600,13 @@ const ITEMS=[
  {id:'t_notes',cat:'t',n:'Music Notes',cost:35},
  {id:'t_bolt',cat:'t',n:'Lightning',ach:'speedy'},
  {id:'t_ghost',cat:'t',n:'Ghosts',wheel:1},
+ {id:'t_smoke',cat:'t',n:'Smoke Puffs',wheel:1},
+ {id:'t_prism',cat:'t',n:'Prism Shards',wheel:1},
+ {id:'t_coins',cat:'t',n:'Coin Shower',wheel:1},
+ {id:'t_petal',cat:'t',n:'Cherry Petals',coins:260},
+ {id:'t_pixel',cat:'t',n:'Pixel Cubes',cost:28},
+ {id:'t_ink',cat:'t',n:'Ink Drops',ach:'die500'},
+ {id:'t_gear',cat:'t',n:'Cogs',ach:'flaw'},
  // the two pack trails (see TRX for their particles); t_meteor above is the Space Pack's
  {id:'t_slime',cat:'t',n:'Slime Drip',col:'#7bdc3b',pack:'monster'},
  {id:'t_gild',cat:'t',n:'Gilded Dust',col:'#ffd23f',pack:'gold'},
@@ -668,33 +757,41 @@ function resetSave(){const o=S,n=defSave();
  for(const k of['dbl','club','clubExp','chaos','world6','goldworld','monsterworld','txDone','iap','cards','tixDay','dtix','clubDay','clubMonth','clubSpinWeek','pw','tixBuyDay','tixBuy'])if(o[k]!=null)n[k]=o[k];
  for(const it of ITEMS)if((it.iap||it.pack)&&o.own[it.id])n.own[it.id]=1;
  S=n;fixEq()}
-// prize wheel: order = position on the wheel (clockwise from the top)
-// The 'cards' segment is the FREE route to Power Cards, added when the paid Card Pack was retired in the store collapse
-// (see the note above PRODUCTS): cards had to stay reachable without money, and the free wheel is where the game already
-// hands things out. Weights are relative and every odds display normalizes them, so adding a segment is safe.
-const WHEEL=[{n:'25 coins',k:'c',v:25,w:20,col:'#ffc93c'},{n:'2 gems',k:'g',v:2,w:14,col:'#4dabff'},{n:'50 coins',k:'c',v:50,w:18,col:'#ff8f3c'},{n:'+1 ticket',k:'t',v:1,w:12,col:'#ff8fd8'},
- {n:'100 coins',k:'c',v:100,w:12,col:'#7bdc3b'},{n:'Power Card',l:'CARD',k:'cards',v:1,w:9,col:'#20b8c9'},{n:'5 gems',k:'g',v:5,w:6,col:'#2ee6c5'},{n:'250 coins',k:'c',v:250,w:5,col:'#ff4d6d'},{n:'Mystery Item',k:'s',v:0,w:6,col:'#9b5de5'}];
-// Premium Wheel: 100 gems a spin. Every prize is exclusive to this wheel — no plain currency outcomes.
-// Weights are RELATIVE (they don't add up to 100): every odds display normalizes them, w/total. Odds are shown in-game (App Store rule).
+// ================= THE WHEELS: DATA, GEOMETRY AND ODDS =================
+// THE RULE, and it is the whole design: THE WHEEL IS THE RANDOMISER. Nothing picks a winner and then animates to it.
+// A spin adds a random amount of rotation to wherever the wheel is already resting, it decelerates, and whatever
+// segment is under the pointer when it stops IS the prize (see SCREENS.wheel.startSpin -> wSegAt).
+// Because of that, w is not a hidden weight any more: it is the segment's SHARE OF THE CIRCUMFERENCE. Both lists add
+// up to 100, so w reads straight off as a percentage and a w:22 wedge really is 22% of the wheel. Rare prizes are
+// VISIBLY narrower. The odds stop being something a player has to take on trust and become something they can see.
+// Order in the array = position on the wheel, clockwise from the top, and it is deliberately NOT sorted by size: big
+// and small wedges are interleaved so it looks like a fairground wheel. The odds lists sort a copy (see oddsRows).
+// The 'cards' segment is the FREE route to Power Cards (the paid Card Pack was retired in the store collapse).
+const WHEEL=[{n:'25 coins',k:'c',v:25,w:22,col:'#ffc93c'},{n:'2 gems',k:'g',v:2,w:14,col:'#4dabff'},
+ {n:'50 coins',k:'c',v:50,w:18,col:'#ff8f3c'},{n:'+1 ticket',k:'t',v:1,w:11,col:'#ff8fd8'},
+ {n:'Mystery Item',k:'s',v:0,w:5,col:'#9b5de5'},{n:'100 coins',k:'c',v:100,w:11,col:'#7bdc3b'},
+ {n:'Power Card',l:'CARD',k:'cards',v:1,w:9,col:'#20b8c9'},{n:'250 coins',k:'c',v:250,w:4,col:'#ff4d6d'},
+ {n:'5 gems',k:'g',v:5,w:6,col:'#2ee6c5'}];
+// Premium Wheel: PWHEEL_COST gems a spin. Every prize is exclusive to this wheel - no plain currency outcomes.
+// Same rule: w = share of the circumference, totals 100. Odds are shown in-game (App Store requirement).
 // Duplicate protection: already own everything a prize could give you? It converts to a PW_REFUND-gem refund.
 // Every price/refund the player sees is drawn from these two constants, so changing them here changes the whole UI.
 const PWHEEL_COST=100,PW_REFUND=90;
-const PWHEEL=[{n:'Exclusive Piece',l:'PIECE',k:'pc',w:38,col:'#5a3fa8'},
- {n:'3 Power Cards',l:'CARDS',k:'cards',w:20,col:'#20b8c9'},
- {n:'Hat+Trail Combo',l:'COMBO',k:'cb',w:24,col:'#8a2f8a'},
+const PWHEEL=[{n:'Exclusive Piece',l:'PIECE',k:'pc',w:36,col:'#5a3fa8'},
+ {n:'3 Power Cards',l:'CARDS',k:'cards',w:19,col:'#20b8c9'},
+ {n:'Hat+Trail Combo',l:'COMBO',k:'cb',w:23,col:'#8a2f8a'},
  {n:'Legendary Skin',l:'LEGEND',k:'L',w:12,col:'#c7285c'},
  {n:'Celestia Set',l:'EPIC SET',k:'ES',w:6,col:'#c98a12'},
- {n:'Chaos Pass',l:'CHAOS',k:'chaos',w:3,col:'#2f8f5a'},
+ {n:'Chaos Pass',l:'CHAOS',k:'chaos',w:2,col:'#2f8f5a'},
  {n:"JACKPOT: Founder's Set",l:'JACKPOT',k:'J',v:500,w:2,col:'#1a1030'}];
-// ---- Premium Wheel hard pity. At w:2 of 105 the jackpot averages ~52 spins and the unluckiest players needed 120+,
-// which is not something to sell at PWHEEL_COST gems a spin. S.pw counts spins since the last jackpot: EVERY premium
-// spin counts (paid, Club free spin, dev), and spin number PW_PITY is the jackpot no matter what the roll says.
-// pwPick() is the single entry point for "which segment does this spin land on" - it returns the jackpot index when
-// pity fires, so the wheel physically spins to and stops on the jackpot segment exactly like a natural win.
-// awardPremium() zeroes the counter whenever the jackpot is awarded, so a natural jackpot restarts the count too.
+// ---- Premium Wheel jackpot guarantee, REBUILT so it can never contradict an honest wheel.
+// It used to force spin number PW_PITY onto the jackpot wedge, which is exactly the steering that had to go. The
+// wheel is now never aimed. S.pw counts spins since the last jackpot (paid, Club free spin and dev spins all count),
+// and on spin PW_PITY the Founder's Set is handed over ON TOP OF whatever the wheel genuinely landed on - see
+// awardPremium's pity branch. A player is never given less than the wheel showed them, the spin stays honest, and
+// "Jackpot guaranteed within PW_PITY spins" is still literally true, which is what the App Store notes promise.
 const PW_PITY=40;
 function pwJackIdx(){return PWHEEL.findIndex(s=>s.k=='J')}
-function pwPick(){S.pw=(S.pw|0)+1;return S.pw>=PW_PITY?pwJackIdx():wPick(PWHEEL)}
 // spins remaining until the jackpot is guaranteed (what the panel shows the player)
 function pwLeft(){return Math.max(1,PW_PITY-(S.pw|0))}
 function pieceItems(){return ITEMS.filter(it=>it.pwPiece)}
@@ -703,8 +800,24 @@ function setItems(id){return ITEMS.filter(it=>it.set==id)}
 function legendPool(){return ITEMS.filter(it=>it.legend)}
 function pickUnowned(list){const p=list.filter(it=>!S.own[it.id]);return p.length?p[Math.floor(Math.random()*p.length)]:null}
 function fmtN(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,',')}
-function wPick(segs){let tot=0;for(const s of segs)tot+=s.w;let r=Math.random()*tot;for(let i=0;i<segs.length;i++){r-=segs[i].w;if(r<0)return i}return 0}
-function wSegAt(rot,n){const A=Math.PI*2/n,f=((-rot)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);return Math.floor(f/A)%n}
+// ---- WHEEL GEOMETRY. ONE source of truth for where each wedge starts and ends, shared by the drawing and by "what
+// did the pointer stop on". If those two ever disagreed the displayed odds would be a lie, so they read the same
+// function. Angles are in TURNS (0..1) clockwise from the top, which is where the pointer sits.
+function wTot(segs){let t=0;for(const s of segs)t+=s.w;return t}
+function wArcs(segs){const tot=wTot(segs)||1,out=[];let c=0;for(const s of segs){const f=s.w/tot;out.push({a:c,f});c+=f}return out}
+// The segment under the pointer at this rotation. THIS is what decides a prize - nothing else does.
+function wSegAt(rot,segs){const TAU=Math.PI*2,f=((((-rot)%TAU)+TAU)%TAU)/TAU,ar=wArcs(segs);
+ for(let i=ar.length-1;i>=0;i--)if(f>=ar[i].a)return i;return 0}
+// ---- THE ODDS THE PLAYER IS SHOWN. Ranges, not decimal points, because the owner did not want a wheel that quotes
+// "5.7%" like a slot machine - but every range is derived from the wedge's REAL share and always contains it, so the
+// disclosure can never contradict the geometry. A 22% wedge is shown as "20-25%"; a 2% wedge as "1-5%".
+function oddsPct(s,segs){return s.w/(wTot(segs)||1)*100}
+// the 1e-6 is not decoration: w/tot*100 lands on 14.000000000000002 for a w:14 wedge, and without it Math.ceil
+// widens the band by a whole step ("10-20%" instead of "10-15%") for no reason at all.
+function oddsBand(p){if(p<1)return'under 1%';const lo=Math.max(1,Math.floor((p+1e-6)/5)*5),hi=Math.min(100,Math.ceil((p+1-1e-6)/5)*5);
+ return hi<=lo?Math.round(p)+'%':lo+'-'+hi+'%'}
+// most common first, down to the rarest - ties keep wheel order so the list is stable
+function oddsRows(segs){return segs.map((s,i)=>({s,i,p:oddsPct(s,segs)})).sort((a,b)=>b.p-a.p||a.i-b.i)}
 // grants a set of items as one unit; if every item in it is already owned, refunds gems instead so a spin always pays out something
 function grantSetOrRefund(items,label,extraGems){const p={};
  if(!items.length||items.every(it=>S.own[it.id])){const tot=PW_REFUND+(extraGems||0);S.bank+=tot;p.txt=fmtN(tot)+' gems';const art=label.indexOf('every ')===0?'':'the ';p.sub='Already own '+art+label+' — converted to '+fmtN(tot)+' gems';p.conv=1;return p}
@@ -722,8 +835,14 @@ function awardWheel(i){const s=WHEEL[i],p={seg:i,k:s.k,txt:s.n,sub:''};
    S.cards[t]=(S.cards[t]||0)+1;p.txt='+1 '+CARD_NAMES[t];p.sub='Story Mode power card — activate it in-level'}}
  else{const pool=ITEMS.filter(it=>it.wheel&&!S.own[it.id]);if(pool.length){const it=pool[Math.floor(Math.random()*pool.length)];S.own[it.id]=1;p.item=it.id;p.txt=it.n+(it.cat=='c'?' skin':it.cat=='h'?'':' trail');p.sub='Wheel exclusive'}else{S.coins+=150;p.txt='150 coins';p.sub='You own every wheel item already'}}
  save();return p}
+// A premium spin. i is whatever the wheel LANDED on - never a pre-chosen winner (see the note above PW_PITY).
+// The spin counter moves here and here only, so a spin is counted exactly once whether it was paid, free or dev.
 function awardPremium(i){const s=PWHEEL[i];let p={seg:i,k:s.k,txt:s.n,sub:''};
- if(s.k=='J')S.pw=0; // jackpot awarded (rolled or forced by pity) -> pity count restarts
+ S.pw=(S.pw|0)+1;
+ // the guarantee: this is spin PW_PITY since the last jackpot and the wheel did not land on the jackpot itself, so
+ // the Founder's Set is handed over AS WELL AS the prize the wheel showed. Never instead of it.
+ const pity=S.pw>=PW_PITY&&s.k!='J';
+ if(s.k=='J')S.pw=0; // jackpot landed for real -> the count restarts
  if(s.k=='pc'){const pool=pieceItems(),it=pickUnowned(pool);
   p=Object.assign(p,grantSetOrRefund(it?[it]:[],'every Exclusive Piece'))}
  else if(s.k=='cb'){const groups=comboGroups(),open=groups.filter(g=>!g.every(it=>S.own[it.id]));
@@ -740,8 +859,16 @@ function awardPremium(i){const s=PWHEEL[i];let p={seg:i,k:s.k,txt:s.n,sub:''};
   else{p.txt='+'+got+' '+CARD_NAMES[t];if(short>0){S.bank+=rf;p.txt+=' + '+rf+' gems';p.sub='Card stock full for the other '+short+' — refunded as '+rf+' gems'}else p.sub='Story Mode power card — activate it in-level'}}
  else if(s.k=='chaos'){if(S.chaos){S.bank+=PW_REFUND;p.txt=fmtN(PW_REFUND)+' gems';p.sub='Already unlocked — converted to '+fmtN(PW_REFUND)+' gems';p.conv=1}else{S.chaos=1;p.txt='Chaos Pass';p.sub='Chaos Replay unlocked! Redo any cleared level with a modifier'}}
  else if(s.k=='J'){p.jack=1;const sub=grantSetOrRefund(setItems('founder'),"Founder's Set",s.v);
-  p.txt=sub.conv?sub.txt:(fmtN(s.v)+' gems + '+sub.txt);p.sub=sub.conv?sub.sub:"Gold prismatic skin + hat + trail, exclusive forever";p.conv=sub.conv;p.items=sub.items;
+  p.txt=sub.conv?sub.txt:(fmtN(s.v)+' gems + '+sub.txt);p.sub=sub.conv?sub.sub:"Engraved gold skin + crown + trail, exclusive forever";p.conv=sub.conv;p.items=sub.items;
   if(!sub.conv)S.bank+=s.v}
+ // ---- the PW_PITY guarantee, paid ON TOP. The wheel already gave what it landed on above; this adds the jackpot,
+ // restarts the count, and says plainly why it happened. The reveal card shows the jackpot art (p.seg).
+ if(pity){const j=PWHEEL[pwJackIdx()],sub=grantSetOrRefund(setItems('founder'),"Founder's Set",j.v);
+  S.pw=0;p.jack=1;p.seg=pwJackIdx();p.k='J';
+  if(!sub.conv)S.bank+=j.v;
+  p.txt=(p.txt?p.txt+' + ':'')+(sub.conv?sub.txt:fmtN(j.v)+' gems + '+sub.txt);
+  p.sub='Guaranteed Jackpot at '+PW_PITY+' spins - added to what the wheel landed on';
+  p.items=(p.items||[]).concat(sub.items||[]);p.conv=0}
  save();return p}
 // ---- Hopscraper Club (subscription). The iOS wrapper sets it with grantProduct(club id) / setClub(false) when it lapses.
 // Perks: +10 gems a day (auto on first open), 2x coins (stacks with Coin Doubler to 3x), 1 free Premium spin a week, monthly skin kept forever.
@@ -1010,6 +1137,26 @@ const ACH=[
  {id:'notes',n:'Pen Pal',d:'Find all '+NOTES.length+' hidden notes'},
  {id:'rocket',n:'Rocket Scientist',d:'Clear the Rocket Yard'},
 ];
+// ================= HOW YOU GOT IT =================
+// it.how is the one-line answer to "where does this cosmetic come from", it.howSub the longer one, it.howCol the
+// colour that goes with it. THE RULE: this never disappears once you own the item. Somebody who puts the game down
+// for a year and comes back wants to know how they earned their skins, so the shop's detail panel prints it whether
+// the item is locked, owned or worn - the panel reads these three fields and nothing else.
+// Computed once, here, because this is the first point where ITEMS, ACH and PRODUCTS all exist; deriving it from the
+// item data means the wording can never drift from what the item actually is.
+// The order of the checks is the precedence srcOf uses, and it matters: a trophy or world reward outranks the rest,
+// and pack: outranks the wheels, because a pack item has exactly ONE route and that route is the pack.
+function itemHow(it){
+ if(it.ach){const a=ACH.find(x=>x.id==it.ach);return['Trophy: '+(a?a.n:it.ach),a?a.d:'','#ffd45e']}
+ if(it.world!=null)return['Reward for clearing World '+(it.world+1),'Earned by finishing that whole world','#ffd45e'];
+ if(it.pack)return['Comes with the '+packLabel(it.pack),'Only in that pack - never earned, never won on a wheel','#ffb066'];
+ if(it.wheel)return['Prize Wheel only','Won as a Mystery Item on the free Prize Wheel','#ff8fd8'];
+ if(it.club)return['Hopscraper Club skin','Members unlock one Club skin each month','#ffd45e'];
+ if(it.premium)return['Premium Wheel only',it.set?'Part of a full set - skin, hat and trail together':'Exclusive to the Premium Wheel, never sold','#ffd45e'];
+ if(it.coins)return['Bought for '+fmtN(it.coins)+' coins','Coins come from playing levels','#7bdc3b'];
+ if(it.cost)return['Bought for '+fmtN(it.cost)+' gems','Gems come from finding them and earning new stars','#8dd3ff'];
+ return['Yours from the start','One of the looks every player begins with','#27865b']}
+for(const it of ITEMS){const hw=itemHow(it);it.how=hw[0];it.howSub=hw[1];it.howCol=hw[2]}
 
 // Level format: r = rects [char,x,y,w,h]. Legend: # solid  = one-way  X crumble  D door  ^ v < > spikes
 // ~ lava  l L lasers (take turns)  N no-air-jump zone  B bounce pad. m = movers ['saw',x1,y1,x2,y2,speed] / ['orb',cx,cy,r,count,speed]
@@ -1762,7 +1909,15 @@ function tAt(L,x,y){if(x<0||x>=L.W||y<0)return'#';if(y>=L.H)return'.';return L.g
 function isSolid(L,x,y){if(x<0||x>=L.W||y<0)return true;if(y>=L.H)return false;const c=L.g[y][x];if(c=='#'||c=='c'||c=='C')return true;if(c=='D')return!G.keyGot;if(c=='X')return L.cr[y*L.W+x].s!=2;if(c=='T'||c=='t')return phaseOn(c,L)&&!(L.ghost&&L.ghost.includes(y*L.W+x));return false}
 function solidAt(L,px,py){return isSolid(L,Math.floor(px/TS),Math.floor(py/TS))}
 function laserOn(c,L){const per=L.def.lp||2.4;const ph=((G.t*G.spd)%per)/per;const a=ph<0.5;return c=='l'?a:!a}
-function laserWarn(c,L){const per=L.def.lp||2.4;const ph=((G.t*G.spd)%per)/per;if(c=='l')return ph>0.5&&(1-ph)*per<0.45;return ph<0.5&&(0.5-ph)*per<0.45}
+// How long before a laser fires its emitters start charging. Was 0.45s, which is about one human reaction time and
+// left nothing to actually react WITH. Widening it only lengthens the telegraph - laserOn (the hazard itself) is
+// untouched, so this is strictly more warning, never a timing change.
+const LASER_WARN=0.75;
+// Charge level, 0 = idle, 1 = about to fire, continuous - so drawLaser can RAMP rather than strobe two fixed alphas.
+function laserWarnK(c,L){const per=L.def.lp||2.4,ph=((G.t*G.spd)%per)/per;
+ const left=(c=='l'?(ph>0.5?1-ph:1):(ph<0.5?0.5-ph:1))*per; // seconds until this one turns ON
+ return left>=LASER_WARN?0:clamp(1-left/LASER_WARN,0,1)}
+function laserWarn(c,L){return laserWarnK(c,L)>0}
 function themeOf(){if(!G)return WORLDS[0];if(G.mode=='endless'||G.mode=='daily'){return WORLDS[Math.floor(G.height/60)%5]}return WORLDS[G.L.def.wd]}
 
 function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,keyGot:false,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
@@ -1984,7 +2139,7 @@ function die(){const p=G.player;if(p.dead)return;p.dead=true;G.deaths++;S.st.dea
  burst(p.x+8,p.y+8,colorOf(S.eq.c,gtime),28,'die');burst(p.x+8,p.y+8,'#ffffff',8,'die')}
 function win(){const p=G.player;G.won=true;G.winT=0;p.vx=0;p.vy=0;
  // a missed note (jumped past it) still gets delivered on level clear, so nobody reads the story out of order
- if(G.mode=='story'&&G.L.note&&!G.L.note.got){G.L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();if(nf%3==0){S.tix++;toast('+1 spin ticket','Every 3 notes = 1 spin','info')}save();G.noteShow={i:G.idx,t0:gtime};if(nf>=NOTES.length)grant('notes')}
+ if(G.mode=='story'&&G.L.note&&!G.L.note.got){G.L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();if(nf%NOTE_TIX==0){S.tix++;toast('+1 spin ticket','Every '+NOTE_TIX+' notes = 1 spin','info')}save();G.noteShow={i:G.idx,t0:gtime};if(nf>=NOTES.length)grant('notes')}
  sfx('win');for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,sp=rnd(80,320),l=rnd(0.7,1.3);G.parts.push({x:p.x+8,y:p.y+8,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-150,l,ml:l,c:`hsl(${rnd(0,360)},90%,62%)`,s:rnd(3,6),g:600,sh:'sq'})}}
 
 // ================= ROCKETS + PORTALS =================
@@ -2689,7 +2844,7 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  // Gold Rush bonus coins: picked up exactly like L.coins above (same G.coinsRun counter, same bank-on-clear/lose-on-death
  // rule) - see spawnGoldRush().
  if(L.grCoins)for(const cn of L.grCoins)if(!cn.got&&Math.abs(cn.x-pcx)<16&&Math.abs(cn.y-pcy)<16){cn.got=true;G.coinsRun++;sfx('coin');burst(cn.x,cn.y,'#ffd45e',12);burst(cn.x,cn.y,'#fff6c8',5)}
- if(L.note&&!L.note.got&&Math.abs(L.note.x-pcx)<20&&Math.abs(L.note.y-pcy)<22){L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();if(nf%3==0){S.tix++;toast('+1 spin ticket','Every 3 notes = 1 spin','info')}save();G.noteShow={i:G.idx,t0:gtime};sfx('check');burst(L.note.x,L.note.y,'#fff3cf',16);if(nf>=NOTES.length)grant('notes')}
+ if(L.note&&!L.note.got&&Math.abs(L.note.x-pcx)<20&&Math.abs(L.note.y-pcy)<22){L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();if(nf%NOTE_TIX==0){S.tix++;toast('+1 spin ticket','Every '+NOTE_TIX+' notes = 1 spin','info')}save();G.noteShow={i:G.idx,t0:gtime};sfx('check');burst(L.note.x,L.note.y,'#fff3cf',16);if(nf>=NOTES.length)grant('notes')}
  if(L.key&&!L.key.got&&Math.abs(L.key.x-pcx)<18&&Math.abs(L.key.y-pcy)<18){L.key.got=true;G.keyGot=true;sfx('key');burst(L.key.x,L.key.y,'#ffd45e',24);if(S.set.shake)G.shake=4}
  // Gilded Vale treasure chests (L.chests): open every one in the level and its gold vault doors unlock. Deliberately
  // reuses G.keyGot - the flag the key already sets - so isSolid()/'D' rendering need no new case. Like the key, an
@@ -2744,7 +2899,16 @@ const TRX={
  t_embercore:{dt:0.018,sh:'ci',pc:['#ff6a2e','#ff9a3a','#ffd23f','#c92a10'],mk:(x,y)=>({x:x+rnd(-3,3),y:y+rnd(-3,3),vx:rnd(-10,10),vy:rnd(-20,10),l:0.7,ml:0.7,c:pick(TRX.t_embercore.pc),s:rnd(2.5,4),g:0,sh:'ci',drag:2.2,shrink:1})},
  t_stormtrail:{dt:0.055,sh:'bolt',pc:['#7c8cff','#b18cff','#5ff4ff'],mk:(x,y)=>({x:x+rnd(-7,7),y:y+rnd(-7,7),vx:rnd(-15,15),vy:rnd(-15,15),l:0.26,ml:0.26,c:pick(TRX.t_stormtrail.pc),s:rnd(5,7.5),g:0,sh:'bolt',r:rnd(-0.6,0.6)})},
  t_celestia:{dt:0.05,sh:'star',pc:['#ffd45e','#b18cff','#8a7cff','#ffffff'],mk:(x,y)=>({x:x+rnd(-7,7),y:y+rnd(-7,7),vx:rnd(-16,16),vy:rnd(-30,-6),l:0.55,ml:0.55,c:pick(TRX.t_celestia.pc),s:rnd(3.5,5.5),g:0,sh:'star'})},
- t_founder:{dt:0.04,sh:'spark2',pc:['#ffd700','#fff3b0','#ffb300'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-6,6),vx:rnd(-14,14),vy:rnd(-30,-8),l:0.5,ml:0.5,c:pick(TRX.t_founder.pc),s:rnd(3,4.5),g:0,sh:'spark2',r:rnd(0,6.28)})}};
+ t_founder:{dt:0.04,sh:'spark2',pc:['#ffd700','#fff3b0','#ffb300'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-6,6),vx:rnd(-14,14),vy:rnd(-30,-8),l:0.5,ml:0.5,c:pick(TRX.t_founder.pc),s:rnd(3,4.5),g:0,sh:'spark2',r:rnd(0,6.28)})},
+ // ---- cosmetics-expansion trails. t_smoke/t_prism/t_coins are free Prize Wheel prizes, t_petal/t_pixel are shop
+ // items, t_ink/t_gear are trophies. Each one uses a different particle SHAPE and motion so no two read alike.
+ t_smoke:{dt:0.06,sh:'ci',pc:['#d8d8e2','#b6b6c6','#f2f2f8'],mk:(x,y)=>({x:x+rnd(-5,5),y:y+rnd(-2,6),vx:rnd(-10,10),vy:rnd(-30,-12),l:0.85,ml:0.85,c:pick(TRX.t_smoke.pc),s:rnd(3.5,6.5),g:-8,drag:1.6,sh:'ci'})},
+ t_prism:{dt:0.04,sh:'shard',pc:['#ff5c8a','#ffd45e','#7bdc3b','#5ff4ff','#b18cff'],mk:(x,y)=>({x:x+rnd(-7,7),y:y+rnd(-7,7),vx:rnd(-24,24),vy:rnd(-24,24),l:0.6,ml:0.6,c:pick(TRX.t_prism.pc),s:rnd(2.6,4.2),g:60,sh:'shard',r:rnd(0,6.28),vr:rnd(-5,5)})},
+ t_coins:{dt:0.085,sh:'conf',pc:['#ffd23f','#ffb300','#fff3b0'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-6,2),vx:rnd(-30,30),vy:rnd(-70,-30),l:0.9,ml:0.9,c:pick(TRX.t_coins.pc),s:rnd(3.5,5),g:300,drag:0.8,sh:'conf',r:0,vr:rnd(10,16)*(Math.random()<.5?-1:1)})},
+ t_petal:{dt:0.09,sh:'leaf',pc:['#ffc2d6','#ff8fb3','#fff0f5','#ffa8c4'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-5,5),vx:rnd(-16,16),vy:rnd(-14,14),l:1.3,ml:1.3,c:pick(TRX.t_petal.pc),s:rnd(3,4.2),g:40,drag:1.1,sh:'leaf',r:rnd(0,6.28),sw:rnd(3.5,5.5)})},
+ t_pixel:{dt:0.05,sh:'sq',pc:['#5ff4ff','#ff5c8a','#7bdc3b','#ffd45e','#b18cff'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-6,6),vx:rnd(-12,12),vy:rnd(-12,12),l:0.55,ml:0.55,c:pick(TRX.t_pixel.pc),s:rnd(4,7),g:0,sh:'sq',shrink:1})},
+ t_ink:{dt:0.055,sh:'ci',pc:['#1f2a44','#2f3f6e','#4a5a8e'],mk:(x,y)=>({x:x+rnd(-4,4),y:y+rnd(-2,6),vx:rnd(-8,8),vy:rnd(-10,14),l:0.95,ml:0.95,c:pick(TRX.t_ink.pc),s:rnd(2.5,5),g:260,drag:1.2,sh:'ci',shrink:1})},
+ t_gear:{dt:0.12,sh:'cog',pc:['#b7bfcc','#8c97a8','#e0c187'],mk:(x,y)=>({x:x+rnd(-6,6),y:y+rnd(-5,3),vx:rnd(-22,22),vy:rnd(-45,-18),l:1.1,ml:1.1,c:pick(TRX.t_gear.pc),s:rnd(3.2,4.8),g:150,drag:0.9,sh:'cog',r:rnd(0,6.28),vr:rnd(4,9)*(Math.random()<.5?-1:1)})}};
 // draws one of the newer trail shapes (q.sh) at x,y, size s, age in seconds
 function trShape(q,x,y,s,age){ctx.save();
  switch(q.sh){
@@ -2769,7 +2933,13 @@ function trShape(q,x,y,s,age){ctx.save();
  case'shard':{ctx.translate(x,y);ctx.rotate((q.r||0)+(q.vr||0)*age);ctx.beginPath();ctx.moveTo(0,-s*1.6);ctx.lineTo(s*0.45,0);ctx.lineTo(0,s*1.6);ctx.lineTo(-s*0.45,0);ctx.closePath();ctx.fill();
   const a=ctx.globalAlpha;ctx.globalAlpha=a*0.5;ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-s*1.1);ctx.lineTo(s*0.18,0);ctx.lineTo(0,s*0.3);ctx.lineTo(-s*0.18,0);ctx.closePath();ctx.fill();break}
  case'spark2':{ctx.translate(x,y);ctx.rotate(q.r||0);ctx.beginPath();ctx.moveTo(0,-s*1.7);ctx.quadraticCurveTo(s*0.18,-s*0.18,s*1.7,0);ctx.quadraticCurveTo(s*0.18,s*0.18,0,s*1.7);ctx.quadraticCurveTo(-s*0.18,s*0.18,-s*1.7,0);ctx.quadraticCurveTo(-s*0.18,-s*0.18,0,-s*1.7);ctx.fill();
-  const a=ctx.globalAlpha;ctx.globalAlpha=a*0.7;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,s*0.35,0,7);ctx.fill();break}}
+  const a=ctx.globalAlpha;ctx.globalAlpha=a*0.7;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,s*0.35,0,7);ctx.fill();break}
+ // a six-tooth cog with a darker hub (t_gear). Kept as a normal fill - no composite tricks, those bleed into the level.
+ case'cog':{ctx.translate(x,y);ctx.rotate((q.r||0)+(q.vr||0)*age);ctx.beginPath();
+  for(let i=0;i<12;i++){const a2=i*Math.PI/6,rd=i%2?s*0.7:s*1.05;ctx.lineTo(Math.cos(a2)*rd,Math.sin(a2)*rd)}ctx.closePath();ctx.fill();
+  const a=ctx.globalAlpha;ctx.globalAlpha=a*0.55;ctx.fillStyle='#2a2f3d';ctx.beginPath();ctx.arc(0,0,s*0.34,0,7);ctx.fill();ctx.globalAlpha=a;break}
+ // plain square: drawParts already falls through to a fillRect for these, this case is what the shop preview uses
+ case'sq':ctx.fillRect(x-s/2,y-s/2,s,s);break}
  ctx.restore()}
 
 function ambient(dt){if(!QUAL)return;const th=themeOf(),d=th.deco;G.amb=(G.amb||0)-dt;if(G.amb>0)return;G.amb=0.12;
@@ -2786,7 +2956,7 @@ function updParts(arr,dt){for(let i=arr.length-1;i>=0;i--){const q=arr[i];q.l-=d
 function drawParts(arr,cull){for(const q of arr){if(cull&&(q.x<cull[0]||q.x>cull[2]||q.y<cull[1]||q.y>cull[3]))continue;const a=clamp(q.l/(q.ml||1),0,1);ctx.globalAlpha=a;const s=q.shrink?q.s*a:q.s;ctx.fillStyle=q.c;ctx.strokeStyle=q.c;
  switch(q.sh){case'ci':ctx.beginPath();ctx.arc(q.x,q.y,s,0,7);ctx.fill();break;case'ring':ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(q.x,q.y,s,0,7);ctx.stroke();break;
   case'sp':ctx.fillRect(q.x-s,q.y-0.8,s*2,1.6);ctx.fillRect(q.x-0.8,q.y-s,1.6,s*2);break;case'star':star5(q.x,q.y,s,q.c);break;
-  case'heart':heart(q.x,q.y,s,q.c);break;case'conf':case'snow':case'leaf':case'note':case'bolt':case'ghost':case'glow':case'shard':case'spark2':trShape(q,q.x,q.y,s,q.ml-q.l);break;default:ctx.fillRect(q.x-s/2,q.y-s/2,s,s)}}ctx.globalAlpha=1}
+  case'heart':heart(q.x,q.y,s,q.c);break;case'conf':case'snow':case'leaf':case'note':case'bolt':case'ghost':case'glow':case'shard':case'spark2':case'cog':trShape(q,q.x,q.y,s,q.ml-q.l);break;default:ctx.fillRect(q.x-s/2,q.y-s/2,s,s)}}ctx.globalAlpha=1}
 function updCam(dt,snap){const L=G.L,p=G.player;const lw=L.W*TS,lh=L.H*TS;
  const want=clamp(p.vx/RUN,-1,1)*26;G.look=snap?want:lerp(G.look||0,want,1-Math.pow(0.02,dt));
  const wantY=clamp(p.vy/MAXF,-0.6,1)*45;G.lookY=snap?wantY:lerp(G.lookY||0,wantY,1-Math.pow(0.05,dt));
@@ -2918,7 +3088,8 @@ function colorOf(id,t){if(id=='c_dev')return'#232025';const it=ITEMS.find(i=>i.i
 const HAT_TOP={h_cap:9,h_party:24,h_phones:8,h_halo:15,h_horns:13,h_top:18,h_prop:17,h_crown:15,h_devil:10,
  h_beanie:17,h_chef:21,h_cowboy:16,h_bunny:23,h_flower:9,h_wizard:26,h_viking:18,h_astro:10,
  h_starforge:19,h_riftling:17,h_frostcrown:16,h_emberhood:19,h_stormveil:17,h_celestia:16,h_founder:19,
- h_ogre:18,h_gild:17};
+ h_ogre:18,h_gild:17,
+ h_tramp:13,h_bucket:12,h_pirate:14,h_antenna:22,h_mush:14,h_goggles:11,h_cactus:23,h_donut:14,h_boat:16};
 function drawHat(id,s,t,face){const k=s/24;ctx.save();ctx.scale(k,k);
  switch(id){
  case'h_cap':ctx.fillStyle='#2b5fd9';ctx.beginPath();ctx.arc(0,1,10,Math.PI,0);ctx.fill();ctx.fillRect(face>0?2:-18,-2,16,4);ctx.fillStyle='#fff';ctx.fillRect(-2,-9,4,3);break;
@@ -2949,6 +3120,57 @@ function drawHat(id,s,t,face){const k=s/24;ctx.save();ctx.scale(k,k);
   const fl=[[-9,-1,'#ff8fab'],[-2.8,-3.4,'#fff6fb'],[3.8,-3.2,'#ffd166'],[9.8,-0.8,'#b69cff']];
   for(const f of fl){ctx.fillStyle=f[2];for(let i=0;i<5;i++){const a=i/5*Math.PI*2-Math.PI/2;ctx.beginPath();ctx.arc(f[0]+Math.cos(a)*2.1,f[1]+Math.sin(a)*2.1,1.9,0,7);ctx.fill()}
    ctx.fillStyle=f[2]=='#ffd166'?'#e76f51':'#ffc93c';ctx.beginPath();ctx.arc(f[0],f[1],1.3,0,7);ctx.fill()}break}
+ // ---- hats added in the cosmetics expansion. Every one is a different SILHOUETTE, not a recolour of a hat already
+ // here: cactus/donut/boat are free Prize Wheel prizes, bucket/pirate/antennae are shop items, tramp/mushroom/goggles
+ // are trophies. See ITEMS for which is which and HAT_TOP above for how high each reaches.
+ // 5,000 jumps -> a mini trampoline, mat squashing on its springs in time with the jump the trophy is named for.
+ case'h_tramp':{const b=Math.abs(Math.sin(t*3.2));
+  ctx.strokeStyle='#5d6374';ctx.lineWidth=2;ctx.lineCap='round';
+  for(const sd of[-1,1]){ctx.beginPath();ctx.moveTo(sd*11,-7);ctx.lineTo(sd*8,2);ctx.stroke()}
+  ctx.fillStyle='#3b4252';ctx.beginPath();ctx.ellipse(0,-8,13,3.6,0,0,7);ctx.fill();
+  ctx.strokeStyle='#aab3c4';ctx.lineWidth=1;for(let i=-4;i<=4;i++){const x=i*2.8;ctx.beginPath();ctx.moveTo(x,-8.6);ctx.lineTo(x*0.82,-7+b*1.4);ctx.stroke()}
+  const tg=ctx.createLinearGradient(0,-11,0,-5);tg.addColorStop(0,'#4dabff');tg.addColorStop(1,'#1c5fb0');
+  ctx.fillStyle=tg;ctx.beginPath();ctx.ellipse(0,-8.6+b*1.8,10,2.8+b*0.9,0,0,7);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.ellipse(-3,-9.4+b*1.8,4,1,0,0,7);ctx.fill();break}
+ case'h_bucket':{ctx.fillStyle='#6f8f5a';ctx.beginPath();ctx.moveTo(-9,-11);ctx.lineTo(9,-11);ctx.lineTo(11,0);ctx.lineTo(-11,0);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#5b7749';ctx.fillRect(-10.4,-5,20.8,2.6);
+  ctx.fillStyle='#7d9e66';ctx.beginPath();ctx.moveTo(-11,-0.5);ctx.quadraticCurveTo(-16,-0.5,-15,2.5);ctx.quadraticCurveTo(0,6.5,15,2.5);ctx.quadraticCurveTo(16,-0.5,11,-0.5);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-11,-0.5);ctx.quadraticCurveTo(0,3,11,-0.5);ctx.stroke();break}
+ case'h_pirate':{ctx.fillStyle='#1c1a26';ctx.beginPath();ctx.moveTo(-17,1);ctx.quadraticCurveTo(-13,-13,0,-13);ctx.quadraticCurveTo(13,-13,17,1);ctx.quadraticCurveTo(0,5,-17,1);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#2b2838';ctx.beginPath();ctx.moveTo(-17,1);ctx.quadraticCurveTo(-8,-3.5,0,-3.5);ctx.quadraticCurveTo(8,-3.5,17,1);ctx.quadraticCurveTo(0,5,-17,1);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#f4f1e6';ctx.beginPath();ctx.arc(0,-8,3.2,0,7);ctx.fill();ctx.fillRect(-2.2,-6.2,4.4,2.2);
+  ctx.fillStyle='#1c1a26';ctx.beginPath();ctx.arc(-1.2,-8.4,0.95,0,7);ctx.arc(1.2,-8.4,0.95,0,7);ctx.fill();break}
+ case'h_antenna':{ctx.fillStyle='#2b2838';rr(-9,-3,18,4,2);ctx.fill();
+  for(const sd of[-1,1]){const sw=Math.sin(t*3+sd*0.9)*1.8;
+   ctx.strokeStyle='#4a4660';ctx.lineWidth=1.6;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(sd*5,-3);ctx.quadraticCurveTo(sd*7+sw,-11,sd*6+sw*1.6,-17);ctx.stroke();
+   ctx.fillStyle=sd<0?'#ff5c8a':'#5ff4ff';ctx.beginPath();ctx.arc(sd*6+sw*1.6,-18.6,3,0,7);ctx.fill();
+   ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.arc(sd*6+sw*1.6-1,-19.6,1,0,7);ctx.fill()}break}
+ case'h_mush':{ctx.fillStyle='#f6f1e0';rr(-4.5,-4,9,6,2);ctx.fill();
+  const mg=ctx.createLinearGradient(0,-13,0,-3);mg.addColorStop(0,'#ff6b6b');mg.addColorStop(1,'#c92a3a');
+  ctx.fillStyle=mg;ctx.beginPath();ctx.moveTo(-12,-3);ctx.quadraticCurveTo(-12,-13,0,-13);ctx.quadraticCurveTo(12,-13,12,-3);ctx.quadraticCurveTo(0,0.5,-12,-3);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#fff6ee';for(const p of[[-6.5,-6,2.1],[0.5,-9,2.6],[6.5,-5.5,1.8],[-2,-4.2,1.3]]){ctx.beginPath();ctx.arc(p[0],p[1],p[2],0,7);ctx.fill()}break}
+ case'h_goggles':{ctx.strokeStyle='#3a3546';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,2,12,Math.PI*1.12,Math.PI*1.88);ctx.stroke();
+  ctx.fillStyle='#4a4457';for(const sd of[-1,1]){ctx.beginPath();ctx.arc(sd*5.5,-6,4.6,0,7);ctx.fill()}
+  ctx.fillStyle='#ffd45e';for(const sd of[-1,1]){ctx.beginPath();ctx.arc(sd*5.5,-6,3.3,0,7);ctx.fill()}
+  ctx.fillStyle='rgba(255,255,255,.65)';for(const sd of[-1,1]){ctx.beginPath();ctx.ellipse(sd*5.5-1.2,-7.2,1.5,1,-0.5,0,7);ctx.fill()}
+  ctx.fillStyle='#3a3546';ctx.fillRect(-1.6,-7,3.2,2);break}
+ case'h_cactus':{ctx.fillStyle='#c1653a';ctx.beginPath();ctx.moveTo(-8,2);ctx.lineTo(-6.5,-6);ctx.lineTo(6.5,-6);ctx.lineTo(8,2);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#a9522c';rr(-9,-8.4,18,3.4,1.2);ctx.fill();
+  ctx.fillStyle='#4f9a45';rr(-3,-19,6,13.5,3);ctx.fill();rr(-8.5,-15,5.5,3.4,1.7);ctx.fill();rr(-8.5,-15,3.4,7,1.7);ctx.fill();
+  rr(3,-17,5.5,3.4,1.7);ctx.fill();rr(5.1,-17,3.4,6,1.7);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.32)';ctx.lineWidth=0.8;for(let i=0;i<4;i++){const y=-17+i*3;ctx.beginPath();ctx.moveTo(-1.6,y);ctx.lineTo(1.6,y);ctx.stroke()}
+  ctx.fillStyle='#ff8fab';for(let i=0;i<5;i++){const a=i/5*Math.PI*2;ctx.beginPath();ctx.arc(Math.cos(a)*2,-20.4+Math.sin(a)*2,1.5,0,7);ctx.fill()}
+  ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(0,-20.4,1.1,0,7);ctx.fill();break}
+ case'h_donut':{ctx.fillStyle='#c98a5a';ctx.beginPath();ctx.ellipse(0,-5,11,7.5,0,0,7);ctx.fill();
+  ctx.fillStyle='#ff9ec8';ctx.beginPath();ctx.ellipse(0,-6.4,11,7,0,0,7);ctx.fill();
+  ctx.fillStyle='#c98a5a';ctx.beginPath();ctx.ellipse(0,-5,3.6,2.4,0,0,7);ctx.fill();
+  const sp=[[-6.5,-8,0.6],[-2,-11,-0.4],[3,-10,0.9],[7,-6,0.2],[-8,-4.2,1.2],[1,-3.4,-0.8],[5.5,-9.5,1.5]];
+  for(let i=0;i<sp.length;i++){const p=sp[i];ctx.save();ctx.translate(p[0],p[1]);ctx.rotate(p[2]);ctx.fillStyle=['#fff','#5ff4ff','#ffd45e','#7bdc3b'][i%4];ctx.fillRect(-1.6,-0.6,3.2,1.2);ctx.restore()}break}
+ case'h_boat':{ctx.fillStyle='#f3ead2';ctx.strokeStyle='#c9bc99';ctx.lineWidth=1;ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(-14,-3);ctx.lineTo(14,-3);ctx.lineTo(8,3);ctx.lineTo(-8,3);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fdf6e3';ctx.beginPath();ctx.moveTo(-11,-3);ctx.lineTo(0,-15);ctx.lineTo(0,-3);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#efe4c8';ctx.beginPath();ctx.moveTo(11,-3);ctx.lineTo(0,-15);ctx.lineTo(0,-3);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.strokeStyle='rgba(90,80,55,.5)';ctx.lineWidth=0.7;for(const y of[-10,-7.5,-5]){ctx.beginPath();ctx.moveTo(-4,y);ctx.lineTo(-1.5,y);ctx.stroke()}break}
  // ---- Monster Pack: a mossy green skullcap with two thick bone horns sweeping up and out. Deliberately BONE + MOSS,
  // not the red demon shapes of h_horns, so the two never read as recolors of each other.
  case'h_ogre':{ctx.fillStyle='#5d7a2b';ctx.beginPath();ctx.arc(0,2,10,Math.PI,0);ctx.fill();
@@ -3107,6 +3329,69 @@ const SKP={
  c_aurum:(w,h,s,t)=>{ctx.fillStyle='rgba(255,255,255,.26)';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(w*.62,0);ctx.lineTo(0,h*.62);ctx.fill();
   ctx.fillStyle='rgba(180,110,0,.22)';ctx.beginPath();ctx.moveTo(w,h*.38);ctx.lineTo(w,h);ctx.lineTo(w*.38,h);ctx.fill();
   [[.2,.24],[.46,.5],[.74,.2],[.18,.72],[.62,.78],[.86,.5],[.36,.86],[.9,.14]].forEach((p,i)=>{if(s<20&&i>4)return;const a=.5+.5*Math.sin(t*3+i*1.7);sSpark(w*p[0],h*p[1],Math.max(.9,s*.045)*a,`rgba(255,250,${205+Math.round(a*40)},${(0.55+a*0.4).toFixed(2)})`)})},
+ // ---- THE TOP's reward, rebuilt. It used to be the colour-CYCLING rainbow; now it is a night sky with the mountain
+ // you just finished climbing, a summit flag and a slow star twinkle. Every colour here is FIXED - the one and only
+ // colour-cycling skin in the game is c_aurora, and it is Premium Wheel only.
+ c_rainbow:(w,h,s,t)=>{ctx.fillStyle='rgba(255,255,255,.9)';
+  [[.18,.2,.55],[.72,.14,1.3],[.86,.36,.2],[.34,.1,2.1],[.56,.26,.9]].forEach((p,i)=>{if(s<20&&i>2)return;const a=.45+.55*Math.abs(Math.sin(t*1.4+p[2]));ctx.globalAlpha=a;ctx.beginPath();ctx.arc(w*p[0],h*p[1],Math.max(.7,s*.026),0,7);ctx.fill()});ctx.globalAlpha=1;
+  ctx.fillStyle='#2f3f7e';ctx.beginPath();sPl([[0,1],[.26,.5],[.52,1]],w,h);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#4a5aa0';ctx.beginPath();sPl([[.34,1],[.7,.34],[1.06,1]],w,h);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#eef3ff';ctx.beginPath();sPl([[.58,.56],[.7,.34],[.82,.56],[.74,.5],[.66,.56],[.62,.52]],w,h);ctx.closePath();ctx.fill();
+  if(s>=20){ctx.strokeStyle='#dfe6ff';ctx.lineWidth=Math.max(1,s*.022);ctx.beginPath();ctx.moveTo(w*.7,h*.34);ctx.lineTo(w*.7,h*.16);ctx.stroke();
+   ctx.fillStyle='#ff4d6d';ctx.beginPath();sPl([[.7,.16],[.86,.22],[.7,.27]],w,h);ctx.closePath();ctx.fill()}},
+ // ---- the other Premium Wheel legendary and the two set skins. c_nova/c_celestia/c_founder were colour-cyclers too;
+ // each is now a fixed design with its own idea, so the one cycler (c_aurora) stays unique.
+ c_nova:(w,h,s,t)=>{const cx=w*.5,cy=h*.5,p=(t*.55)%1;
+  const g=ctx.createRadialGradient(cx,cy,s*.02,cx,cy,s*.52);g.addColorStop(0,'#fffdf2');g.addColorStop(.34,'#ffd45e');g.addColorStop(.72,'rgba(255,110,20,.55)');g.addColorStop(1,'rgba(180,40,0,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,s*.52,0,7);ctx.fill();
+  ctx.strokeStyle=`rgba(255,220,150,${(.55*(1-p)).toFixed(2)})`;ctx.lineWidth=Math.max(1,s*.035);ctx.beginPath();ctx.arc(cx,cy,s*(.12+p*.46),0,7);ctx.stroke();
+  if(s>=20)for(let i=0;i<4;i++){const a=t*.6+i*1.57;sSpark(cx+Math.cos(a)*s*.36,cy+Math.sin(a)*s*.36,Math.max(.9,s*.045),'rgba(255,245,210,.85)')}},
+ c_celestia:(w,h,s,t)=>{const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,'rgba(18,8,58,.8)');g.addColorStop(1,'rgba(160,130,255,.25)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  const P=[[.22,.28],[.42,.16],[.58,.38],[.78,.24],[.66,.62],[.34,.66]];
+  ctx.strokeStyle='rgba(220,205,255,.55)';ctx.lineWidth=Math.max(.8,s*.018);ctx.beginPath();sPl(P,w,h);ctx.stroke();
+  P.forEach((p,i)=>{if(s<20&&i>3)return;const a=.5+.5*Math.sin(t*1.8+i*1.1);star5(w*p[0],h*p[1],Math.max(1,s*(.03+.018*a)),i%2?'#ffd45e':'#e8dcff')})},
+ c_founder:(w,h,s,t)=>{ctx.fillStyle='rgba(120,80,0,.28)';rr(w*.14,h*.14,w*.72,h*.72,s*.1);ctx.fill();
+  ctx.strokeStyle='rgba(255,246,200,.85)';ctx.lineWidth=Math.max(1,s*.03);rr(w*.14,h*.14,w*.72,h*.72,s*.1);ctx.stroke();
+  if(s>=20){ctx.fillStyle='#fff6c8';ctx.font=`bold ${Math.round(s*.36)}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('1',w*.5,h*.53)}
+  const sh=((t*.6)%2)-.6;if(sh>-.3&&sh<1.1){ctx.fillStyle='rgba(255,255,255,.4)';ctx.fillRect(w*(sh*.9-.1),0,s*.12,h)}},
+ // ---- free Prize Wheel skins: each one has an actual idea, not a hue shift
+ c_candy:(w,h,s)=>{ctx.save();ctx.translate(w*.5,h*.5);ctx.rotate(-.6);ctx.fillStyle='#e8213f';
+  for(let i=-3;i<=3;i++)ctx.fillRect(i*s*.3-s*.07,-h,s*.15,h*2.4);ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(0,h*.46,w,Math.max(1,s*.03))},
+ c_bee:(w,h,s)=>{ctx.fillStyle='#2a2318';for(const y of[.34,.6,.86])ctx.fillRect(0,h*y,w,h*.12);
+  ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.ellipse(w*.16,h*.26,s*.16,s*.09,-.5,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(w*.84,h*.26,s*.16,s*.09,.5,0,7);ctx.fill()},
+ c_ocean:(w,h,s,t)=>{ctx.fillStyle='rgba(2,30,60,.45)';ctx.fillRect(0,h*.58,w,h*.42);
+  ctx.strokeStyle='rgba(180,240,255,.32)';ctx.lineWidth=Math.max(1,s*.022);
+  for(let i=0;i<3;i++){const y=h*(.2+i*.26);ctx.beginPath();ctx.moveTo(0,y);ctx.quadraticCurveTo(w*.5,y+Math.sin(t*1.6+i)*s*.06,w,y);ctx.stroke()}
+  if(s>=20){ctx.strokeStyle='rgba(220,250,255,.6)';ctx.lineWidth=Math.max(.8,s*.02);
+   for(const b of[[.26,.9,.07],[.72,.8,.05],[.55,1,.04]]){ctx.beginPath();ctx.arc(w*b[0],h*b[1]-((t*14+b[0]*30)%(h*.9)),s*b[2],0,7);ctx.stroke()}}},
+ c_pumpkin:(w,h,s)=>{ctx.strokeStyle='rgba(150,60,0,.5)';ctx.lineWidth=Math.max(1,s*.03);
+  for(const x of[.3,.7]){ctx.beginPath();ctx.moveTo(w*x,h*.1);ctx.quadraticCurveTo(w*(x<.5?.2:.8),h*.52,w*x,h*.96);ctx.stroke()}
+  ctx.fillStyle='#4f9a45';ctx.fillRect(w*.44,0,w*.12,h*.15);
+  ctx.strokeStyle='#4f9a45';ctx.lineWidth=Math.max(1,s*.028);ctx.beginPath();ctx.moveTo(w*.56,h*.07);ctx.quadraticCurveTo(w*.76,h*.02,w*.7,h*.16);ctx.stroke()},
+ c_denim:(w,h,s)=>{ctx.fillStyle='rgba(255,255,255,.07)';for(let y=0;y<h;y+=Math.max(2,s*.08))ctx.fillRect(0,y,w,Math.max(1,s*.03));
+  ctx.fillStyle='rgba(20,40,80,.3)';rr(w*.2,h*.5,w*.6,h*.4,s*.06);ctx.fill();
+  ctx.strokeStyle='#ffd45e';ctx.lineWidth=Math.max(1,s*.025);ctx.setLineDash([Math.max(2,s*.07),Math.max(2,s*.05)]);
+  ctx.beginPath();ctx.moveTo(w*.2,h*.5);ctx.lineTo(w*.2,h*.84);ctx.lineTo(w*.5,h*.92);ctx.lineTo(w*.8,h*.84);ctx.lineTo(w*.8,h*.5);ctx.stroke();ctx.setLineDash([])},
+ c_jade:(w,h,s)=>{ctx.strokeStyle='rgba(230,255,240,.38)';ctx.lineWidth=Math.max(1,s*.035);ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(w*.1,h*.7);ctx.quadraticCurveTo(w*.42,h*.3,w*.9,h*.52);ctx.stroke();
+  ctx.strokeStyle='rgba(180,255,215,.26)';ctx.beginPath();ctx.moveTo(w*.06,h*.34);ctx.quadraticCurveTo(w*.5,h*.62,w*.96,h*.22);ctx.stroke();
+  sSpark(w*.74,h*.76,s*.09,'rgba(255,255,255,.75)')},
+ // ---- shop + trophy skins added at the same time
+ c_lilac:(w,h,s)=>{ctx.fillStyle='rgba(255,255,255,.35)';for(const p of[[.22,.72],[.5,.85],[.78,.66],[.36,.54]]){if(s<20&&p[0]>.6)continue;
+  for(let i=0;i<5;i++){const a=i/5*Math.PI*2;ctx.beginPath();ctx.arc(w*p[0]+Math.cos(a)*s*.05,h*p[1]+Math.sin(a)*s*.05,s*.04,0,7);ctx.fill()}}},
+ c_sand:(w,h,s)=>{ctx.fillStyle='rgba(160,120,60,.26)';for(let i=0;i<3;i++){const b=.4+i*.2;ctx.beginPath();ctx.moveTo(0,h*b);ctx.quadraticCurveTo(w*.5,h*(b-.08),w,h*(b+.04));ctx.lineTo(w,h*(b+.1));ctx.quadraticCurveTo(w*.5,h*(b-.02),0,h*(b+.06));ctx.closePath();ctx.fill()}},
+ c_ink:(w,h,s,t)=>{for(const p of[[.28,.34,.11],[.68,.6,.14],[.46,.82,.08]])sBlob(w*p[0],h*p[1],s*p[2],s*p[2]*.8,'rgba(110,150,255,.28)');
+  const a=.4+.4*Math.sin(t*1.6);sSpark(w*.74,h*.3,Math.max(1,s*.06)*a,`rgba(200,220,255,${a.toFixed(2)})`)},
+ c_steel:(w,h,s,t)=>{ctx.fillStyle='rgba(255,255,255,.13)';for(let x=0;x<w;x+=Math.max(2,s*.1))ctx.fillRect(x,0,Math.max(1,s*.04),h);
+  ctx.fillStyle='rgba(40,50,65,.4)';for(const p of[[.16,.18],[.84,.18],[.16,.86],[.84,.86]]){ctx.beginPath();ctx.arc(w*p[0],h*p[1],s*.05,0,7);ctx.fill()}
+  const sh=((t*.5)%2)-.6;if(sh>-.3&&sh<1.1){ctx.fillStyle='rgba(255,255,255,.22)';ctx.fillRect(w*(sh*.9-.1),0,s*.14,h)}},
+ c_sprout:(w,h,s)=>{ctx.strokeStyle='#2f6b28';ctx.lineWidth=Math.max(1,s*.04);ctx.beginPath();ctx.moveTo(w*.5,h*.92);ctx.lineTo(w*.5,h*.42);ctx.stroke();
+  ctx.fillStyle='#a8e06a';for(const sd of[-1,1]){ctx.beginPath();ctx.ellipse(w*.5+sd*s*.14,h*.52,s*.15,s*.08,sd*.6,0,7);ctx.fill()}
+  ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.arc(w*.5,h*.38,s*.05,0,7);ctx.fill()},
+ c_cinder:(w,h,s,t)=>{for(const p of[[.2,.3,.16],[.62,.22,.12],[.42,.62,.18],[.8,.66,.13]])sBlob(w*p[0],h*p[1],s*p[2],s*p[2]*.75,'rgba(24,14,12,.5)');
+  [[.3,.44],[.68,.38],[.52,.76],[.18,.68]].forEach((p,i)=>{if(s<20&&i>1)return;const g=.35+.65*Math.abs(Math.sin(t*2.2+i*1.3));
+   ctx.fillStyle=`rgba(255,${Math.round(90+g*90)},40,${(.35+g*.5).toFixed(2)})`;ctx.beginPath();ctx.arc(w*p[0],h*p[1],Math.max(.9,s*.035),0,7);ctx.fill()})},
  };
 const SKF={
  // one droopy eyelid
@@ -3239,6 +3524,32 @@ function drawBG(th,cx,cy,t,hy){const dk=th.deco,tix=Math.max(0,WORLDS.indexOf(th
   let ox=-((cx*d)%s.width);if(ox>0)ox-=s.width;const oy=VH-s.height+40-pcy*d*0.25;
   ctx.globalAlpha=lay==-1?0.4:lay?0.9:0.62;for(let x=ox;x<VW;x+=s.width)ctx.drawImage(s,x,oy);ctx.globalAlpha=1}
  if(QUAL)bgFx(dk,cx,cy,t)}
+// ---- CLIMB SKY CROSS-FADE -----------------------------------------------------------------------------------------
+// The climbing modes change world every CLIMB_BAND metres and the backdrop used to SNAP mid-jump. Now the outgoing sky
+// keeps drawing and the incoming one fades in over CLIMB_XF seconds.
+// Doing that means running drawBG at partial opacity, but drawBG rightly drives ctx.globalAlpha itself (clouds,
+// ridges, twinkles) and resets it to 1 - so rather than thread an alpha argument through the whole background renderer
+// (and fight whoever owns it next), the second pass runs through a one-line proxy whose globalAlpha setter folds the
+// fade factor in. Nothing inside drawBG changes, every baked layer is reused as-is, and the extra pass only exists
+// while a fade is actually running - a second or so every 60m.
+const CLIMB_BAND=60,CLIMB_XF=1.5;
+let BGPX=null,BGPR=null,BGPA=1;
+function bgFadeCtx(real){if(BGPR!==real){BGPR=real;BGPX=new Proxy(real,{
+ get:(o,k)=>{const v=o[k];return typeof v=='function'?v.bind(o):v},
+ set:(o,k,v)=>{o[k]=(k=='globalAlpha')?v*BGPA:v;return true}})}return BGPX}
+// which two skies to blend, and how far. Lags the band change by design: the sky is caught up by the time you are a
+// jump or two into the new stretch, which is what "fade into them" looks like.
+function climbSky(){const i=Math.floor(G.height/CLIMB_BAND)%5;
+ if(G.bgJ==null){G.bgI=G.bgJ=i;G.bgK=1;G.bgT=gtime}
+ if(i!==G.bgJ){G.bgI=G.bgK>=1?G.bgJ:G.bgI;G.bgJ=i;G.bgK=0}
+ const d=clamp(gtime-(G.bgT==null?gtime:G.bgT),0,0.05);G.bgT=gtime;
+ if(G.bgK<1)G.bgK=Math.min(1,G.bgK+d/CLIMB_XF);
+ return{a:WORLDS[G.bgI],b:WORLDS[G.bgJ],k:ease(G.bgK)}}
+function drawBGFade(f,cx,cy,t,hy){drawBG(f.a,cx,cy,t,hy);
+ if(f.k<=0.002)return;
+ if(f.k>=0.998){drawBG(f.b,cx,cy,t,hy);return}
+ const real=ctx;BGPA=f.k;ctx=bgFadeCtx(real);
+ try{drawBG(f.b,cx,cy,t,hy)}finally{ctx=real;BGPA=1;real.globalAlpha=1}}
 // mix that returns a HEX, so its result can be fed back into shade()/mix() (which only parse '#rrggbb')
 function mixh(a,b,k){const x=parseInt(a.slice(1),16),y=parseInt(b.slice(1),16);
  const r=Math.round(((x>>16)&255)*(1-k)+((y>>16)&255)*k),g=Math.round(((x>>8)&255)*(1-k)+((y>>8)&255)*k),b2=Math.round((x&255)*(1-k)+(y&255)*k);
@@ -3692,7 +4003,8 @@ function drawCraterRims(L,th){if(!L.dips||!L.dips.length||th.deco!=6)return;
   ctx.restore()}}
 // ================= WORLD RENDER =================
 function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf(th));
- drawBG(th,G.cam.x,G.cam.y,gtime,(G.mode=='endless'||G.mode=='daily')?G.cam.y-(L.H*TS-VH):undefined);
+ {const cl=G.mode=='endless'||G.mode=='daily',hy=cl?G.cam.y-(L.H*TS-VH):undefined;
+  if(cl)drawBGFade(climbSky(),G.cam.x,G.cam.y,gtime,hy);else drawBG(th,G.cam.x,G.cam.y,gtime,hy);}
  ctx.save();let sx=0,sy=0;if(G.shake>0.3){sx=rnd(-G.shake,G.shake);sy=rnd(-G.shake,G.shake)}
  ctx.translate(Math.round(-G.cam.x+sx),Math.round(-G.cam.y+sy));
  const x0=Math.max(0,Math.floor(G.cam.x/TS)-1),x1=Math.min(L.W-1,Math.floor((G.cam.x+VW)/TS)+1),y0=Math.max(0,Math.floor(G.cam.y/TS)-1),y1=Math.min(L.H-1,Math.floor((G.cam.y+VH)/TS)+1);
@@ -3847,11 +4159,49 @@ function drawSpike(px,py,c,th){const vert=c=='^'||c=='v';
   ctx.closePath();ctx.fill();ctx.stroke()}
  ctx.fillStyle='rgba(255,255,255,.85)';
  for(let i=0;i<2;i++){const o=i*12;if(c=='^')ctx.fillRect(px+o+5,py+9,1.6,10);else if(c=='v')ctx.fillRect(px+o+5,py+5,1.6,9);else if(c=='>')ctx.fillRect(px+5,py+o+5,9,1.6);else ctx.fillRect(px+10,py+o+5,9,1.6)}}
-function drawLaser(L,x,y,c,px,py){const on=laserOn(c,L),warn=!on&&laserWarn(c,L),col=c=='l'?'#ff3b7a':'#27d7ff',o=L.lo[y*L.W+x];
- ctx.save();if(on){ctx.shadowColor=col;ctx.shadowBlur=14;ctx.fillStyle=col;ctx.globalAlpha=0.55;if(o=='v')ctx.fillRect(px+6,py,12,TS);else if(o=='h')ctx.fillRect(px,py+6,TS,12);else ctx.fillRect(px+4,py+4,16,16);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#fff';if(o=='v')ctx.fillRect(px+10,py,4,TS);else if(o=='h')ctx.fillRect(px,py+10,TS,4);else ctx.fillRect(px+9,py+9,6,6)}
- else{ctx.globalAlpha=warn?(Math.sin(G.t*40)>0?0.9:0.3):0.28;ctx.fillStyle=col;if(o=='v'){for(let k=0;k<TS;k+=6)ctx.fillRect(px+11,py+k,2,3)}else if(o=='h'){for(let k=0;k<TS;k+=6)ctx.fillRect(px+k,py+11,3,2)}else ctx.fillRect(px+10,py+10,4,4)}
+// LASER TELEGRAPH. The old pre-fire state was a 2px dotted line in the laser's OWN colour at 0.28 alpha, strobing
+// between 0.9 and 0.3 for the last 0.45s. That has no contrast rule at all: cyan at 28% disappears into Laser Lab's
+// pale blue sky (its home world), and pink at 28% disappears into the near-black Low-G / Monster Woods / THE TOP skies
+// it gets injected into by Chaos, Hard Mode and the Speed Courses. Getting killed by a beam you could not see is the
+// worst kind of unfair, so the pre-fire state is rebuilt around one rule that holds on EVERY palette:
+//   a near-black slab behind a bright core - dark-on-light and light-on-dark at once, on the same mark.
+// On top of that the telegraph RAMPS instead of blinking a fixed pair of alphas: over LASER_WARN seconds the beam
+// thickens, its dashes close up into a solid bar, a glow spreads either side, and each emitter's lens fills like a
+// fuse. Under Reduce Flashing & Motion the strobe is dropped and the ramp alone still reads.
+function drawLaser(L,x,y,c,px,py){const on=laserOn(c,L),col=c=='l'?'#ff3b7a':'#27d7ff',o=L.lo[y*L.W+x];
+ const w=on?0:laserWarnK(c,L),vt=o=='v',hz=o=='h';
+ const fl=(!RM()&&w>0.6)?(Math.sin(G.t*44)>0?1:0.62):1; // strobe only in the last third, never under Reduce Motion
+ ctx.save();if(on){ctx.shadowColor=col;ctx.shadowBlur=14;ctx.fillStyle=col;ctx.globalAlpha=0.55;if(vt)ctx.fillRect(px+6,py,12,TS);else if(hz)ctx.fillRect(px,py+6,TS,12);else ctx.fillRect(px+4,py+4,16,16);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#fff';if(vt)ctx.fillRect(px+10,py,4,TS);else if(hz)ctx.fillRect(px,py+10,TS,4);else ctx.fillRect(px+9,py+9,6,6)}
+ else{const th=Math.round(3+w*9),hf=th/2;
+  // the widening glow goes down first, so peripheral vision catches a charge even when you are looking elsewhere
+  if(w>0.22&&QUAL){ctx.globalAlpha=(w-0.22)*0.55*fl;ctx.fillStyle=col;const gw=th+10+w*10;
+   if(vt)ctx.fillRect(px+12-gw/2,py,gw,TS);else if(hz)ctx.fillRect(px,py+12-gw/2,TS,gw);else ctx.fillRect(px+12-gw/2,py+12-gw/2,gw,gw)}
+  // the dark backing slab: this is the part that makes a beam legible on a PALE sky
+  ctx.globalAlpha=0.34+w*0.48;ctx.fillStyle='#07050f';
+  if(vt)ctx.fillRect(px+10-hf,py,th+4,TS);else if(hz)ctx.fillRect(px,py+10-hf,TS,th+4);else ctx.fillRect(px+10-hf,py+10-hf,th+4,th+4);
+  // the bright core on top of it: dashed while idle, closing into a solid bar as the charge completes
+  ctx.globalAlpha=(0.72+w*0.28)*fl;ctx.fillStyle=mix(col,'#ffffff',0.15+w*0.5);
+  if(w>0.5){if(vt)ctx.fillRect(px+12-hf,py,th,TS);else if(hz)ctx.fillRect(px,py+12-hf,TS,th);else ctx.fillRect(px+12-hf,py+12-hf,th,th)}
+  else{const ln=Math.round(3+w*6);
+   if(vt)for(let k=0;k<TS;k+=6)ctx.fillRect(px+12-hf,py+k,th,ln);
+   else if(hz)for(let k=0;k<TS;k+=6)ctx.fillRect(px+k,py+12-hf,ln,th);
+   else ctx.fillRect(px+12-hf,py+12-hf,th,th)}
+  // Final beat: a PURE WHITE hairline down the middle, the same mark the live beam uses. Measured against all nine
+  // world palettes, the pink and cyan cores are mid-luminance and only clear 1.2-2.3:1 against Magma's maroon horizon
+  // and Rocket Yard / Gilded Vale's dark zeniths - the pair #07050f + #ffffff clears 3:1 against every single sky
+  // stop in the game, so the moment that actually matters is unmissable on all of them.
+  if(w>0.72){ctx.globalAlpha=Math.min(1,(w-0.72)/0.2)*fl;ctx.fillStyle='#ffffff';
+   if(vt)ctx.fillRect(px+11,py,2.5,TS);else if(hz)ctx.fillRect(px,py+11,TS,2.5);else ctx.fillRect(px+11,py+11,2.5,2.5)}}
  ctx.restore();
- ctx.fillStyle='#39364a';if(o=='v'){if(L.g[y-1][x]!=c)ctx.fillRect(px+4,py,16,5);if(L.g[y+1][x]!=c)ctx.fillRect(px+4,py+TS-5,16,5)}else if(o=='h'){if(L.g[y][x-1]!=c)ctx.fillRect(px,py+4,5,16);if(L.g[y][x+1]!=c)ctx.fillRect(px+TS-5,py+4,5,16)}}
+ // EMITTER HOUSINGS. These were one flat '#39364a' rectangle, invisible against the dark worlds - so on those skies
+ // the beam had no visible source either. Now: dark rim, pale plate, and a lens that fills with the charge, so both
+ // ends of a beam are their own little countdown and the line reads on any background.
+ const lens=on?'#ffffff':mix('#241f3a',col,0.18+w*0.82);
+ const cap=(cx,cy,cw,ch)=>{ctx.fillStyle='#07050f';ctx.fillRect(cx-1,cy-1,cw+2,ch+2);
+  ctx.fillStyle='#c3c7da';ctx.fillRect(cx,cy,cw,ch);
+  ctx.globalAlpha=on?1:(0.55+w*0.45)*fl;ctx.fillStyle=lens;ctx.fillRect(cx+2,cy+2,cw-4,ch-4);ctx.globalAlpha=1};
+ if(vt){if(L.g[y-1][x]!=c)cap(px+3,py,18,7);if(L.g[y+1][x]!=c)cap(px+3,py+TS-7,18,7)}
+ else if(hz){if(L.g[y][x-1]!=c)cap(px,py+3,7,18);if(L.g[y][x+1]!=c)cap(px+TS-7,py+3,7,18)}}
 function drawSaw(x,y,r){ctx.save();ctx.translate(x,y);
  ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.arc(1.5,2.5,13,0,7);ctx.fill();
  ctx.rotate(r);const g=ctx.createLinearGradient(-13,-13,13,13);g.addColorStop(0,'#ffffff');g.addColorStop(0.5,'#c2c6d4');g.addColorStop(1,'#8b90a4');
@@ -3928,12 +4278,55 @@ const UI={list:[],prev:[],selId:null};
 function inR(m,b){return m.x>=b.x&&m.x<=b.x+b.w&&m.y>=b.y&&m.y<=b.y+b.h}
 // the first real option (never "< Back") starts selected on a fresh screen
 function button(id,x,y,w,h,label,o){o=o||{};UI.list.push({id,x,y,w,h,o});if(UI.selId==null&&id!='back')UI.selId=id;const sel=UI.selId==id;
- ctx.save();ctx.translate(x+w/2,y+h/2);const sc=sel?1.05+Math.sin(gtime*6)*0.01:1;ctx.scale(sc,sc);
+ // sliders never breathe: a 5% pulse under a dragging finger makes the knob drift away from where it was grabbed
+ ctx.save();ctx.translate(x+w/2,y+h/2);const sc=(sel&&!o.sld)?1.05+Math.sin(gtime*6)*0.01:1;ctx.scale(sc,sc);
  ctx.fillStyle='rgba(0,0,0,.25)';rr(-w/2+3,-h/2+5,w,h,12);ctx.fill();
  ctx.fillStyle=o.disabled?'#9a98aa':sel?(o.col||'#ffd45e'):(o.bg||'#ffffff');rr(-w/2,-h/2,w,h,12);ctx.fill();
  if(sel){ctx.strokeStyle='#ffffff';ctx.lineWidth=3;rr(-w/2,-h/2,w,h,12);ctx.stroke()}
  if(o.draw)o.draw(w,h,sel);else txt(label,0,1,o.fs||22,o.disabled?'#5d5c6b':'#1d1a2e','center',false);
  ctx.restore();return sel}
+// ---- SLIDERS ------------------------------------------------------------------------------------------------------
+// A slider is just a button with o.sld set, so keyboard nav walks onto it and tapping it already hit-tests. On top of
+// that: sldUpd() (called from the screen's update, before uiNav) drags it from the raw pointer/finger, and sldKeys()
+// turns Left/Right on the selected row into steps instead of letting uiNav move the selection off it.
+// Values are quantised to 5% so the readout is always a round number and the tick can fire once per real change.
+const SLD={id:null,lv:-1,kh:0},SLD_STEP=0.05;
+// absolute track geometry of a slider row (o.tx is the track's inset from the row's left edge, o.tw its width)
+function sldTrack(b){return{x:b.x+b.o.tx,w:b.o.tw}}
+function sldSet(b,v){const t=Math.round(clamp(v,0,1)/SLD_STEP)*SLD_STEP;if(Math.abs(t-b.o.get())<1e-9)return;b.o.set(t);if(t!==SLD.lv){SLD.lv=t;sfx('tick')}}
+function slider(id,x,y,w,h,label,get,set){
+ const v=clamp(get(),0,1),tx=18,tw=w-36;
+ button(id,x,y,w,h,'',{sld:1,get,set,tx,tw,bg:'#f6f3ff',col:'#fff0bd',draw:(bw,bh,sel)=>{
+  txt(label,-bw/2+18,-bh/2+15,15,'#1d1a2e','left',false);
+  txt(v<=0?'OFF':Math.round(v*100)+'%',bw/2-18,-bh/2+15,15,v<=0?'#b3384c':'#3b3752','right',false);
+  const gx=-bw/2+tx,gy=8;
+  ctx.fillStyle='#d6d1e6';rr(gx,gy-6,tw,12,6);ctx.fill();
+  // quarter ticks: a slider with no landmarks is impossible to set to "about half" on a phone
+  ctx.fillStyle='rgba(60,55,90,.28)';for(let k=1;k<4;k++)ctx.fillRect(gx+tw*k/4-1,gy-3,2,6);
+  if(v>0){ctx.fillStyle=sel?'#ffb02e':'#3fb0c4';rr(gx,gy-6,Math.max(12,tw*v),12,6);ctx.fill()}
+  const kx=gx+tw*v;ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.arc(kx+1,gy+2,12,0,7);ctx.fill();
+  ctx.fillStyle=sel?'#fff6d8':'#ffffff';ctx.beginPath();ctx.arc(kx,gy,12,0,7);ctx.fill();
+  ctx.strokeStyle=sel?'#c87a00':'#3b3752';ctx.lineWidth=sel?3:2;ctx.beginPath();ctx.arc(kx,gy,12,0,7);ctx.stroke();
+  ctx.strokeStyle='rgba(60,55,90,.45)';ctx.lineWidth=1.6;for(const o of[-3.5,0,3.5]){ctx.beginPath();ctx.moveTo(kx+o,gy-5);ctx.lineTo(kx+o,gy+5);ctx.stroke()}}})}
+// finger first (uiTouch tracks the live touch even where pointer events get swallowed), then mouse/pen via PTR
+function sldPtr(){if(uiTouch)return{x:uiTouch.px,y:uiTouch.py};return PTR.down?PTR:null}
+// Anchored drag: once a row is grabbed it keeps the drag even if the finger slides above, below or past either end of
+// the track, which is how you actually reach 0% and 100% on a phone.
+function sldUpd(){const p=sldPtr();if(!p){SLD.id=null;return}
+ const L=UI.prev;let b=SLD.id?L.find(q=>q.id==SLD.id&&q.o.sld):null;
+ if(!b)for(const q of L){if(!q.o.sld)continue;if(p.x>=q.x-10&&p.x<=q.x+q.w+10&&p.y>=q.y-6&&p.y<=q.y+q.h+6){b=q;SLD.id=q.id;SLD.lv=q.o.get();UI.selId=q.id;UI.kb=false;break}}
+ if(!b){SLD.id=null;return}
+ const t=sldTrack(b);sldSet(b,(p.x-t.x)/t.w)}
+// Left/Right on a selected slider: one step per press, then a fast repeat after a short hold so a slider can be run end
+// to end without twenty taps. The presses are consumed so uiNav can't walk the selection sideways off the row.
+function sldKeys(dt){const b=UI.prev.find(q=>q.id==UI.selId&&q.o.sld);if(!b){SLD.kh=0;return}
+ const d=(keys.R?1:0)-(keys.L?1:0);
+ if(!d){SLD.kh=0;return}
+ if(pressed.L||pressed.R){SLD.lv=b.o.get();sldSet(b,b.o.get()+d*SLD_STEP);SLD.kh=-0.32}
+ else if((SLD.kh+=dt)>0.05){SLD.kh=0;sldSet(b,b.o.get()+d*SLD_STEP)}
+ delete pressed.L;delete pressed.R}
+// a tap straight onto a track (no drag) still lands the value where the finger went down
+function sldClick(b){if(!b||!b.o.sld)return false;const t=sldTrack(b);SLD.lv=b.o.get();sldSet(b,(mouse.x-t.x)/t.w);return true}
 function navDir(L,c,dx,dy){const cx=c.x+c.w/2,cy=c.y+c.h/2;let best=null,bd=1e9;for(const b of L){if(b===c)continue;const ddx=b.x+b.w/2-cx,ddy=b.y+b.h/2-cy,along=ddx*dx+ddy*dy;if(along<=4)continue;const perp=Math.abs(ddx*dy)+Math.abs(ddy*dx),d=along+perp*2.2;if(d<bd){bd=d;best=b}}return best}
 function uiNav(scr){const L=UI.prev;if(!L.length)return;let cur=L.find(b=>b.id==UI.selId);if(!cur){UI.selId=L[0].id;cur=L[0]}
  function act(b){if(b.o.disabled){sfx('no');return}sfx('click');scr.onBtn(b.id,b)}
@@ -3958,10 +4351,83 @@ function drawToasts(){const bot=SCR===SCREENS.worlds;
 function firework(x,y){const hue=rnd(0,360);for(let i=0;i<46;i++){const a=i/46*Math.PI*2,sp=rnd(120,260),l=rnd(0.8,1.4);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l,ml:l,c:`hsl(${hue+rnd(-20,20)},95%,65%)`,s:rnd(2,4),g:160,drag:1.2,sh:'sq'})}sfx('boom')}
 function confetti(n){for(let i=0;i<n;i++){const l=rnd(2,4);FX.push({x:rnd(0,VW),y:rnd(-60,-10),vx:rnd(-40,40),vy:rnd(60,200),l,ml:l,c:`hsl(${rnd(0,360)},90%,62%)`,s:rnd(4,8),g:40,sh:'sq'})}}
 
+// ================= GENTLE REMINDERS =================
+// IN-GAME ONLY. No push notifications, no permission prompts, nothing that can reach the player with the game closed.
+// A reminder is a banner in the strip along the bottom of the MAIN MENU - a lane nothing else draws in, so it never
+// covers a button and never has to swallow a tap meant for one (remTap only consumes a click that actually landed
+// inside its own rect, and it never takes keyboard focus at all). It is never shown during play or on a results
+// screen, so it cannot block play or steal a jump.
+// NEVER NAG, three ways over:
+//   - `when` is re-checked every frame, so one that stops being true (you spent the ticket) removes itself;
+//   - acting on it, dismissing it with the x, letting it time out, or even just having read it for 3s retires it;
+//   - a retired rule is done for the whole session (REM.done is only cleared by reloading the game).
+// Stays REM_HOLD seconds, which is long enough to read two lines twice over, and fades rather than popping away.
+const REM_HOLD=9,REM_IN=0.5,REM_OUT=0.7,REM_DELAY=1.3,REM_READ=3;
+const REM_RULES=[
+ {k:'tix',c:'#ff8fd8',ic:(x,y)=>tixIcon(x,y,14),
+  a:()=>'You have '+S.tix+' free spin'+(S.tix==1?'':'s')+' waiting',
+  b:()=>'Tap here to open the Prize Wheel and use them.',
+  when:()=>!S.dev&&S.tix>0,go:()=>go('wheel')},
+ {k:'daily',c:'#ff77c8',ic:(x,y)=>{ctx.save();ctx.translate(x,y);modeIcon('daily',13,'#14102a','#ffffff');ctx.restore()},
+  a:()=>'Have you tried the Daily Climb today?',
+  b:()=>'Everyone gets the same tower. A new one in '+cdStr()+'.',
+  when:()=>worldDone(1)&&S.daily.d!=todayStr(),go:()=>go('modes')},
+];
+const REM={done:{},cur:null,t:0,wait:REM_DELAY};
+const REM_R={x:20,y:494,w:800,h:44}; // the one strip on the menu nothing else occupies (dev chip lives past x=840)
+function remOn(){return SCR===SCREENS.menu&&STORE_OK} // saving blocked puts its own warning in this lane
+function remRetire(){if(REM.cur)REM.done[REM.cur.k]=1;REM.cur=null;REM.t=0;REM.wait=REM_DELAY}
+function remUpd(dt){
+ if(!remOn()){if(REM.cur&&REM.t>REM_READ)remRetire();else{REM.cur=null;REM.t=0}return}
+ if(REM.cur){REM.t+=dt;if(!REM.cur.when()||REM.t>REM_HOLD+REM_OUT)remRetire();return}
+ if((REM.wait-=dt)>0)return;
+ const r=REM_RULES.find(q=>!REM.done[q.k]&&q.when());if(r){REM.cur=r;REM.t=0}}
+function remA(){const t=REM.t;return t<REM_IN?ease(t/REM_IN):t>REM_HOLD?1-clamp((t-REM_HOLD)/REM_OUT,0,1):1}
+// returns true only when it actually swallowed the tap, so the menu underneath keeps every click that wasn't for it
+function remTap(){if(!REM.cur||!remOn()||remA()<0.5||!mouse.click)return false;
+ const g=REM_R;if(mouse.x<g.x||mouse.x>g.x+g.w||mouse.y<g.y||mouse.y>g.y+g.h)return false;
+ const r=REM.cur,close=mouse.x>g.x+g.w-54;remRetire();sfx('click');if(!close)r.go();return true}
+function remDraw(){if(!REM.cur||!remOn())return;const r=REM.cur,a=remA(),g=REM_R;if(a<=0.01)return;
+ ctx.save();ctx.globalAlpha=a;ctx.translate(0,(1-a)*14); // slides up as it fades in, so it reads as arriving
+ ctx.fillStyle='rgba(0,0,0,.3)';rr(g.x+3,g.y+5,g.w,g.h,g.h/2);ctx.fill();
+ ctx.fillStyle='rgba(20,16,40,.94)';rr(g.x,g.y,g.w,g.h,g.h/2);ctx.fill();
+ ctx.strokeStyle=r.c;ctx.lineWidth=2.5;rr(g.x,g.y,g.w,g.h,g.h/2);ctx.stroke();
+ ctx.fillStyle=r.c;ctx.globalAlpha=a*0.22;ctx.beginPath();ctx.arc(g.x+34,g.y+g.h/2,17,0,7);ctx.fill();ctx.globalAlpha=a;
+ r.ic(g.x+34,g.y+g.h/2);
+ txt(fitStr(r.a(),g.w-180,17),g.x+64,g.y+15,17,'#ffffff','left',false);
+ txt(fitStr(r.b(),g.w-180,13),g.x+64,g.y+33,13,'#cfcbe4','left',false);
+ // dismiss target: its own corner of the same rect, so "not now" never costs a screen change
+ ctx.strokeStyle='rgba(255,255,255,.65)';ctx.lineWidth=2.5;ctx.lineCap='round';const cx=g.x+g.w-30,cy=g.y+g.h/2;
+ ctx.beginPath();ctx.moveTo(cx-6,cy-6);ctx.lineTo(cx+6,cy+6);ctx.moveTo(cx+6,cy-6);ctx.lineTo(cx-6,cy+6);ctx.stroke();ctx.lineCap='butt';
+ ctx.restore()}
+
 // ================= SCREENS =================
 let SCR=null,fadeA=1,gtime=0;
-function go(name,arg){if(SCREENS[name]!==SCR)tReset();tapBlock=performance.now()+220;SCR=SCREENS[name];UI.selId=null;UI.clickId=null;UI.kb=false;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;if(SCR.enter)SCR.enter(arg)}
+function go(name,arg){if(SCREENS[name]!==SCR)tReset();tapBlock=performance.now()+220;SCR=SCREENS[name];UI.selId=null;UI.clickId=null;UI.kb=false;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;MBG.n++;SLD.id=null;if(SCR.enter)SCR.enter(arg)}
 function backBtn(){button('back',20,18,110,42,'< Back',{fs:18})}
+// ---- MENU BACKDROPS -------------------------------------------------------------------------------------------
+// The menu backdrop varies between visits instead of every screen owning one fixed world for ever ("click shop, then
+// back, and the main screen is different"). It reuses drawBG and its baked offscreen layers exactly as the in-level
+// renderer does - no second background system, no extra bakes, same handful of drawImage calls - and only varies WHICH
+// sky is asked for, how far it is scrolled and where the horizon sits.
+// MBG_LIGHT: worlds that are PALE at the top, the only ones safe behind the main menu's navy wordmark.
+// MBG_ANY: everything except the near-black bonus skies, for screens whose text is white or sits on a plate.
+const MBG_LIGHT=[0,1,2],MBG_ANY=[0,1,2,3,4,5];
+// go() bumps n, so one pick is held for as long as a screen stays open and a fresh one is rolled on the next visit
+const MBG={n:0,seen:-1,i:2,ox:0,oy:0,last:-1};
+function menuBGRoll(pool){if(MBG.seen===MBG.n)return;MBG.seen=MBG.n;
+ let i=pool[Math.floor(Math.random()*pool.length)];
+ for(let g=0;i===MBG.last&&pool.length>1&&g<8;g++)i=pool[Math.floor(Math.random()*pool.length)]; // never the same one twice running
+ MBG.last=MBG.i=i;MBG.ox=Math.random()*4000;MBG.oy=(Math.random()*2-1)*260}
+// tone='dark' = this screen writes DARK text straight onto the sky (only the main menu's wordmark does), so the
+// readability veil goes light instead of dark. Either way that veil is what keeps the copy legible whichever sky came
+// up: the backdrop is never allowed to fight the text.
+function menuBG(pool,tone){pool=pool||MBG_ANY;menuBGRoll(pool);
+ drawBG(WORLDS[MBG.i],gtime*20+MBG.ox,MBG.oy,gtime);
+ const g=ctx.createLinearGradient(0,0,0,VH);
+ if(tone=='dark'){g.addColorStop(0,'rgba(255,255,255,.3)');g.addColorStop(0.42,'rgba(255,255,255,.1)');g.addColorStop(1,'rgba(255,255,255,0)')}
+ else{g.addColorStop(0,'rgba(10,7,26,.3)');g.addColorStop(0.5,'rgba(10,7,26,.08)');g.addColorStop(1,'rgba(10,7,26,.18)')}
+ ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH)}
 function header(s,y,col){txt(s,VW/2,y||52,40,col||'#fff')}
 const SCREENS={};
 
@@ -4053,7 +4519,7 @@ SCREENS.menu={enter(){musicPlay(0);TILT.nx=null;if(!this.b)this.b={x:710,y:404,v
   else b.va*=1-0.8*dt;
   b.sq*=Math.max(0,1-10*dt)},
  // deep navy, not white: the wordmark sits on the pale Laser Lab sky and white-on-pale washed out completely
- draw(){drawBG(WORLDS[2],gtime*20,0,gtime);txt('HOPSCRAPER',80,82,58,'#14265c','left');txt('how high can a square go?',84,128,18,'#1e2a52','left',false);
+ draw(){menuBG(MBG_LIGHT,'dark');txt('HOPSCRAPER',80,82,58,'#14265c','left');txt('how high can a square go?',84,128,18,'#1e2a52','left',false);
   // Club badge sits to the right of the title (it used to overlap the tagline)
   if(clubOn()){ctx.font=`bold 58px ${FONT}`;const bx=Math.min(462,84+ctx.measureText('HOPSCRAPER').width+14);ctx.fillStyle='#ffd45e';rr(bx,70,92,24,12);ctx.fill();crownIcon(bx+16,82,9);txt('CLUB',bx+28,83,14,'#3a1470','left',false)}
   if(!STORE_OK)txt('Saving is blocked in this browser - progress will not be kept',VW/2,VH-44,14,'#ffb3b3');
@@ -4426,7 +4892,8 @@ SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h
   oLines.forEach((l,i)=>txt(l.t,VW/2,385+i*22,16,l.c,undefined,false));
   const oMy=410+(oLines.length>1?22:0);
   button('again',VW/2-230,oMy,210,54,r.rollover?'New Tower':'Climb Again');button('menu',VW/2+20,oMy,210,54,'Back')},
- onBtn(id){if(id=='again')startEndless(this.r.daily);else go('sub',CLIMBS)}};
+ // back out to MODES, where Daily Climb and Endless Climb are now their own cards - the old Climbs sub-menu is gone
+ onBtn(id){if(id=='again')startEndless(this.r.daily);else go('modes')}};
 
 SCREENS.sdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(100)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
@@ -4436,19 +4903,71 @@ SCREENS.sdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(100)
   button('again',VW/2-230,410,210,54,'Run Again');button('menu',VW/2+20,410,210,54,'Back')},
  onBtn(id){if(id=='again'){this.r.hard?startHSpeed():startSpeed()}else go('sub',MARAS)}};
 
+// ================= MODES =================
+// Six cards, not five identical white buttons: every mode owns a colour, a coloured header band and its own drawn
+// icon, so they can be told apart before a single word is read.
+// NAMING RULE: the word a player goes looking for comes FIRST. The old "CLIMBS" hid the Daily Climb behind a sub-menu
+// under a word nobody searches for; it is split into DAILY CLIMB and ENDLESS CLIMB, both promoted onto this screen, so
+// "Daily" is right there and one tap from the menu instead of three.
+// modeIcon: procedural, drawn around (0,0) at roughly radius s, in two inks so it reads on its own colour band.
+function modeIcon(k,s,ink,paper){ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
+ if(k=='story'){ // a little tower of ledges with the game's own square standing on top
+  ctx.fillStyle=ink;for(let i=0;i<3;i++){const w=s*(1.5-i*0.3);rr(-w/2+(i%2?s*0.24:-s*0.24),s*0.6-i*s*0.44,w,s*0.2,s*0.07);ctx.fill()}
+  ctx.fillStyle=paper;ctx.strokeStyle=ink;ctx.lineWidth=2.4;rr(-s*0.28,-s*0.95,s*0.56,s*0.56,s*0.13);ctx.fill();ctx.stroke();
+  ctx.fillStyle=ink;ctx.fillRect(-s*0.17,-s*0.78,s*0.11,s*0.15);ctx.fillRect(s*0.06,-s*0.78,s*0.11,s*0.15)}
+ else if(k=='daily'){ // a calendar page showing TODAY's date - the most recognisable "daily" symbol there is
+  for(const x of[-s*0.42,s*0.42]){ctx.fillStyle=ink;rr(x-s*0.08,-s*1.02,s*0.16,s*0.34,s*0.08);ctx.fill()}
+  ctx.fillStyle=paper;rr(-s*0.8,-s*0.78,s*1.6,s*1.56,s*0.18);ctx.fill();
+  ctx.fillStyle=ink;rr(-s*0.8,-s*0.78,s*1.6,s*0.46,s*0.18);ctx.fill();ctx.fillRect(-s*0.8,-s*0.5,s*1.6,s*0.18);
+  txt(String(new Date().getUTCDate()),0,s*0.34,Math.max(11,Math.round(s*0.88)),ink,'center',false)}
+ else if(k=='endless'){ // a lemniscate over a lava line: "no end", and the thing that ends the run
+  ctx.strokeStyle=ink;ctx.lineWidth=s*0.26;ctx.beginPath();
+  for(let i=0;i<=44;i++){const a=i/44*Math.PI*2,d=1+Math.sin(a)*Math.sin(a);const x=s*0.92*Math.cos(a)/d,y=s*0.58*Math.cos(a)*Math.sin(a)/d;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
+  ctx.closePath();ctx.stroke();ctx.fillStyle=paper;rr(-s,s*0.66,s*2,s*0.24,s*0.12);ctx.fill()}
+ else if(k=='speed'){ // stopwatch
+  ctx.fillStyle=ink;rr(-s*0.18,-s*1.14,s*0.36,s*0.26,s*0.09);ctx.fill();
+  ctx.fillStyle=paper;ctx.strokeStyle=ink;ctx.lineWidth=s*0.2;ctx.beginPath();ctx.arc(0,s*0.1,s*0.8,0,7);ctx.fill();ctx.stroke();
+  ctx.lineWidth=s*0.13;ctx.beginPath();ctx.moveTo(0,s*0.1);ctx.lineTo(s*0.42,-s*0.28);ctx.stroke();
+  ctx.fillStyle=ink;ctx.beginPath();ctx.arc(0,s*0.1,s*0.11,0,7);ctx.fill()}
+ else if(k=='mara'){ // chequered flag
+  ctx.strokeStyle=ink;ctx.lineWidth=s*0.15;ctx.beginPath();ctx.moveTo(-s*0.74,-s*0.98);ctx.lineTo(-s*0.74,s*1.02);ctx.stroke();
+  const cw=s*0.34;ctx.save();rr(-s*0.64,-s*0.94,cw*4,cw*3,s*0.06);ctx.clip();
+  for(let r=0;r<3;r++)for(let c=0;c<4;c++){ctx.fillStyle=((r+c)%2)?paper:ink;ctx.fillRect(-s*0.64+c*cw,-s*0.94+r*cw,cw,cw)}ctx.restore()}
+ else skull(0,s*0.05,s*1.55,paper);
+ ctx.restore()}
+// One card definition. `hot` = this one is genuinely waiting for the player right now (see the Daily's attention ring).
+function modeCards(){const obw=ownedBonusWorlds(),nbl=obw.reduce((a,b)=>a+LEVELS.filter(l=>l.wd==b.wd).length,0);
+ const f=!!S.finale||!!S.dev,e=worldDone(1),dn=S.daily.d==todayStr();
+ let med=0;COURSES.forEach((c,k)=>{if(medalOf(k,(S.course[k]||{}).t)>=0)med++});
+ let hd=0;for(let k=0;k<NL;k++)if(S.hard[k]&&S.hard[k].done)hd++;
+ // level counts have to agree with the menu's star total (STAR_MAX = STORY_ORDER.length * 3): STORY_ORDER already
+ // includes THE TOP, and the bonus extra is counted in LEVELS, not worlds, so "+3" can't be misread as 3 levels.
+ const sb=bonusStars();
+ return[
+  {k:'story',ic:'story',c:'#5fc93a',n:'STORY',d:STORY_ORDER.length+' levels across '+Math.round((STORY_ORDER.length-1)/8)+' worlds, up to THE TOP'+(nbl?' (+'+nbl+' bonus)':''),ok:true,stat:'★ '+totalStars()+'/'+STAR_MAX+(sb?'  +'+sb:''),go:()=>go('levels',{from:'modes'})},
+  {k:'daily',ic:'daily',c:'#ff77c8',n:'DAILY CLIMB',d:'One tower a day. Everyone gets the same one.',ok:e,lock:'Clear World 2 to unlock',stat:dn?'Today '+S.daily.h+'m':'Not played today',hot:e&&!dn,go:()=>startEndless(true)},
+  {k:'endless',ic:'endless',c:'#ff7043',n:'ENDLESS CLIMB',d:'A brand new tower every run. It never ends.',ok:e,lock:'Clear World 2 to unlock',stat:'Best '+S.endBest+'m',go:()=>startEndless(false)},
+  {k:'speed',ic:'speed',c:'#f0b323',n:'SPEED COURSES',d:'4 non-stop courses. Race the clock for a medal.',ok:true,stat:med+'/4 medals',go:()=>go('courses')},
+  {k:'marathon',ic:'mara',c:'#4aa8e8',n:'MARATHON',d:'Every level back to back on one timer. Normal or hard.',ok:f,lock:'Reach THE TOP to unlock',stat:'Best '+fmtT(S.speedBest),go:()=>go('sub',MARAS)},
+  {k:'hard',ic:'hard',c:'#ec4e63',n:'HARD MODE',d:'One air jump, no checkpoints, a new twist every level.',ok:f,lock:'Reach THE TOP to unlock',stat:hd+'/'+NL+' cleared',go:()=>go('levels',{hard:true,from:'modes'})}]}
+const MODE_X=[36,340,644],MODE_Y=[96,304],MODE_W=280,MODE_H=192;
 SCREENS.modes={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('menu')},
- draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('MODES');const f=!!S.finale||!!S.dev,e=worldDone(1),hf=!!S.dev||!!(S.hard[NL-1]&&S.hard[NL-1].done);
-  // level counts have to agree with the menu's star total (STAR_MAX = STORY_ORDER.length * 3): STORY_ORDER already
-  // includes THE TOP, and the bonus extra is counted in LEVELS, not worlds, so "+3" can't be misread as 3 levels.
-  const obw=ownedBonusWorlds(),nbw=obw.length,nbl=obw.reduce((a,b)=>a+LEVELS.filter(l=>l.wd==b.wd).length,0);
-  const M=[['story','STORY',STORY_ORDER.length+' levels across '+Math.round((STORY_ORDER.length-1)/8)+' worlds, ending at THE TOP'+(nbl?'  ·  +'+nbl+' bonus levels':''),true,''],
-   ['courses','SPEED COURSES','4 non-stop courses. Race the clock.',true,''],
-   ['climb','CLIMBS','Endless and the daily tower.',e,'Clear World 2 to unlock'],
-   ['marathon','MARATHON','Every level in one run. Normal or hard.',f,'Reach THE TOP to unlock'],
-   ['hard','HARD MODE','One air jump. No checkpoints. Faster hazards. A new twist on every level.',f,'Reach THE TOP to unlock']];
-  M.forEach((m,i)=>{button(m[0],VW/2-300,104+i*78,600,66,'',{disabled:!m[3],draw:()=>{txt(m[1],-270,-12,26,m[3]?'#1d1a2e':'#5d5c6b','left',false);txt(m[3]?m[2]:m[4],-270,16,15,m[3]?'#3b3752':'#5d5c6b','left',false);
-   if(!m[3])lockIcon(250,0,24);else{let rt='';if(m[0]=='climb')rt='Best '+S.endBest+'m';if(m[0]=='marathon')rt='Best '+fmtT(S.speedBest);if(m[0]=='story'){rt='★ '+totalStars()+'/'+STAR_MAX;const bs=bonusStars();if(bs)rt+='  +'+bs;}if(m[0]=='courses'){let n=0;COURSES.forEach((c,k)=>{if(medalOf(k,(S.course[k]||{}).t)>=0)n++});rt=n+'/4 medals'}if(m[0]=='hard'){let n=0;for(let k=0;k<NL;k++)if(S.hard[k]&&S.hard[k].done)n++;rt=n+'/'+NL}txt(rt,270,0,18,'#1d1a2e','right',false)}}})})},
- onBtn(id){if(id=='back')return go('menu');if(id=='story')return go('levels',{from:'modes'});if(id=='courses')return go('courses');if(id=='climb')return go('sub',CLIMBS);if(id=='marathon')return go('sub',MARAS);if(id=='hard')return go('levels',{hard:true,from:'modes'})}};
+ draw(){menuBG();backBtn();header('MODES');
+  modeCards().forEach((m,i)=>{const ok=!!m.ok,x=MODE_X[i%3],y=MODE_Y[i/3|0];
+   button(m.k,x,y,MODE_W,MODE_H,'',{disabled:!ok,bg:ok?mixh('#ffffff',m.c,0.13):'#a5a2b4',col:ok?mixh('#ffffff',m.c,0.34):'#a5a2b4',draw:(bw,bh,sel)=>{
+    const band=ok?m.c:'#7e7b90',dk=ok?mixh(m.c,'#14102a',0.68):'#4e4c60';
+    ctx.save();rr(-bw/2,-bh/2,bw,bh,12);ctx.clip();
+    ctx.fillStyle=band;ctx.fillRect(-bw/2,-bh/2,bw,78);
+    const g=ctx.createLinearGradient(-bw/2,-bh/2,bw/2,-bh/2+78);g.addColorStop(0,'rgba(255,255,255,.26)');g.addColorStop(1,'rgba(0,0,0,.16)');ctx.fillStyle=g;ctx.fillRect(-bw/2,-bh/2,bw,78);
+    ctx.fillStyle='rgba(0,0,0,.14)';ctx.fillRect(-bw/2,-bh/2+75,bw,3);ctx.restore();
+    ctx.save();ctx.translate(0,-57);if(ok)modeIcon(m.ic,25,dk,'#ffffff');else lockIcon(0,0,34,'#e6e4ee');ctx.restore();
+    txt(m.n,0,-2,txtW(m.n,24)>bw-26?21:24,ok?'#1d1a2e':'#4e4c60','center',false);
+    wrapText(ok?m.d:m.lock,bw-30,13).slice(0,2).forEach((l,k)=>txt(l,0,26+k*17,13,ok?'#3b3752':'#4e4c60','center',false));
+    if(ok)txt(m.stat,0,74,16,dk,'center',false);
+    // the Daily is the one card that can genuinely be waiting for you: a soft ring says so with no extra UI
+    if(m.hot&&!sel){ctx.save();ctx.globalAlpha=0.45+0.35*Math.sin(gtime*3.6);ctx.strokeStyle='#ff77c8';ctx.lineWidth=4;rr(-bw/2+2,-bh/2+2,bw-4,bh-4,11);ctx.stroke();ctx.restore()}}})});
+  txt('New Daily tower in '+cdStr()+'   ·   the same tower for everyone, so scores compare',VW/2,518,14,'#ffffff',undefined,false)},
+ onBtn(id){if(id=='back')return go('menu');const m=modeCards().find(q=>q.k==id);if(m&&m.ok)m.go()}};
 
 // generic sub-menu: a category with a couple of modes inside it
 SCREENS.sub={enter(cfg){this.cfg=cfg||this.cfg;musicPlay(0)},
@@ -4463,9 +4982,8 @@ SCREENS.sub={enter(cfg){this.cfg=cfg||this.cfg;musicPlay(0)},
     if(!ok)lockIcon(250,0,24);else if(it.stat)txt(it.stat(),270,0,18,'#1d1a2e','right',false)}})});
   if(c.foot)textPlate(c.foot,VW/2,VH-26,14,'#e8e6f5')},
  onBtn(id){if(id=='back')return go('modes');const it=this.cfg.items[+id.slice(1)];if(it&&it.ok())it.go()}};
-const CLIMBS={title:'CLIMBS',wd:3,sub:'Go up until the lava gets you.',foot:'Tip: the daily tower is the same for everyone, so compare scores.',items:[
- {n:'ENDLESS',d:'A brand new tower every run. No end.',ok:()=>worldDone(1),lock:'Clear World 2 to unlock',stat:()=>'Best '+S.endBest+'m',go:()=>startEndless(false)},
- {n:'DAILY CLIMB',d:()=>'One tower a day ('+todayStr().split('-').map((v,k)=>k?String(v).padStart(2,'0'):v).join('-')+'). Everyone gets the same one.',ok:()=>worldDone(1),lock:'Clear World 2 to unlock',stat:()=>'Today '+(S.daily.d==todayStr()?S.daily.h:0)+'m',sub2:()=>'New tower in '+cdStr(),go:()=>startEndless(true)}]};
+// (the CLIMBS sub-menu is gone: "Climbs" was a word nobody went looking for, and it buried the Daily one level deeper.
+// Daily Climb and Endless Climb are top-level cards on SCREENS.modes now - see modeCards.)
 const MARAS={title:'MARATHON',wd:4,sub:'Every level back to back on one timer. No breaks.',foot:'Dying does not stop the clock.',items:[
  {n:'MARATHON',d:'All '+STORY_ORDER.length+' story levels in one run.',ok:()=>!!S.finale||!!S.dev,lock:'Reach THE TOP to unlock',stat:()=>'Best '+fmtT(S.speedBest),go:()=>startSpeed()},
  {n:'HARD MARATHON',d:'All '+NL+' hard levels, modifiers and all.',ok:()=>!!S.dev||!!(S.hard[NL-1]&&S.hard[NL-1].done),lock:'Clear Hard Mode THE TOP to unlock',stat:()=>'Best '+fmtT(S.hspeedBest),go:()=>startHSpeed()}]};
@@ -4492,38 +5010,108 @@ function srcOf(it){if(it.coins!=null||it.cost!=null)return'buy';
  if(it.pack)return'pack';
  if(it.club)return'club';
  return'prem'}
-// the sub-tab an item sits under. Premium Wheel and Club items share the "Wheel" shelf: both are spin-or-subscribe
-// exclusives, and splitting them made a 2-item shelf next to a 12-item one.
-function subOf(it){const s=srcOf(it);return s=='buy'?'buy':s=='reward'?'earn':s=='pack'?'pack':'spin'}
-const SUBCATS={c:[['buy','Buy'],['earn','Earn'],['spin','Wheel'],['pack','Packs']],
- h:[['buy','Buy'],['earn','Earn'],['spin','Wheel'],['pack','Packs']],
- t:[['buy','Buy'],['earn','Earn'],['spin','Wheel'],['pack','Packs']]};
+// ---- GROUPS. grpKey() is the finest "where does this come from" bucket there is, and grpOrder() is the ONE order
+// those buckets are ever listed in. EVERY shelf in the shop is built by walking that order and taking WHOLE buckets,
+// so a source physically cannot appear twice with another source in between (owner: "not a mix of like legendary,
+// pack, pack, legendary"). srcOf() stays the coarse answer; grpKey() only splits reward into world/trophy and pack
+// into one bucket per pack, because those are the two a player thinks of as separate shelves.
+function grpKey(it){const s=srcOf(it);return s=='reward'?(it.world!=null?'world':'ach'):s=='pack'?'pk:'+it.pack:s}
+const GRP_BASE=['buy','world','ach','wheel','prem','club'];
+function grpOrder(){return GRP_BASE.concat(packProducts().map(p=>'pk:'+p.pk))}
+const GRP_HEAD={buy:['SHOP  ·  COINS & GEMS','#8ef0a8'],world:['WORLD REWARDS','#ffd45e'],ach:['TROPHY REWARDS','#ffd45e'],
+ wheel:['FREE PRIZE WHEEL','#ff8fd8'],prem:['PREMIUM WHEEL','#ffc93c'],club:['HOPSCRAPER CLUB','#ffd45e'],
+ // the two COARSE buckets ALL and OWNED use - see shopKeys(). Same runs, one subtitle instead of two or three.
+ reward:['EARN BY PLAYING','#ffd45e'],pack:['THE THREE PACKS','#ffb066']};
+function grpHead(k){return k.slice(0,3)=='pk:'?[packLabel(k.slice(3)).toUpperCase(),'#ffb066']:(GRP_HEAD[k]||[k.toUpperCase(),'#ffffff'])}
+// the filter row inside Skins/Hats/Trails, in the owner's own words and order. There is deliberately no BUY filter:
+// ALL already opens on every coin/gem item (SHOP is the first bucket above), so a Buy shelf would be ALL amputated.
+const FILTERS=[['all','ALL'],['own','OWNED'],['spin','WHEEL'],['earn','EARN'],['pack','PACKS']];
+const FLT_GRPS={spin:['wheel','prem','club'],earn:['world','ach']};
+// HOW COARSE the subtitles are, per filter. ALL and OWNED are the whole catalogue, so they use the SIX coarse
+// srcOf buckets - one EARN BY PLAYING instead of world+trophy, one THE THREE PACKS instead of three - which is two
+// fewer subtitles and two fewer part-empty rows, i.e. two fewer pages to flick through. A narrow filter splits fine,
+// because that is the level it is about: WHEEL shows wheel/premium/club, PACKS shows one subtitle per pack.
+// Either way a bucket is a whole contiguous run of grpOrder(), so nothing ever interleaves.
+const COARSE={buy:'buy',world:'reward',ach:'reward',wheel:'wheel',prem:'prem',club:'club'};
+function shopKeys(flt){const ord=grpOrder();
+ if(flt=='pack')return ord.filter(k=>k.slice(0,3)=='pk:');
+ if(FLT_GRPS[flt])return FLT_GRPS[flt];
+ const out=[];for(const k of ord){const c=COARSE[k]||'pack';if(out[out.length-1]!=c)out.push(c)}return out}
+function shopKeyOf(it,flt){const k=grpKey(it);return(flt=='pack'||FLT_GRPS[flt])?k:(COARSE[k]||'pack')}
+// every section a (category, filter) shows: whole buckets, in grpOrder(), never interleaved
+function shopSections(cat,flt){const out=[];
+ for(const k of shopKeys(flt)){let its=ITEMS.filter(i=>i.cat==cat&&shopKeyOf(i,flt)==k);if(flt=='own')its=its.filter(i=>!!S.own[i.id]);
+  if(its.length)out.push({k,its:grpSort(k,its)})}
+ return out}
+// inside a bucket, the order is still grpOrder's: cheapest first on the shop shelf, worlds before trophies and in
+// world order, packs in shop order. A coarse bucket is just its fine runs back to back.
+function grpSort(k,its){const ix=i=>grpOrder().indexOf(grpKey(i));
+ if(k=='buy')return its.slice().sort((a,b)=>(a.cost?1:0)-(b.cost?1:0)||(a.coins||a.cost||0)-(b.coins||b.cost||0));
+ if(k=='world')return its.slice().sort((a,b)=>a.world-b.world);
+ if(k=='reward')return its.slice().sort((a,b)=>ix(a)-ix(b)||(a.world!=null&&b.world!=null?a.world-b.world:0));
+ if(k=='pack')return its.slice().sort((a,b)=>ix(a)-ix(b));
+ return its}
 // what a LOCKED item's card says underneath it, and the colour that goes with it. Short enough for a 96px card.
 function srcTag(it){const s=srcOf(it);
  // just the theme word ("Space", not "Space Pack"): these only ever appear on the Packs shelf, where "Pack" is already
  // said twice over, and the full name crowds a 96px card at the 14px floor. The detail panel says it in full.
- if(s=='pack')return[it.pack.charAt(0).toUpperCase()+it.pack.slice(1),'#ff9f45'];
- if(s=='wheel')return['Wheel','#9b3dbf'];
- if(s=='prem')return['Premium','#c98a12'];
- if(s=='club')return['Club','#e0a32a'];
- if(s=='reward')return[it.ach?'Trophy':'World '+(it.world+1),'#b06a00'];
+ // COLOURS ARE DELIBERATELY DARK: they sit on a LOCKED card, which is light grey (#cfccd8). The old mid-gold
+ // #c98a12/#e0a32a and orange #ff9f45 measured under 2:1 against it - the "randomly hard to read" the owner
+ // flagged. Each keeps its hue but climbs to ~5:1.
+ if(s=='pack')return[it.pack.charAt(0).toUpperCase()+it.pack.slice(1),'#9c4a00'];
+ if(s=='wheel')return['Wheel','#7a2b9c'];
+ if(s=='prem')return['Premium','#7a5200'];
+ if(s=='club')return['Club','#7a5200'];
+ if(s=='reward')return[it.ach?'Trophy':'World '+(it.world+1),'#7a4200'];
  return['Free','#27865b']} // a 'buy' item with a 0 price (No Hat, Dust, ...) that somehow isn't owned yet
 // price tag under an item: owned/equipped, a coin or gem price, or - for anything locked - a lock plus where it comes
 // from. 14px floor: the small variants used to bottom out at 12px, which is unreadable on a phone.
 function priceTag(it,x,y,fs){fs=Math.max(14,fs||15);const own=!!S.own[it.id],eq=S.eq[it.cat]==it.id,sm=Math.max(14,fs-2);
- if(eq)txt('ON',x,y,Math.max(14,fs-1),'#27b865','center',false);else if(own)txt('owned',x,y,sm,'#5d5c6b','center',false);
+ // ON sits on the pale-green EQUIPPED card, so it needs a dark green, not the mid #27b865 (2.2:1 on #c8f5cf)
+ if(eq)txt('ON',x,y,Math.max(14,fs-1),'#12703c','center',false);else if(own)txt('owned',x,y,sm,'#5d5c6b','center',false);
  else if(it.coins){coinIcon(x-19,y-1,6.5,0);txt(''+it.coins,x-9,y,fs,'#1d1a2e','left',false)}
  else if(it.cost){gemShape(x-14,y-1,6,'#20b8c9');txt(''+it.cost,x-4,y,fs,'#1d1a2e','left',false)}
  else{const g=srcTag(it),lw=txtW(g[0],14);lockIcon(x-lw/2-7,y-1,12,g[1]);txt(g[0],x-lw/2+5,y,14,g[1],'left',false)}}
-// every cosmetic of this kind, locked ones included - see rule 2 above
-function shopItems(cat,sub){return ITEMS.filter(i=>i.cat==cat&&(sub==null||subOf(i)==sub))}
-// the "this shelf is empty for you" copy. It is never a bare "nothing here yet": each sub-tab knows how its items are
-// obtained, so an empty shelf explains the route instead of shrugging. (With locked items now always shown, a shelf can
-// only really be empty if a future build removes a whole group - but the promise holds either way.)
-// top-level tabs: three kinds of cosmetic, then the two kinds of real-money thing. 'p'/'g' replaced the old single
-// 'Store' tab, which was a drawer holding four unrelated kinds of product.
-const SHOP_TABS=[['c','Skins'],['h','Hats'],['t','Trails'],['p','Packs'],['g','Gems']];
-const SUB_EMPTY={buy:['Nothing to buy here yet','Coins come from playing levels, gems from finding them and earning new stars.'],
+// ALWAYS shown in the detail panel, owned or not (owner: "just cause you have it doesn't mean the text that says how
+// you get it goes away - if someone forgets about my app for a year they wanna know HOW they got their skins").
+// If a build ever puts a ready-made source string on an item, that wins; otherwise it is derived from srcOf.
+// it.how / it.howSub / it.howCol (itemHow(), up by ACH) is the wording; srcWhy only picks it up and keeps a derived
+// fallback so this panel still says something if an item ever arrives without those fields.
+function srcWhy(it){if(typeof it.how=='string'&&it.how)return[it.how,it.howSub||'',it.howCol||'#ffd45e'];const s=srcOf(it);
+ if(s=='buy')return[it.coins?'Bought for '+fmtN(it.coins)+' coins':it.cost?'Bought for '+fmtN(it.cost)+' gems':'Yours from the start','Coins come from playing levels','#7bdc3b'];
+ if(s=='reward'){if(it.ach){const a=ACH.find(x=>x.id==it.ach);return['Trophy: '+(a?a.n:it.ach),a?a.d:'','#ffd45e']}
+  return['Reward for clearing World '+(it.world+1),'Earned by finishing that whole world','#ffd45e']}
+ if(s=='wheel')return['Prize Wheel only','Won as a Mystery Item on the free Prize Wheel','#ff8fd8'];
+ if(s=='pack')return['Comes with the '+packLabel(it.pack),'Only in that pack - never earned, never won on a wheel','#ffb066'];
+ if(s=='club')return['Hopscraper Club skin','Members unlock one Club skin each month','#ffd45e'];
+ return['Premium Wheel only',it.set?'Part of a full set - skin, hat and trail together':'Exclusive to the Premium Wheel, never sold','#ffd45e']}
+// the wheel tab reads the wheel tables rather than hardcoding numbers: a weight may be a plain number or a [lo,hi]
+// range, and a segment may carry its own ready-made odds string. Whatever the wheel does, this list follows.
+function segW(s){const w=s&&s.w;return Array.isArray(w)?(w[0]+w[1])/2:(+w||0)}
+function oddsTxt(s,tot){if(typeof s.odds=='string')return s.odds;const w=s.w,r=v=>Math.round(v/tot*1000)/10;
+ return Array.isArray(w)?r(w[0])+'-'+r(w[1])+'%':r(+w||0)+'%'}
+// ---- GRID GEOMETRY. ONE RAIL: every row down the left-hand side spans GX..GX+GW, so the tab row, the filter row and
+// the item grid share both edges. The owner's "doesn't line up well" was the old 104px tab pitch sitting over a 130px
+// filter pitch - two rows that started together and ended in different places.
+const GX=24,GW=512,GY0=178,GH=328,GCOLS=5,GCW=96,GCP=104,GCH=76,GRH=84,GHH=24;
+// ONE layout engine for every filter: sections -> rows -> pages. The PACKS filter is the same engine with the last
+// column of a section's final row reserved for its "View all benefits" tile, so the two can never drift apart.
+function shopFlow(cat,flt,h){const secs=shopSections(cat,flt),rows=[],pk=flt=='pack',per=GCOLS-(pk?1:0);
+ for(const s of secs){rows.push({h:1,s});for(let i=0;i<s.its.length;i+=per)rows.push({s,its:s.its.slice(i,i+per),tail:pk&&i+per>=s.its.length})}
+ const pages=[[]];let ph=0;
+ for(const r of rows){const rh=r.h?GHH:GRH,need=r.h?GHH+GRH:rh; // a subtitle never strands itself at the foot of a page
+  if(ph&&ph+need>h){pages.push([]);ph=0;if(!r.h){pages[pages.length-1].push({h:1,s:r.s,c:1});ph=GHH}}
+  pages[pages.length-1].push(r);ph+=rh}
+ return{secs,pages}}
+// which page an item landed on, so FEATURED (and any other jump) opens on the card instead of page 1
+function shopPageOf(cat,flt,id){const F=shopFlow(cat,flt,GH-42);for(let p=0;p<F.pages.length;p++)for(const r of F.pages[p])if(!r.h&&r.its.some(i=>i.id==id))return p;return 0}
+// the "this shelf is empty for you" copy. It is never a bare "nothing here yet": each filter knows how its items are
+// obtained, so an empty shelf explains the route instead of shrugging.
+// top-level tabs: three kinds of cosmetic, then the three ways to get more of them. Wheel is a tab of its own because
+// the owner asked for "a section made just for the wheel in Shop".
+const SHOP_TABS=[['c','Skins'],['h','Hats'],['t','Trails'],['w','Wheel'],['p','Packs'],['g','Gems']];
+const SUB_EMPTY={all:['Nothing of this kind yet','Keep playing - more unlocks as you climb.'],
+ own:['You do not own any of these yet','Buy one with coins or gems, win one on the Prize Wheel, or earn one by clearing a world.'],
  earn:['No rewards of this kind yet','These unlock by clearing worlds and earning trophies - just keep climbing.'],
  spin:['No wheel prizes of this kind','Win these on the free Prize Wheel, the Premium Wheel, or as a Hopscraper Club member.'],
  pack:['No pack items of this kind','These come with the Space, Monster and Gold Supporter packs - see the Packs tab.']};
@@ -4532,49 +5120,75 @@ const SUB_EMPTY={buy:['Nothing to buy here yet','Coins come from playing levels,
 let _dp={d:'',it:null};
 function dailyPickItem(){const d=todayStr();if(_dp.d!=d){const pool=ITEMS.filter(it=>(it.coins||it.cost)&&!it.pack&&!it.iap);
   const R=mulberry(todaySeed()+777);_dp={d,it:pool.length?pool[Math.floor(R()*pool.length)]:null}}return _dp.it}
-SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.sub=this.sub||(SUBCATS[this.cat]||[['','']])[0][0];this.pg=0;this.msg='';this.mt=0;FX.length=0;musicPlay(0)},
+SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';if(!FILTERS.some(f=>f[0]==this.sub))this.sub='all';this.wp=!!this.wp;this.pg=0;this.msg='';this.mt=0;FX.length=0;musicPlay(0)},
  // one place to wipe the panel's transient state: the message, and the "you already tapped this card once" memory that
  // makes a second tap buy. Both belong to a single card, so changing tab/section/page has to drop them.
  clr(){this.msg='';this.mt=0;UI.clickId=null;UI.wasSel=false},
  update(dt){uiNav(this);if(pressed.ESC)go('menu');this.mt-=dt;const s=UI.selId||'';
   if(!UI.kb){} // tabs/sections follow the selection only for keyboard navigation; the mouse has to click them
-  else if(s.startsWith('tab_')){const nc=s.slice(4);if(nc!=this.cat){this.cat=nc;this.sub=(SUBCATS[nc]||[['','']])[0][0];this.pg=0;this.clr()}}
+  else if(s.startsWith('tab_')){const nc=s.slice(4);if(nc!=this.cat){this.cat=nc;this.pg=0;this.clr()}}
   else if(s.startsWith('sub_')&&s.slice(4)!=this.sub){this.sub=s.slice(4);this.pg=0;this.clr()}
   // a "tap again to buy" prompt belongs to whichever card is selected: once the selection leaves every card it is orphaned
   if(this.mt>0&&/again to buy/.test(this.msg)&&!(s.startsWith('it_')||s.startsWith('pr_')))this.clr();
   updParts(FX,dt)},
- draw(){drawBG(WORLDS[1],gtime*20,0,gtime);backBtn();header('SHOP');
+ // Saw Mill's sky is cream/orange, so EVERY loose string on this screen needs a plate under it or it greys out - that,
+ // not the wording, is what made half the shop's text "randomly hard to read".
+ draw(){drawBG(WORLDS[1],gtime*20,0,gtime);backBtn();hudPill(VW/2-84,16,168,44);header('SHOP');
   hudPill(VW-336,18,150,42);coinIcon(VW-312,39,10,gtime*2);txt(curTxt(S.coins),VW-294,40,22,'#fff','left');
   hudPill(VW-176,18,156,42);gemShape(VW-152,39,10,'#5ff4ff');txt(curTxt(S.bank),VW-134,40,22,'#fff','left');
   // no countdown here: the spotlight rotates daily but carries no discount, so a ticking clock would be fake urgency
   {const dp=dailyPickItem();if(dp)button('pick',145,18,240,42,'',{fs:14,bg:'#ffd45e',draw:()=>{txt('★ FEATURED',0,-9,14,'#3a1470','center',false);
-    const nm=dp.n.length>20?dp.n.slice(0,19)+'…':dp.n;txt(nm,0,11,14,'#3a1470','center',false)}})}
-  // five tabs, one per KIND of thing. The old 'Store' tab (a drawer of unrelated products) split into Packs and Gems.
+    txt(fitStr(dp.n,220,14),0,11,14,'#3a1470','center',false)}})}
+  // ONE RAIL: the tabs are sized to fill GX..GX+GW exactly, the same span the filter row and every grid row use, so
+  // the two rows start and end together whatever the tab count. The old 104px tabs over 130px filters did not.
   if((this.cat=='p'||this.cat=='g')&&!storeOn())this.cat='c';
-  SHOP_TABS.filter(c=>'pg'.indexOf(c[0])<0||storeOn()).forEach((c,i)=>button('tab_'+c[0],24+i*104,88,96,42,c[1],{fs:17,bg:this.cat==c[0]?'#ffd45e':'pg'.indexOf(c[0])>=0?'#c8f5cf':'#ffffff'}));
-  ctx.fillStyle='rgba(15,12,30,.45)';rr(560,88,360,420,22);ctx.fill();
+  const TB=SHOP_TABS.filter(c=>'pg'.indexOf(c[0])<0||storeOn()),tn=TB.length,tw=Math.floor((GW-(tn-1)*8)/tn),tp=tn>1?(GW-tw)/(tn-1):0;
+  TB.forEach((c,i)=>button('tab_'+c[0],Math.round(GX+i*tp),86,tw,42,c[1],{fs:tw<88?16:17,bg:this.cat==c[0]?'#ffd45e':'pg'.indexOf(c[0])>=0?'#c8f5cf':c[0]=='w'?'#e9d4ff':'#ffffff'}));
+  ctx.fillStyle='rgba(12,9,26,.72)';rr(560,88,360,420,22);ctx.fill();
   if(this.cat=='p')return this.drawPacks();
   if(this.cat=='g')return this.drawGems();
-  const subs=SUBCATS[this.cat]||[];
-  subs.forEach((sc,i)=>button('sub_'+sc[0],24+i*130,136,122,34,sc[1],{fs:15,bg:this.sub==sc[0]?'#8dd3ff':'#ffffff'}));
-  const full=shopItems(this.cat,this.sub),PCOLS=5,PROWS=3,PP=PCOLS*PROWS;
-  const pages=Math.max(1,Math.ceil(full.length/PP));if(this.pg>pages-1)this.pg=pages-1;
-  const list=full.slice(this.pg*PP,this.pg*PP+PP),n=list.length,cols=PCOLS,rows=Math.max(1,Math.ceil(n/cols)),cw=Math.floor((512-(cols-1)*8)/cols),ch=90,GY=184;
+  if(this.cat=='w')return this.drawWheelTab();
+  // the filter row, in the owner's words and his order, on the same rail as the tabs directly above it
+  if(!FILTERS.some(f=>f[0]==this.sub))this.sub='all';
+  FILTERS.forEach((f,i)=>button('sub_'+f[0],GX+i*GCP,134,GCW,38,f[1],{fs:15,bg:this.sub==f[0]?'#8dd3ff':'#ffffff'}));
+  ctx.fillStyle='rgba(12,9,26,.72)';rr(GX,GY0-6,GW,GH+12,18);ctx.fill();
+  // sections -> rows -> pages, all from one engine (shopFlow). The paging row only costs height when there IS one.
+  let F=shopFlow(this.cat,this.sub,GH);if(F.pages.length>1)F=shopFlow(this.cat,this.sub,GH-42);
+  const pgs=F.pages,multi=pgs.length>1;this.pg=clamp(this.pg|0,0,pgs.length-1);
   // an empty shelf ALWAYS says how to fill it - never a bare "nothing here yet" (see SUB_EMPTY)
-  if(!full.length){const e=SUB_EMPTY[this.sub]||['Nothing here yet','Keep playing - more unlocks as you climb.'];
-   ctx.fillStyle='rgba(15,12,30,.55)';rr(24,184,512,150,18);ctx.fill();
-   txt(e[0],280,222,20,'#ffd45e');wrapText(e[1],450,15).slice(0,3).forEach((l,i)=>txt(l,280,252+i*22,15,'#d8d5ea',undefined,false));
-   if(this.sub=='spin')button('gopw',180,350,200,36,'★ Premium Wheel',{fs:16,bg:'#2a1450',draw:(w,h,sel)=>txt('★ Premium Wheel',0,1,16,sel?'#3a1470':'#ffd45e','center',false)});
-   if(this.sub=='pack'&&storeOn())button('gopack',180,350,200,36,'See the Packs',{fs:16,bg:'#c8f5cf'})}
-  const pickId=dailyPickItem()?dailyPickItem().id:null;
+  if(!F.secs.length){const e=SUB_EMPTY[this.sub]||['Nothing here yet','Keep playing - more unlocks as you climb.'];
+   txt(e[0],GX+GW/2,GY0+46,20,'#ffd45e');wrapText(e[1],460,15).slice(0,3).forEach((l,i)=>txt(l,GX+GW/2,GY0+80+i*22,15,'#d8d5ea',undefined,false));
+   if(this.sub=='spin')button('gopw',GX+GW/2-110,GY0+168,220,42,'',{bg:'#2a1450',draw:(w,h,sel)=>txt('★ Premium Wheel',0,1,16,sel?'#3a1470':'#ffd45e','center',false)});
+   else if(this.sub=='pack'&&storeOn())button('gopack',GX+GW/2-110,GY0+168,220,42,'See the Packs',{fs:16,bg:'#c8f5cf'});
+   else button('gobuy',GX+GW/2-110,GY0+168,220,42,'Show everything',{fs:16,bg:'#8dd3ff'})}
   // THREE card states, readable without looking at the caption: green = worn, white = yours or affordable right now,
-  // grey + dimmed art = locked. Anything locked still shows its art (you can see what you are missing) at 55% alpha.
-  list.forEach((it,k)=>{const x=24+(k%cols)*(cw+8),y=GY+Math.floor(k/cols)*(ch+8),eq=S.eq[it.cat]==it.id,ps=ch>=80?30:24;
-   const own=!!S.own[it.id],pr=it.coins||it.cost,afford=S.dev||!pr||(it.coins?S.coins:S.bank)>=pr,lock=!own&&!(srcOf(it)=='buy'&&afford);
-   button('it_'+it.id,x,y,cw,ch,'',{bg:eq?'#c8f5cf':lock?'#cfccd8':'#ffffff',draw:()=>{ctx.save();if(lock)ctx.globalAlpha=0.55;ctx.translate(0,-ch*0.1);if(it.cat=='t')drawItemPreview(it,-6,-4,ps*0.66);else{BLINKO=shopBlink(this,k%cols,Math.floor(k/cols),cols,rows,k,n);if(it.cat=='h'){const hs=ch>=80?26:22;drawSq(0,ch*0.6-hs,hs,gtime,{c:S.eq.c,h:it.id})}else drawItemPreview(it,0,-ps*0.6,ps);BLINKO=null}ctx.restore();priceTag(it,0,ch/2-13);
+  // grey + dimmed art = locked. A locked card dims its ART only - its caption stays full strength, because that
+  // caption is the one thing that says where the item comes from.
+  const pickId=(dailyPickItem()||{}).id,pg=pgs[this.pg]||[],nr=Math.max(1,pg.filter(r=>!r.h).length);
+  const card=(it,x,y,ri,ci)=>{const eq=S.eq[it.cat]==it.id,own=!!S.own[it.id],pr=it.coins||it.cost,w=GCW,h=GCH,
+    afford=S.dev||!pr||(it.coins?S.coins:S.bank)>=pr,lock=!own&&!(srcOf(it)=='buy'&&afford);
+   button('it_'+it.id,x,y,w,h,'',{bg:eq?'#c8f5cf':lock?'#cfccd8':'#ffffff',draw:()=>{ctx.save();if(lock)ctx.globalAlpha=0.55;ctx.translate(0,-h*0.12);
+    if(it.cat=='t')drawItemPreview(it,-6,-3,17);
+    else{BLINKO=shopBlink(this,ci,ri,GCOLS,nr,ri*GCOLS+ci,nr*GCOLS);
+     if(it.cat=='h')drawSq(0,h*0.58-22,22,gtime,{c:S.eq.c,h:it.id});else drawItemPreview(it,0,-14,24);BLINKO=null} // hats sit lower so tall ones stay inside the card
+    ctx.restore();priceTag(it,0,h/2-13);
     // badge shortened to PICK so the label can sit at the 14px floor instead of a 10px sliver
-    if(it.id==pickId){ctx.fillStyle='#ffd45e';rr(-cw/2+3,-ch/2+3,48,20,7);ctx.fill();txt('PICK',-cw/2+27,-ch/2+14,14,'#3a1470','center',false)}}})}); // hats sit lower and a bit smaller so tall ones stay inside the card
-  if(pages>1){const py=GY+PROWS*(ch+8)+10;button('pg_prev',24,py,60,28,'<',{fs:16,disabled:this.pg==0});txt('Page '+(this.pg+1)+'/'+pages,270,py+16,14,'#fff');button('pg_next',236,py,60,28,'>',{fs:16,disabled:this.pg>=pages-1})}
+    if(it.id==pickId){ctx.fillStyle='#ffd45e';rr(-w/2+3,-h/2+3,48,19,7);ctx.fill();txt('PICK',-w/2+27,-h/2+13,14,'#3a1470','center',false)}}})};
+  {let y=GY0,ri=0;for(const r of pg){
+   if(r.h){const hd=grpHead(r.s.k),ow=r.s.its.filter(i=>!!S.own[i.id]).length;
+    txt(fitStr(hd[0]+(r.c?'  (continued)':''),320,14),GX+6,y+12,14,hd[1],'left',false);
+    txt(ow+' / '+r.s.its.length+' owned',GX+GW-6,y+12,14,'#cfccdd','right',false);
+    ctx.fillStyle='rgba(255,255,255,.16)';ctx.fillRect(GX+6,y+21,GW-12,1);y+=GHH;continue}
+   r.its.forEach((it,k)=>card(it,GX+k*GCP,y,ri,k));
+   // the jump-out the owner asked for: card-sized, last column, so it reads as one more thing in this pack
+   if(r.tail){const p=packProduct(r.s.k.slice(3));if(p)button('vp_'+PRODUCTS.indexOf(p),GX+(GCOLS-1)*GCP,y,GCW,GCH,'',{bg:'#ffd9b0',draw:(w,h,sel)=>{
+    txt('View all',0,-19,14,'#3a1470','center',false);txt('benefits',0,-3,14,'#3a1470','center',false);
+    ctx.fillStyle=sel?'#3a1470':'#9c4a00';rr(-28,8,56,21,10);ctx.fill();txt('OPEN',0,19,14,'#fff','center',false)}})}
+   ri++;y+=GRH}}
+  // the page number sits in the MIDDLE of the rail; it used to be drawn straight on top of the > button
+  if(multi){const py=GY0+GH-36;button('pg_prev',GX,py,86,36,'<',{fs:18,disabled:this.pg==0});
+   txt('Page '+(this.pg+1)+' / '+pgs.length,GX+GW/2,py+18,15,'#fff');
+   button('pg_next',GX+GW-86,py,86,36,'>',{fs:18,disabled:this.pg>=pgs.length-1})}
   const s=UI.selId||'';const it=s.startsWith('it_')?ITEMS.find(i=>i.id==s.slice(3)):null;
   const pv=it||ITEMS.find(i=>i.id==S.eq[this.cat])||ITEMS.find(i=>i.id==defSave().eq[this.cat])||ITEMS[0];const pc=pv.cat=='c'?pv.id:S.eq.c,ph=pv.cat=='h'?pv.id:S.eq.h;
   if(pv.cat=='t'){const a=gtime*1.6,px=740+Math.cos(a)*90,py=250+Math.sin(a*2)*40;const tr=pv.id;const c={t_dust:'#fff',t_spark:'#fff6a8',t_bubble:'#aeefff',t_fire:['#ffd23f','#ff8c1a','#ff3d2e'][Math.random()*3|0],t_hearts:'#ff5c8a',t_stars:'#ffe066',t_rainbow:`hsl(${(gtime*300)%360},90%,62%)`}[tr];
@@ -4582,27 +5196,64 @@ SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.su
    const X=TRX[tr];if(X&&Math.random()<0.028/X.dt)FX.push(X.mk(px,py-22));
    drawParts(FX);drawSq(px,py,44,gtime,{c:pc,h:ph,lx:-Math.sin(a)})}
   else{FX.length=0;const bob=Math.abs(Math.sin(gtime*3))*30;ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(740,296,40,7,0,0,7);ctx.fill();drawSq(740,296-bob,72,gtime,{c:pc,h:ph,lx:Math.sin(gtime)})}
-  // the detail line is the LONG answer to the same question the card's caption answers short - every route spelled out,
-  // including the pack an item belongs to, so nothing in the grid is ever unexplained
-  if(it){txt(it.n,740,346,28,'#fff');const own=!!S.own[it.id],eq=S.eq[it.cat]==it.id,pr=it.coins||it.cost,have=it.coins?S.coins:S.bank,unit=it.coins?' coins':' gems';let st,col='#fff',sub='';
-   if(eq)st='Equipped';else if(own)st=touchOn()?'Tap to wear':'Click or press ENTER to wear';
-   else if(pr){st='Costs '+fmtN(pr)+unit;const ok=S.dev||have>=pr;col=ok?'#7bdc3b':'#ff8a8a';sub=ok?(touchOn()?'Tap again to buy':'Click again or press ENTER to buy'):'Need '+fmtN(pr-have)+' more'}
-   else if(it.ach){st='Trophy: '+ACH.find(a=>a.id==it.ach).n;col='#ffd45e';sub=ACH.find(a=>a.id==it.ach).d}
-   else if(it.world!=null){st='Reward for clearing World '+(it.world+1);col='#ffd45e'}
-   else if(it.wheel){st='Prize Wheel only';col='#ff8fd8';sub='Win it on the free Prize Wheel'}
-   else if(it.pack){st='Comes with the '+packLabel(it.pack);col='#ffb066';sub='Open the Packs tab to see everything inside'}
-   else if(it.club){st='Hopscraper Club skin';col='#ffd45e';sub='Members unlock one Club skin each month'}
-   else{st='Premium Wheel only';col='#ffd45e';sub=it.set?'Part of a full set - skin, hat and trail together':'Exclusive to the Premium Wheel, never sold'}
-   txt(st,740,380,18,col,undefined,false);if(sub){let fs=15;ctx.font=`bold ${fs}px ${FONT}`;while(fs>14&&ctx.measureText(sub).width>330){fs--;ctx.font=`bold ${fs}px ${FONT}`}txt(sub,740,406,fs,'#d8d5ea',undefined,false)}}
+  // WHAT IT IS, then HOW YOU GET IT, then WHAT YOU CAN DO NOW - three FIXED rows, never stacked conditionally, so no
+  // two of them can land on top of each other however long the wording is. OWNING SOMETHING NEVER HIDES HOW YOU GOT
+  // IT: the route prints in the same words locked, owned or worn. The WORDING is item data (it.how / it.howSub /
+  // it.howCol, built by itemHow() next to ACH) - this panel only lays it out, so the two can never disagree.
+  if(it){const own=!!S.own[it.id],eq=S.eq[it.cat]==it.id,pr=it.coins||it.cost,have=it.coins?S.coins:S.bank,wy=srcWhy(it);
+   txt(fitStr(it.n,336,26),740,336,26,'#fff');
+   txt(own?'HOW YOU GOT IT':'HOW YOU GET IT',740,364,14,'#c3bfd4',undefined,false);
+   txt(fitStr(wy[0],336,18),740,390,18,wy[2],undefined,false);
+   if(wy[1])wrapText(wy[1],330,14).slice(0,2).forEach((l,i)=>txt(l,740,414+i*18,14,'#d8d5ea',undefined,false));
+   let st,col='#fff',sub='';
+   if(eq){st='Equipped - you are wearing it';col='#7bdc3b'}
+   else if(own){st=touchOn()?'Tap to wear it':'Click or press ENTER to wear it';col='#8dd3ff'}
+   else if(pr){const ok=S.dev||have>=pr;st='Costs '+fmtN(pr)+(it.coins?' coins':' gems');col=ok?'#7bdc3b':'#ff8a8a';
+    sub=ok?(touchOn()?'Tap it again to buy':'Click again or press ENTER to buy'):'You need '+fmtN(pr-have)+' more'}
+   else{st='Not unlocked yet';col='#ffb066'}
+   txt(fitStr(st,336,18),740,454,18,col,undefined,false);if(sub)txt(fitStr(sub,336,14),740,476,14,'#d8d5ea',undefined,false);
+   if(this.mt>0)txt(fitStr(this.msg,336,15),740,498,15,'#ffd45e')}
   // nothing picked yet: this is the only place the game ever says where each currency actually comes from
-  else{coinIcon(596,374,9,gtime*2);txt('Coins come from playing levels.',612,375,15,'#ffd45e','left',false);
-   gemShape(596,402,9,'#5ff4ff');wrapText('Gems come from finding gems and earning new stars.',312,15).slice(0,2).forEach((l,k)=>txt(l,612,403+k*19,15,'#8dd3ff','left',false))}
-  if(this.mt>0)txt(this.msg,740,434,17,'#ffd45e');
-  button('wheel',580,452,320,42,'',{bg:(S.dev||S.tix>0)?'#ffe9a8':'#ffffff',draw:()=>{tixIcon(-120,0,11);txt('Prize Wheel',-98,1,18,'#1d1a2e','left',false);txt('x'+curTxt(S.tix),140,1,17,(S.dev||S.tix)?'#c2185b':'#6d6982','right',false)}})},
+  else{txt(touchOn()?'TAP ANYTHING TO SEE HOW TO GET IT':'CLICK ANYTHING TO SEE HOW TO GET IT',740,336,14,'#b0acc2',undefined,false);
+   coinIcon(600,378,9,gtime*2);txt('Coins come from playing levels.',616,379,15,'#ffd45e','left',false);
+   gemShape(600,408,9,'#5ff4ff');wrapText('Gems come from finding gems and earning new stars.',296,15).slice(0,2).forEach((l,k)=>txt(l,616,409+k*19,15,'#8dd3ff','left',false));
+   if(this.mt>0)txt(fitStr(this.msg,336,15),740,470,15,'#ffd45e')}},
  // ---- PACKS tab: the three themed packs, one tall card each, no sub-tabs and no paging. Three products is a SHELF,
  // not a card wall, so each one gets room for its world name, its contents and an unmistakable Owned/price chip.
+ // ---- WHEEL tab: "Add a section made just for the wheel in Shop." Left rail = your tickets and the two wheels.
+ // Right panel = the odds, MOST COMMON FIRST, read live off the wheel tables (segW/oddsTxt) instead of hardcoded, so
+ // this list follows whatever the wheel's own weights do. The wheel screen's own odds popup is left alone.
+ drawWheelTab(){const prem=!!this.wp&&pwOn(),segs=(prem?PWHEEL:WHEEL)||[];
+  ctx.fillStyle='rgba(12,9,26,.72)';rr(GX,134,GW,378,18);ctx.fill();
+  txt('THE PRIZE WHEEL',GX+GW/2,164,22,'#ffd45e');
+  tixIcon(GX+38,200,13);txt('x'+curTxt(S.tix)+' '+(S.tix==1?'ticket':'tickets'),GX+62,201,18,'#fff','left',false);
+  txt('Free - you earn them by playing.',GX+GW-14,201,14,'#cfccdd','right',false);
+  button('wheel',GX+16,224,GW-32,52,'',{bg:(S.dev||S.tix>0)?'#ffe9a8':'#ffffff',draw:w=>{tixIcon(-w/2+36,0,12);txt('SPIN THE PRIZE WHEEL',-w/2+62,1,20,'#1d1a2e','left',false)}});
+  if(pwOn())button('gopw',GX+16,286,GW-32,52,'',{bg:'#2a1450',draw:(w,h,sel)=>{const c=sel?'#3a1470':'#ffd45e';star5(-w/2+36,0,11,c);txt('PREMIUM WHEEL',-w/2+62,1,20,c,'left',false);
+   gemShape(w/2-98,0,9,'#5ff4ff');txt(PWHEEL_COST+' a spin',w/2-84,1,15,c,'left',false)}});
+  {const ws=ITEMS.filter(i=>srcOf(i)=='wheel'),ps=ITEMS.filter(i=>srcOf(i)=='prem');
+   txt('Wheel-only cosmetics you own: '+ws.filter(i=>!!S.own[i.id]).length+'/'+ws.length+' free  ·  '+ps.filter(i=>!!S.own[i.id]).length+'/'+ps.length+' premium',GX+GW/2,360,14,'#d8d5ea')}
+  button('seewheel',GX+16,382,GW-32,44,'See every wheel-only item',{fs:17,bg:'#8dd3ff'});
+  if(canBuyTix())button('buytix',GX+16,436,GW-32,44,'',{bg:'#ffffff',draw:w=>{coinIcon(-w/2+34,0,9,gtime*2);txt('Swap '+fmtN(TIX_COST)+' coins for a ticket',-w/2+52,1,16,'#1d1a2e','left',false);txt(tixBuyLeft()+' left today',w/2-14,1,14,'#54506a','right',false)}});
+  else txt(tixBuyLeft()?'A ticket costs '+fmtN(TIX_COST)+' coins - not enough yet':'No more ticket swaps today',GX+GW/2,458,14,'#cfccdd');
+  if(this.mt>0)txt(fitStr(this.msg,GW-40,15),GX+GW/2,494,15,'#ffd45e');
+  button('od_f',576,100,164,36,'Prize Wheel',{fs:15,bg:prem?'#ffffff':'#8dd3ff'});
+  if(pwOn())button('od_p',748,100,156,36,'Premium',{fs:15,bg:prem?'#8dd3ff':'#ffffff'});
+  txt('ODDS  ·  MOST COMMON FIRST',740,156,14,'#c3bfd4',undefined,false);
+  // oddsRows()/oddsBand() belong to the wheel - this list borrows them so the shop and the wheel's own odds popup can
+  // never print different numbers. segW/oddsTxt is only the fallback if the wheel ever stops exposing them.
+  const tot=segs.reduce((a,x)=>a+segW(x),0)||1,
+   so=typeof oddsRows=='function'?oddsRows(segs):segs.map((s,i)=>({s,i,p:segW(s)/tot*100})).sort((a,b)=>b.p-a.p||a.i-b.i),
+   band=r=>typeof oddsBand=='function'?oddsBand(r.p):oddsTxt(r.s,tot);
+  so.forEach((e,i)=>{const sg=e.s,ry=178+i*32;ctx.fillStyle=i%2?'rgba(255,255,255,.05)':'rgba(255,255,255,.11)';rr(576,ry-14,328,28,8);ctx.fill();
+   ctx.fillStyle=sg.col;ctx.beginPath();ctx.arc(594,ry,8,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.5;ctx.stroke();
+   // 30px of lane for the icon, not 22: the Power Card segment's icon is a wide card and used to touch its own label
+   segIcon(sg,620,ry,18);txt(fitStr(sg.n,164,14),650,ry+1,14,'#fff','left',false);
+   txt(band(e),898,ry+1,15,'#ffd45e','right',false)});
+  txt(prem?'Duplicates convert to gems.':'Every spin pays out something.',740,Math.min(486,186+segs.length*32),14,'#cfccdd',undefined,false)},
  drawPacks(){const ps=packProducts(),n=ps.length,cw=Math.floor((512-(n-1)*10)/n);
-  txt('THREE PACKS. THAT IS THE WHOLE STORE.',280,152,15,'#ffd45e');
+  // gold on Saw Mill's cream sky measured about 1.6:1 - this strapline needs the same plate the rest of the shop got
+  {const s='THREE PACKS. THAT IS THE WHOLE STORE.',w=txtW(s,15)+28;hudPill(GX+GW/2-w/2,138,w,30);txt(s,GX+GW/2,153,15,'#ffd45e')}
   ps.forEach((p,k)=>{const x=24+k*(cw+10),own=prodOwned(p),th=WORLDS[bwWorldOf(p)];
    button('pr_'+PRODUCTS.indexOf(p),x,170,cw,250,'',{bg:own?'#c8f5cf':'#ffffff',draw:(bw,bh,sel)=>{
     // the world's own sky, so each pack card is instantly the colour of the thing it sells
@@ -4630,7 +5281,8 @@ SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.su
  // "currency and membership" rather than content, which is why they share a tab instead of each getting a half-empty one.
  drawGems(){const gs=PRODUCTS.filter(p=>p.gems),sub=PRODUCTS.find(p=>p.type=='sub');
   // one centred strapline, no left-hand "GEMS" label: the tab above already says Gems, and the two collided
-  txt('Spend them on skins, hats, trails and Premium Wheel spins.',280,152,14,'#d8d5ea');
+  // ...and it gets the same plate as the Packs strapline: pale grey on a cream sky is the worst pairing in the screen
+  {const s='Spend them on skins, hats, trails and Premium Wheel spins.',w=txtW(s,14)+28;hudPill(GX+GW/2-w/2,138,w,30);txt(s,GX+GW/2,153,14,'#e8e6f5')}
   gs.forEach((p,k)=>{const x=24+(k%2)*262,y=168+Math.floor(k/2)*106;
    button('pr_'+PRODUCTS.indexOf(p),x,y,252,96,'',{bg:'#ffffff',draw:(bw,bh)=>{
     if(p.tag){ctx.fillStyle='#ffd45e';rr(bw/2-96,-bh/2+7,88,19,8);ctx.fill();txt(p.tag,bw/2-52,-bh/2+17,13,'#3a1470','center',false)}
@@ -4668,7 +5320,8 @@ SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.su
    else{const rl=wrapText('Renews monthly. Cancel anytime in Settings > Apple ID > Subscriptions.',330,13);rl.forEach((l,i)=>txt(l,740,ny-5+i*15,13,'#b9b6c6',undefined,false));ny+=(rl.length-1)*15}
    if(mem&&dayNum(S.clubDay)>=todaySeed()&&ny+20<=410)txt('Next +10 gems in '+cdStr(),740,ny+20,13,'#ffd45e',undefined,false);
    // Apple requires Terms of Use + Privacy Policy links on the subscription screen
-   button('terms',588,418,164,28,'Terms of Use',{fs:14});button('privacy',756,418,164,28,'Privacy Policy',{fs:14});
+   // 34 tall, not 28: at landscape-phone scale a 28px row is about 19 CSS px, too small to hit reliably
+   button('terms',588,412,164,36,'Terms of Use',{fs:14});button('privacy',756,412,164,36,'Privacy Policy',{fs:14});
    if(S.dev)button('devclub',660,94,160,26,clubOn()?'DEV: unsub':'DEV: sub free',{fs:12,bg:'#c8f5cf'});return}
   const own=prodOwned(p);txt(p.n,740,126,26,'#fff');
   // a pack shows every cosmetic in it, ticked off one by one, so "what am I actually buying" is answered on the card
@@ -4678,21 +5331,32 @@ SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.su
     const g=!!S.own[it.id];ctx.save();if(!g&&!own)ctx.globalAlpha=0.85;
     if(it.cat=='t')drawItemPreview(it,x,y,20);else if(it.cat=='h')drawSq(x,y+14,26,gtime+i,{c:S.eq.c,h:it.id});else drawSq(x,y+6,34,gtime+i,{c:it.id,h:'h_none'});
     ctx.restore();
-    txt(fitStr(it.n,cw2-4,11),x,y+30,11,g?'#7bdc3b':'#d8d5ea',undefined,false);
+    // NO 11px name under each icon. Six of them in 330px meant every one but "Moon" was a truncated 11px stub
+    // ("Astronau…", "Space H…", "Meteor …"), which is about 7 CSS px on a landscape phone - the worst text in the
+    // shop. The art says which item it is, the tick says whether it is yours, and p.d below names them all in full.
     if(g){ctx.strokeStyle='#7bdc3b';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+cw2/2-13,y-16);ctx.lineTo(x+cw2/2-9,y-12);ctx.lineTo(x+cw2/2-2,y-21);ctx.stroke()}});
-   const ln=wrapText(p.d,330,14);ln.slice(0,5).forEach((l,i)=>txt(l,740,250+i*19,14,'#d8d5ea',undefined,false));
+   {const b=packBlurb(p);txt(b[b.length>1?1:0],740,240,14,'#ffd45e',undefined,false)}
+   const ln=wrapText(p.d,330,14);ln.slice(0,5).forEach((l,i)=>txt(l,740,264+i*19,14,'#d8d5ea',undefined,false));
    txt(own?'Owned':priceTxt(p),740,366,26,own?'#b9b6c6':'#7bdc3b')}
   else{gemShape(740,214,34,'#5ff4ff');
    const ln=wrapText(p.d,320,17);ln.forEach((l,i)=>txt(l,740,286+i*24,17,'#fff',undefined,false));
    txt(priceTxt(p),740,356,26,'#7bdc3b')}},
- onBtn(id){if(id=='back')return go('menu');if(id=='pick'){const dp=dailyPickItem();if(dp){this.cat=dp.cat;this.sub=subOf(dp);this.pg=0;UI.selId='it_'+dp.id}return}
-  if(id.startsWith('tab_')){const nc=id.slice(4);this.cat=nc;this.sub=(SUBCATS[nc]||[['','']])[0][0];this.pg=0;this.clr();return}
+ // FEATURED lands ON the card, not just on its tab: shopPageOf finds the page the item flowed onto.
+ onBtn(id){if(id=='back')return go('menu');if(id=='pick'){const dp=dailyPickItem();if(dp){this.cat=dp.cat;this.sub='all';this.pg=shopPageOf(dp.cat,'all',dp.id);this.clr();UI.selId='it_'+dp.id}return}
+  // the filter is KEPT across Skins/Hats/Trails - you stay on OWNED (or PACKS) while you flick between them
+  if(id.startsWith('tab_')){this.cat=id.slice(4);this.pg=0;this.clr();return}
   if(id=='wheel')return go('wheel','shop');if(id=='gopw')return go('wheel',{from:'shop',prem:true});
   if(id=='gopack'){this.cat='p';this.pg=0;this.clr();UI.selId=null;return}
+  if(id=='gobuy'){this.sub='all';this.pg=0;this.clr();return}
+  if(id=='seewheel'){this.cat='c';this.sub='spin';this.pg=0;this.clr();UI.selId=null;return}
+  if(id=='od_f'||id=='od_p'){this.wp=id=='od_p';this.clr();return}
+  // "View all benefits": jump to the Packs tab with that pack already open in the detail panel
+  if(id.startsWith('vp_')){this.cat='p';this.pg=0;this.clr();UI.selId=id.replace('vp_','pr_');return}
   if(id.startsWith('sub_')){this.sub=id.slice(4);this.pg=0;this.clr();return}
   if(id=='pg_prev'){this.pg=Math.max(0,this.pg-1);this.clr();return}
   if(id=='pg_next'){this.pg++;this.clr();return}
   if(id=='restore'){if(!restorePurchases())noNativeBuy();return}
+  if(id=='buytix'){if(buyTix()){sfx('buy');this.msg='+1 spin ticket';this.mt=1.5}else{sfx('no');this.msg='Not enough coins';this.mt=1.5}return}
   if(id=='devclub'){setClub(!clubOn());this.msg=clubOn()?'DEV: Club active':'DEV: Club off';this.mt=1.5;return}if(id=='terms')return openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');if(id=='privacy')return openURL('https://l3dprints26.github.io/hopscraper/privacy.html');
   if(id.startsWith('pr_')){const p=PRODUCTS[+id.slice(3)];if(prodOwned(p)){this.msg=p.type=='sub'?'You are already a member':'You already own this';this.mt=1.5;return}
    if(!UI.wasSel){this.msg=touchOn()?'Tap again to buy':'Click again to buy';this.mt=1.5;return}
@@ -4712,8 +5376,8 @@ SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';this.su
    it.world!=null?'Clear World '+(it.world+1)+' for it':'Win it on the Premium Wheel';this.mt=2}};
 
 // ================= PRIZE WHEEL =================
-function wheelPick(){let tot=0;for(const s of WHEEL)tot+=s.w;let r=Math.random()*tot;for(let i=0;i<WHEEL.length;i++){r-=WHEEL[i].w;if(r<0)return i}return 0}
-function wheelSeg(rot){const A=Math.PI*2/WHEEL.length,f=((-rot)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);return Math.floor(f/A)%WHEEL.length}
+// (wheelPick/wheelSeg used to live here: a weighted roll that chose the prize, and an equal-wedge lookup that only
+// existed to point the animation at it. Both are gone - the spin itself decides now, through wSegAt. See PW_PITY.)
 // ---- wheel art (shared by the Prize Wheel and the Premium Wheel)
 function otxt(s,x,y,size,fill,stroke,lw){ctx.font=`bold ${size}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';ctx.strokeStyle=stroke||'rgba(20,6,40,.6)';ctx.lineWidth=lw||Math.max(2,size*0.26);ctx.strokeText(s,x,y);ctx.fillStyle=fill||'#fff';ctx.fillText(s,x,y)}
 function backOut(x){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)}
@@ -4750,7 +5414,10 @@ function segIcon(s,x,y,sz){const k=s.k;
  else if(k=='J')crownIcon(x,y,sz*0.85)}
 function segLabel(s){return s.l||(s.k=='t'?'+'+s.v:s.k=='s'?'MYSTERY':''+s.v)}
 // mode: 0 idle, 1 spinning, 2 winner flash
-function drawWheel(cx,cy,R,segs,rot,prem,hi,mode){const n=segs.length,A=Math.PI*2/n,TAU=Math.PI*2;
+// WEDGE SIZE IS THE ODDS. Every wedge's arc is its w as a share of the total (wArcs), so a 22% prize physically
+// occupies 22% of the wheel and a 2% prize is a sliver you can SEE is a sliver. Nothing here is decorative: this is
+// the same geometry wSegAt reads to decide what the spin won.
+function drawWheel(cx,cy,R,segs,rot,prem,hi,mode){const n=segs.length,TAU=Math.PI*2,AR=wArcs(segs);
  const glow=ctx.createRadialGradient(cx,cy,R*0.8,cx,cy,R+90);glow.addColorStop(0,prem?'rgba(255,200,80,.35)':'rgba(255,255,255,.22)');glow.addColorStop(1,'rgba(255,200,80,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(cx,cy,R+90,0,TAU);ctx.fill();
  ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.arc(cx+5,cy+12,R+27,0,TAU);ctx.fill();
  const rg=ctx.createLinearGradient(cx,cy-R-28,cx,cy+R+28);
@@ -4766,12 +5433,12 @@ function drawWheel(cx,cy,R,segs,rot,prem,hi,mode){const n=segs.length,A=Math.PI*
   else ctx.fillStyle=prem?'#6e4a0c':'#4a3a96';
   ctx.beginPath();ctx.arc(bx,by,4.3,0,TAU);ctx.fill()}
  ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);
- for(let i=0;i<n;i++){const s=segs[i],a0=-Math.PI/2+i*A,a1=a0+A;
+ for(let i=0;i<n;i++){const s=segs[i],A=AR[i].f*TAU,a0=-Math.PI/2+AR[i].a*TAU,a1=a0+A;
   const g=ctx.createRadialGradient(0,0,R*0.12,0,0,R);g.addColorStop(0,shade(s.col,1.5));g.addColorStop(0.55,s.col);g.addColorStop(1,shade(s.col,0.7));
   ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,a0,a1);ctx.closePath();ctx.fill();
   if(hi===i){ctx.fillStyle=`rgba(255,255,255,${0.2+0.16*Math.sin(gtime*10)})`;ctx.fill()}
   if(s.k=='J')for(let q=0;q<7;q++){const fa=((q*0.37)%1),fr=((q*0.61)%1),tw=Math.abs(Math.sin(gtime*3+q*1.7)),aa=a0+A*(0.15+0.7*fa),rr2=R*(0.3+0.62*fr);star5(Math.cos(aa)*rr2,Math.sin(aa)*rr2,2+tw*4,`rgba(255,215,90,${0.35+0.6*tw})`)}}
- for(let i=0;i<n;i++){const a=-Math.PI/2+i*A,c=Math.cos(a),sn=Math.sin(a);
+ for(let i=0;i<n;i++){const a=-Math.PI/2+AR[i].a*TAU,c=Math.cos(a),sn=Math.sin(a);
   ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(c*R*0.18,sn*R*0.18);ctx.lineTo(c*R,sn*R);ctx.stroke();
   ctx.strokeStyle=prem?'#ffe39a':'rgba(255,255,255,.92)';ctx.lineWidth=2.5;ctx.stroke();
   const px=c*(R-9),py=sn*(R-9);ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.arc(px+1,py+2,4.8,0,TAU);ctx.fill();
@@ -4785,10 +5452,13 @@ function drawWheel(cx,cy,R,segs,rot,prem,hi,mode){const n=segs.length,A=Math.PI*
  // hat/trail/skin art especially) piled on top of each other. Label and icon now get their OWN polar anchors on the
  // wedge midline - label at 0.79R, icon at 0.50R - and are counter-rotated individually. They are therefore always
  // radially stacked inside their own wedge at every rotation, while still staying upright and readable.
- for(let i=0;i<n;i++){const s=segs[i],am=-Math.PI/2+(i+0.5)*A,lab=segLabel(s),ca=Math.cos(am),sa=Math.sin(am);
-  const fs=Math.round(lab.length>7?R*0.078:lab.length>5?R*0.092:lab.length>3?R*0.11:R*0.13);
-  // icon first, so a long label always wins the overlap it can never quite avoid on a 7-segment wheel
-  ctx.save();ctx.translate(ca*R*0.50,sa*R*0.50);ctx.rotate(-rot);segIcon(s,0,0,R*0.185);ctx.restore();
+ // UNEQUAL WEDGES: art and label now also scale with how much of the wheel the wedge actually owns (shr = its share
+ // measured against an average wedge), so a rare 2% sliver does not try to print full-size art across its neighbours.
+ for(let i=0;i<n;i++){const s=segs[i],am=-Math.PI/2+(AR[i].a+AR[i].f/2)*TAU,lab=segLabel(s),ca=Math.cos(am),sa=Math.sin(am);
+  const shr=clamp(AR[i].f*n,0.35,1.6),sc=Math.min(1,0.6+0.32*shr);
+  const fs=Math.max(10,Math.round((lab.length>7?R*0.078:lab.length>5?R*0.092:lab.length>3?R*0.11:R*0.13)*sc));
+  // icon first, so a long label always wins the overlap it can never quite avoid on a wheel this dense
+  ctx.save();ctx.translate(ca*R*0.50,sa*R*0.50);ctx.rotate(-rot);segIcon(s,0,0,R*0.185*Math.min(1,0.55+0.45*shr));ctx.restore();
   ctx.save();ctx.translate(ca*R*0.79,sa*R*0.79);ctx.rotate(-rot);
   otxt(lab,0,0,fs,s.k=='J'?`hsl(${(gtime*140)%360},95%,72%)`:'#fff',prem?'rgba(40,10,60,.75)':'rgba(20,10,50,.6)');ctx.restore()}
  ctx.restore();
@@ -4820,30 +5490,51 @@ function pwOn(){return true}
 SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
  enter(a){if(typeof a=='string')a={from:a};a=a||{};this.from=a.from||'menu';if(a.prem!=null)this.prem=!!a.prem;if(!pwOn())this.prem=false;this.spin=null;this.rev=null;this.modal=null;this.pa=0;this.pv=0;FX.length=0;musicPlay(0);UI.selId='spin'},
  segs(){return this.prem?PWHEEL:WHEEL},
- update(dt){updParts(FX,dt);const m=this.prem?'p':'r',n=this.segs().length,A=Math.PI*2/n,sp=this.spin;
+ update(dt){updParts(FX,dt);const m=this.prem?'p':'r',segs=this.segs(),sp=this.spin;
   const st=Math.min(dt,0.05);this.pv+=(-110*this.pa-10*this.pv)*st;this.pa+=this.pv*st;
-  if(!sp&&!(this.landed&&this.landed[m]))this.rot[m]+=dt*(Math.PI*2/25); // slow idle drift before the first spin; after a spin the wheel stays exactly on the prize it landed on
-  if(sp){sp.t+=dt;const u=clamp(sp.t/sp.d,0,1);const r=sp.r0+(sp.r1-sp.r0)*(1-Math.pow(1-u,4)); // clean ease-out, no overshoot/bounce-back
+  if(!sp&&!(this.landed&&this.landed[m]))this.rot[m]+=dt*(Math.PI*2/25); // slow idle drift before the first spin; after a spin the wheel stays exactly where it stopped
+  // Deceleration curve. Exponent 5 over a long duration is the "real wheel" feel the owner asked for back: a hard
+  // whip at the start, then a long crawl where the last wedge or two takes a second each and you can watch it die.
+  if(sp){sp.t+=dt;const u=clamp(sp.t/sp.d,0,1);const r=sp.r0+(sp.r1-sp.r0)*(1-Math.pow(1-u,5));
    const prev=this.rot[m];this.rot[m]=r;
-   if(Math.floor(r/A)!=Math.floor(prev/A)){const spd=Math.abs(r-prev)/Math.max(dt,0.001);this.pa=-Math.min(0.62,0.2+spd*0.03);this.pv=0;if(gtime-(this.tk||0)>0.035){this.tk=gtime;sfx('tick')}}
+   // the clicker kicks once per DIVIDER passed. On an unequal wheel that means asking the geometry which wedge is
+   // under the pointer, not dividing the angle by a fixed wedge size - the dividers are not evenly spaced any more.
+   const si=wSegAt(r,segs);
+   if(si!==this.tkSeg){this.tkSeg=si;const spd=Math.abs(r-prev)/Math.max(dt,0.001);this.pa=-Math.min(0.62,0.2+spd*0.03);this.pv=0;if(gtime-(this.tk||0)>0.03){this.tk=gtime;sfx('tick')}}
    if(sp.t>=sp.d){this.rot[m]=sp.r1;this.spin=null;this.finish(sp)}return}
   if(this.rev)this.rev.t+=dt;
   uiNav(this);
   if(pressed.ESC){if(this.modal){this.modal=null;UI.selId='spin'}else if(this.rev)this.onBtn('collect');else this.onBtn('back')}},
- finish(sp){const p=sp.prize,m=sp.prem?'p':'r';this.landed=this.landed||{};this.landed[m]=1;p.landed=wSegAt(this.rot[m],(sp.prem?PWHEEL:WHEEL).length);this.rev={t:-0.65,p,prem:sp.prem};this.last[m]=p;UI.selId='collect'; // negative t = a beat to watch the wheel land before the prize card covers it
+ finish(sp){const p=sp.prize,m=sp.prem?'p':'r';this.landed=this.landed||{};this.landed[m]=1;p.landed=wSegAt(this.rot[m],sp.prem?PWHEEL:WHEEL);this.rev={t:-0.65,p,prem:sp.prem};this.last[m]=p;UI.selId='collect'; // negative t = a beat to watch the wheel land before the prize card covers it
   sfx('win');confetti(sp.prem?110:70);
   if(p.jack){sfx('ach');for(let j=0;j<3;j++)firework(rnd(160,VW-160),rnd(90,220))}else if(p.k=='L'&&!p.conv)firework(VW/2,150)},
- startSpin(i,prize,prem){const m=prem?'p':'r',n=(prem?PWHEEL:WHEEL).length,A=Math.PI*2/n,TAU=Math.PI*2;
-  const r0=((this.rot[m]%TAU)+TAU)%TAU,off=rnd(-0.3,0.2)*A,want=-(i+0.5)*A+off,delta=((want-r0)%TAU+TAU)%TAU;
-  this.rev=null;this.modal=null;this.spin={t:0,d:prem?6.2:5.2,r0,r1:r0+TAU*(prem?7:6)+delta,prize,prem,seg:i};this.rot[m]=r0;sfx('click');sfx('air')},
+ // ---- THE HONEST SPIN. Nothing picks a prize. The wheel is given a random amount of rotation starting from EXACTLY
+ // where it came to rest last time (it is never reset to a start angle), it decelerates, and the segment under the
+ // pointer at the end IS the prize - read off the wheel by wSegAt, the same function the drawing uses.
+ // The final angle is worked out up front only because the deceleration curve is deterministic: r1 is already decided
+ // the moment the spin begins, so the outcome is still a consequence of the spin, and granting it immediately keeps
+ // the old guarantee that closing the game mid-spin can never lose a prize.
+ // rnd(0,TAU) on top of the whole turns makes the resting angle uniform around the circle, so each segment's real
+ // chance is exactly its share of the circumference - which is exactly what is drawn and exactly what Odds claims.
+ // award(i) is awardWheel or awardPremium: it takes the LANDED index, it never chooses one.
+ startSpin(prem,award){const m=prem?'p':'r',TAU=Math.PI*2,segs=prem?PWHEEL:WHEEL;
+  const r0=((this.rot[m]%TAU)+TAU)%TAU,dist=TAU*rnd(prem?6:5,prem?11:10)+rnd(0,TAU),r1=r0+dist;
+  const i=wSegAt(r1,segs);
+  // a harder shove genuinely takes longer to die down, so the duration follows the distance instead of being a fixed
+  // number - two spins in a row never run for the same length of time, which is half of why it reads as a real spin
+  const d=(prem?5.6:5)+(dist/TAU)*0.33;
+  this.rev=null;this.modal=null;this.tkSeg=wSegAt(r0,segs);
+  this.spin={t:0,d,r0,r1,prize:award(i),prem,seg:i};this.rot[m]=r0;sfx('click');sfx('air')},
  // "Not now" is the default on the nogems popup - the Store must never be the pre-selected answer to "you are short on gems"
  openModal(k){this.modal={k,t0:gtime};UI.selId=k=='confirm'?'m_yes':'m_no';sfx(k=='nogems'?'no':'click')},
- spinPremium(){if(clubFreeSpin()){S.clubSpinWeek=weekKey();save();const i=pwPick();this.startSpin(i,awardPremium(i),true);return}
+ spinPremium(){if(clubFreeSpin()){S.clubSpinWeek=weekKey();save();this.startSpin(true,awardPremium);return}
   if(!S.dev&&S.bank<PWHEEL_COST)return this.openModal('nogems');
   return this.openModal('confirm')},
  draw(){const prem=!!this.prem,m=prem?'p':'r',segs=this.segs(),cx=300,cy=298,R=182,busy=!!this.spin,blocked=busy||!!this.modal||!!this.rev;
   wheelBG(prem,cx,cy);
-  const hi=this.rev&&this.rev.prem==prem?this.rev.p.seg:null;
+  // highlight the wedge the wheel ACTUALLY stopped on (p.landed), not p.seg - the PW_PITY guarantee rewrites p.seg to
+  // the jackpot so the reveal card shows the right art, but the wheel underneath must still show where it really landed
+  const hi=this.rev&&this.rev.prem==prem?(this.rev.p.landed!=null?this.rev.p.landed:this.rev.p.seg):null;
   drawWheel(cx,cy,R,segs,this.rot[m],prem,hi,busy?1:this.rev?2:0);
   drawPointer(cx,cy-R-22,this.pa,prem);
   if(!blocked){backBtn();if(pwOn()){button('mode_r',590,20,160,44,'Prize Wheel',{fs:18,bg:!prem?'#ffd45e':'#ffffff'});
@@ -4868,7 +5559,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
       txt(left>0?left+' left today':'none left today',150,1,14,left>0?'#6d6982':'#c2185b','right',false)}});
      txt(left<=0?'Coin exchange resets tomorrow':poor?'You have '+curTxt(S.coins)+' coins - '+fmtN(TIX_COST-S.coins)+' more for a ticket':'You have '+curTxt(S.coins)+' coins',300,529,14,(left<=0||poor)?'#ffb3c1':'#d8d5ea',undefined,false)}}
    else ghostBtn(620,258,280,70,busy?'SPINNING...':'SPIN!','rgba(255,255,255,.6)','#5d5c6b',28);
-   const how=['Get tickets:','1 free every day','1 per trophy','1 per 3 notes found','1 per daily climb (first run)',fmtN(TIX_COST)+' coins = 1 ticket ('+TIX_BUY_MAX+' a day)'];
+   const how=['Get tickets:','1 free every day','1 per trophy','1 per '+NOTE_TIX+' notes found','1 per daily climb (first run)',fmtN(TIX_COST)+' coins = 1 ticket ('+TIX_BUY_MAX+' a day)'];
    how.forEach((l,i)=>txt(l,760,410+i*19,i?14:15,i?'#d8d5ea':'#fff',undefined,false))}
   else{txt('PREMIUM WHEEL',760,110,30,'#ffd45e');txt('Every spin wins something.',760,140,14,'#f0dcff',undefined,false);
    gemShape(704,190,14,'#5ff4ff');txt(curTxt(S.bank)+' gems',728,192,28,'#fff','left');
@@ -4880,13 +5571,14 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
     button('spin',620,258,280,70,'',{bg:'#ffc93c',col:'#fff1a8',draw:()=>{if(free)txt('FREE SPIN',0,1,30,'#3a1470','center',false);else{txt('SPIN',-40,1,32,'#3a1470','center',false);gemShape(28,0,13,'#20b8c9');txt(''+PWHEEL_COST,46,1,26,'#3a1470','left',false)}}});
     button('odds',620,342,136,40,'Odds',{fs:17});if(storeOn())button('getgems',764,342,136,40,'Get Gems',{fs:17,bg:'#c8f5cf'});else{txt('Earn gems by',832,353,14,'#f0dcff',undefined,false);txt('clearing levels',832,371,14,'#f0dcff',undefined,false)}}
    else ghostBtn(620,258,280,70,busy?'SPINNING...':'SPIN','rgba(255,255,255,.6)','#5d5c6b',28);
-   txt("WHAT'S INSIDE",760,396,14,'#ffd45e',undefined,false);const ptot=PWHEEL.reduce((a,s)=>a+s.w,0);
+   txt("WHAT'S INSIDE",760,396,14,'#ffd45e',undefined,false);
    // Odds are a required disclosure, so the whole list always fits inside the panel (bottom edge 522): the row pitch is
    // derived from the space under the header and the text never drops below 14px - names shrink into the room left
    // beside their percentage instead of the last row falling off the panel.
-   {const LY0=414,LY1=514,pn=PWHEEL.length,rp=pn>1?Math.min(20,(LY1-LY0)/(pn-1)):0,rfs=clamp(Math.round(rp*0.85),14,16);
-    PWHEEL.forEach((s,j)=>{const ry=LY0+j*rp;ctx.fillStyle=s.col;ctx.beginPath();ctx.arc(618,ry,5,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.2;ctx.stroke();
-     const pc=Math.round(s.w/ptot*1000)/10+'%',pw=txtW(pc,rfs);
+   // MOST COMMON FIRST, and each figure is a RANGE that contains the wedge's real share of the wheel (see oddsBand).
+   {const rows=oddsRows(PWHEEL),LY0=414,LY1=514,pn=rows.length,rp=pn>1?Math.min(20,(LY1-LY0)/(pn-1)):0,rfs=clamp(Math.round(rp*0.85),14,16);
+    rows.forEach((rw,j)=>{const s=rw.s,ry=LY0+j*rp;ctx.fillStyle=s.col;ctx.beginPath();ctx.arc(618,ry,5,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.2;ctx.stroke();
+     const pc=oddsBand(rw.p),pw=txtW(pc,rfs);
      txt(s.n,630,ry+1,fitFont(s.n,898-pw-10-630,rfs,14),'#fff','left',false);txt(pc,898,ry+1,rfs,'#ffd45e','right',false)})}}
   if(this.rev)this.drawReveal();
   if(this.modal)this.drawModal();
@@ -4921,13 +5613,17 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   else if(md.k=='nogems'){txt('Not enough gems',VW/2,y+44,28,'#fff');gemShape(VW/2,y+96,20,'#5ff4ff');
    txt('A Premium spin costs '+PWHEEL_COST+' gems. You have '+curTxt(S.bank)+'.',VW/2,y+138,16,'#d8d5ea',undefined,false);txt(storeOn()?"Earn them by playing, or buy some on the Shop's Gems tab.":'Earn gems by clearing levels and collecting gems.',VW/2,y+160,16,'#ffd45e',undefined,false);
    if(storeOn())button('m_store',x+30,y+186,220,52,'Open Gems tab',{fs:20,bg:'#ffc93c'});button('m_no',storeOn()?x+266:VW/2-72,y+186,144,52,storeOn()?'Not now':'OK',{fs:20})}
-  else{const segs=prem?PWHEEL:WHEEL;let tot=0;for(const s of segs)tot+=s.w;
-   txt(prem?'PREMIUM WHEEL ODDS':'PRIZE WHEEL ODDS',VW/2,y+34,24,prem?'#ffd45e':'#fff');
-   segs.forEach((s,i)=>{const ry=y+70+i*33;ctx.fillStyle=i%2?'rgba(255,255,255,.04)':'rgba(255,255,255,.09)';rr(x+20,ry-15,w-40,30,8);ctx.fill();
+  // ---- THE ODDS PANEL. Two rules, both the owner's: MOST COMMON FIRST, and ranges instead of a false-precision
+  // decimal. The range always contains the wedge's real share of the circumference (oddsBand), and the wedge really
+  // is that size on the wheel, so nothing shown here can be contradicted by the thing it describes.
+  else{const segs=prem?PWHEEL:WHEEL,rows=oddsRows(segs),nn=rows.length,rp=nn>1?Math.min(30,(h-224)/(nn-1)):0;
+   txt(prem?'PREMIUM WHEEL ODDS':'PRIZE WHEEL ODDS',VW/2,y+32,24,prem?'#ffd45e':'#fff');
+   txt('Most common first. Each slice is as wide as its odds.',VW/2,y+56,13,'#b9b6c6',undefined,false);
+   rows.forEach((rw,i)=>{const s=rw.s,ry=y+78+i*rp;ctx.fillStyle=i%2?'rgba(255,255,255,.04)':'rgba(255,255,255,.09)';rr(x+20,ry-14,w-40,28,8);ctx.fill();
     ctx.fillStyle=s.col;ctx.beginPath();ctx.arc(x+40,ry,8,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.5;ctx.stroke();
-    segIcon(s,x+72,ry,20);txt(s.n,x+96,ry+1,15,'#fff','left',false);
-    const pc=s.w/tot*100;txt((Math.round(pc*10)/10)+'%',x+w-34,ry+1,16,'#ffd45e','right',false)});
-   const nt=prem?['Skins, hats and trails here are exclusive to this wheel.','Power Cards are a consumable Story Mode boost.','Own it already? You get '+PW_REFUND+' gems instead (Jackpot +500).','The Jackpot is guaranteed within '+PW_PITY+' spins.']:['Mystery Item = a wheel-only skin, hat or trail','(150 coins if you already own them all). Tickets are free.'];
+    segIcon(s,x+72,ry,19);txt(s.n,x+96,ry+1,15,'#fff','left',false);
+    txt(oddsBand(rw.p),x+w-34,ry+1,16,'#ffd45e','right',false)});
+   const nt=prem?['Skins, hats and trails here are exclusive to this wheel.','The spin decides the prize - nothing is picked for you.','Own it already? You get '+PW_REFUND+' gems instead (Jackpot +500).','Jackpot guaranteed by spin '+PW_PITY+', added to that spin.']:['The spin decides the prize - nothing is picked for you.','Mystery Item = a wheel-only skin, hat or trail','(150 coins if you already own them all). Tickets are free.'];
    // bottom-aligned just above the Close button, so the premium list (4 lines) and the prize list (2) both fit
    nt.forEach((l,i)=>txt(l,VW/2,y+h-78-(nt.length-1)*19+i*19,14,'#b9b6c6',undefined,false));
    button('m_no',VW/2-80,y+h-60,160,44,'Close',{fs:20})}},
@@ -4939,9 +5635,9 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   if(id=='m_no')return this.onBtn('back');
   if(id=='getgems'||id=='m_store'){this.modal=null;go('shop');SCREENS.shop.cat='g';return}
   if(id=='spin'&&!this.spin){
-   if(!this.prem){if(!S.dev&&S.tix<=0)return;if(!S.dev)S.tix--;S.spun=1;save();const i=wheelPick();this.startSpin(i,awardWheel(i),false);return}
+   if(!this.prem){if(!S.dev&&S.tix<=0)return;if(!S.dev)S.tix--;S.spun=1;save();this.startSpin(false,awardWheel);return}
    return this.spinPremium()}
-  if(id=='m_yes'){this.modal=null;if(!S.dev)S.bank-=PWHEEL_COST;const i=pwPick();this.startSpin(i,awardPremium(i),true);return}
+  if(id=='m_yes'){this.modal=null;if(!S.dev)S.bank-=PWHEEL_COST;this.startSpin(true,awardPremium);return}
   if(id=='buytix'){if(buyTix()){sfx('buy');toast('+1 spin ticket',fmtN(TIX_COST)+' coins exchanged','ach')}else sfx('no');return}}};
 
 // ================= LEADERBOARDS =================
@@ -5073,29 +5769,51 @@ SCREENS.notes={enter(){this.tab=0;this.open=null;this.mt=0;this.mi=0},
    txt('Hidden in '+lvTitle(this.mi,'  '),VW/2,y+62,15,'#d8d5ea',undefined,false);ctx.restore()}
   txt('Tap a page to read it.  Every note names the level it came from.',VW/2,VH-22,15,'#d8d5ea',undefined,false)}};
 
-SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(this.conf&&gtime-this.confT>3)this.conf=0;if(pressed.ESC)go('menu')},
- draw(){drawBG(WORLDS[0],gtime*20,0,gtime);backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
-  const GN={auto:'Auto',high:'High Quality',bal:'Balanced',perf:'Performance'};
-  button('music',VW/2-180,96,360,44,'Music: '+on(S.set.music));button('sfx',VW/2-180,148,360,44,'Sound FX: '+on(S.set.sfx));button('shake',VW/2-180,200,176,44,'Shake: '+on(S.set.shake),{fs:18});button('rm',VW/2+4,200,176,44,'Less Motion: '+on(S.set.rm),{fs:17});
-  button('gfx',VW/2-180,252,360,44,'Graphics: '+GN[S.set.gfx||'auto'],{fs:20});
-  button('reset',VW/2-180,304,360,44,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?15:20});
-  button('dev',VW/2-180,356,360,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
-  // Same 8px gap and column width as the rows above, so keyboard nav just walks onto it
-  button('feedback',VW/2-180,404,360,40,'Send Feedback',{fs:18});
-  // Footer lays itself out from its real line count, starting a fixed gap BELOW the last button and tightening its line
-  // height if it ever needs to. The Less Motion hint is just another footer line, so it can't land on the Dev Mode button.
+// ================= SETTINGS =================
+// Three labelled panels instead of one stack of identical full-width buttons: AUDIO down the left, DISPLAY & MOTION and
+// GAME down the right. Each panel is a plate with its own title, so the eye can find a group before reading any label.
+// AUDIO row = [label, slider key, on/off twin (null for the master trim), footer blurb]. The twin is the flag the rest
+// of the game already reads, so a slider at 0 IS the old ON/OFF switch being off (see defSave's note and applyVol).
+const AUDROWS=[['Master Volume','vmas',null,'Everything at once - music, effects and menus together.'],
+ ['Music','vmus','music','The backing track. The M key also mutes just this.'],
+ ['Sound Effects','vsfx','sfx','Jumps, landings, pickups and hazards.'],
+ ['Menus & Buttons','vui','ui','Clicks and ticks on the menus. Kept separate so you can keep button feedback with the game quiet.']];
+function audGet(k,f){return (f&&!S.set[f])?0:vnum(k,0.8)}
+function audSet(k,f,v){if(f)S.set[f]=v>0?1:0;S.set[k]=v;applyVol();save()}
+function sectTitle(s,x,y){txt(s,x,y,17,'#ffe9a8','left')}
+function panel(x,y,w,h){ctx.fillStyle='rgba(16,12,34,.56)';rr(x,y,w,h,18);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.16)';ctx.lineWidth=2;rr(x,y,w,h,18);ctx.stroke()}
+const SET_GN={auto:'Auto',high:'High Quality',bal:'Balanced',perf:'Performance'};
+SCREENS.settings={enter(){this.conf=0},
+ // sldUpd/sldKeys run BEFORE uiNav: a drag must not also register as a tap, and Left/Right on a slider row must be
+ // eaten before uiNav would use them to walk the selection into the next column.
+ update(dt){sldUpd();sldKeys(dt||0);uiNav(this);if(this.conf&&gtime-this.confT>3)this.conf=0;if(pressed.ESC)go('menu')},
+ draw(){menuBG();backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
+  panel(44,84,418,350);sectTitle('AUDIO',66,110);txt('drag, or ← →',440,110,13,'rgba(255,255,255,.55)','right',false);
+  AUDROWS.forEach((r,i)=>slider('v_'+r[1],58,128+i*58,390,52,r[0],()=>audGet(r[1],r[2]),v=>audSet(r[1],r[2],v)));
+  {const sel=AUDROWS.find(r=>UI.selId=='v_'+r[1]);
+   wrapText(sel?sel[3]:'Effects were mixed down against the music, so the pickups no longer shout over the track.',384,13).slice(0,3)
+    .forEach((l,k)=>txt(l,66,374+k*19,13,'#d8d5ea','left',false))}
+  panel(498,84,418,150);sectTitle('DISPLAY & MOTION',520,110);
+  button('gfx',514,124,386,42,'Graphics: '+SET_GN[S.set.gfx||'auto'],{fs:19});
+  button('shake',514,176,188,42,'Shake: '+on(S.set.shake),{fs:17});button('rm',706,176,188,42,'Less Motion: '+on(S.set.rm),{fs:15});
+  panel(498,246,418,188);sectTitle('GAME',520,272);
+  button('feedback',514,284,386,40,'Send Feedback',{fs:18});
+  button('dev',514,332,386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
+  button('reset',514,380,386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
+  // Footer lays itself out from its real line count, starting a fixed gap BELOW the panels and tightening its line
+  // height if it ever needs to. The Less Motion hint is just another footer line, so it can't land on a button.
   {const fl=[];
    if(UI.selId=='rm')fl.push(['Reduce Flashing & Motion: softer warning flashes, calmer wheel lights, no screen shake.',13]);
-   fl.push([S.set.gfx=='perf'||(!S.set.gfx||S.set.gfx=='auto')&&AUTOLV==2?'Performance: lower resolution, fewer effects. Best for slow laptops.':S.set.gfx=='high'?'High Quality: sharpest picture. Can lag on slow laptops.':S.set.gfx=='bal'?'Balanced: slightly softer picture, runs smoother.':'Auto: starts sharp, lowers itself if the game starts lagging.',15]);
-   // no Computer/Mobile switch any more, so this just describes the one layout there is
-   ['Drag on the left to move, tap the right side to jump.','Progress saves automatically on this device.'].forEach(l=>fl.push([l,15]));
-   const FY=460,LH=Math.min(26,Math.floor((VH-16-FY)/Math.max(1,fl.length-1)));
-   fl.forEach((l,i)=>txt(l[0],VW/2,FY+i*LH,l[1],'#1f3b2d',undefined,false))}},
- onBtn(id){if(id=='back')return go('menu');
+   fl.push([S.set.gfx=='perf'||(!S.set.gfx||S.set.gfx=='auto')&&AUTOLV==2?'Performance: lower resolution, fewer effects. Best for slow laptops.':S.set.gfx=='high'?'High Quality: sharpest picture. Can lag on slow laptops.':S.set.gfx=='bal'?'Balanced: slightly softer picture, runs smoother.':'Auto: starts sharp, lowers itself if the game starts lagging.',14]);
+   fl.push(['Drag on the left to move, tap the right side to jump.  ·  Progress saves automatically on this device.',14]);
+   const FY=452,LH=Math.min(24,Math.floor((VH-14-FY)/Math.max(1,fl.length-1)));
+   fl.forEach((l,i)=>txt(l[0],VW/2,FY+i*LH,l[1],'#ffffff',undefined,false))}},
+ onBtn(id,b){if(id=='back')return go('menu');
+  if(sldClick(b))return; // a tap straight on a track sets the value there; the drag path is sldUpd's job
   if(id=='dev'){if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
   if(id=='feedback'){if(!openFeedback())toast('Feedback is not set up yet','Please try again after the next update','info');return}
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
-  if(id=='music')S.set.music=S.set.music?0:1;if(id=='sfx')S.set.sfx=S.set.sfx?0:1;if(id=='shake')S.set.shake=S.set.shake?0:1;
+  if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='rm'){S.set.rm=S.set.rm?0:1;if(S.set.rm)S.set.shake=0}
   if(id=='reset'){if(!this.conf){this.conf=1;this.confT=gtime;return}resetSave();this.conf=0;toast('Progress erased','Purchases were kept','info')}else this.conf=0;applyVol();save()}};
 
@@ -5288,15 +6006,20 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  if(jank)slowT=0;
  else if((S.set.gfx||'auto')=='auto'&&AUTOLV<2&&SCR===SCREENS.play&&!rot){if(fpsEma>Math.max(0.027,minDt*1.4)){slowT+=dt;if(slowT>2.5){AUTOLV++;applyGfx();toast('Graphics lowered','Auto keeps it smooth. Change in Settings','info')}}else slowT=Math.max(0,slowT-dt*0.5)}
  try{
- if(pressed.MUTE){S.set.music=S.set.music?0:1;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
+ // M un-mutes to an audible level: if the Music slider itself was dragged to 0, "Music on" has to actually mean on
+ if(pressed.MUTE){S.set.music=S.set.music?0:1;if(S.set.music&&!vnum('vmus',0.8))S.set.vmus=defSave().set.vmus;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
  const updOn=UPD&&(SCR===SCREENS.menu||SCR===SCREENS.title||SCR===SCREENS.levels),UR=SCR===SCREENS.menu?{x:560,y:100,w:320,h:38}:SCR===SCREENS.levels?{x:VW-300,y:20,w:280,h:38}:{x:VW/2-160,y:20,w:320,h:38};
  if(updOn&&mouse.click&&inR(mouse,UR)){mouse.click=false;try{location.reload()}catch(e){}}
- if(!rot){SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt)}
+ // remTap runs BEFORE the screen's own update so a tap that landed on the reminder isn't also read as a menu press -
+ // and it only clears the click when it really was inside the banner, so the menu keeps every other tap
+ if(!rot&&remTap())mouse.click=false;
+ if(!rot){SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);remUpd(dt)}
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(SCR!==SCREENS.play&&(STK||tp.size))tReset(); // (not on the win beat, so held fingers carry into the next Marathon level)
  UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();
  if(updOn){const k=0.5+0.5*Math.sin(gtime*4);ctx.fillStyle='rgba(0,0,0,.3)';rr(UR.x+3,UR.y+4,UR.w,UR.h,UR.h/2);ctx.fill();ctx.fillStyle='#7bdc3b';rr(UR.x,UR.y,UR.w,UR.h,UR.h/2);ctx.fill();
   ctx.strokeStyle=`rgba(255,255,255,${0.4+k*0.6})`;ctx.lineWidth=3;rr(UR.x,UR.y,UR.w,UR.h,UR.h/2);ctx.stroke();txt('Update ready - tap to reload',UR.x+UR.w/2,UR.y+UR.h/2+1,17,'#10240a','center',false)}
+ remDraw(); // above the menu, below the toasts and below the fade - see GENTLE REMINDERS
  if(SCR!==SCREENS.intro)drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
  if(rot)drawRotate();
