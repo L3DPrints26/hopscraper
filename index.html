@@ -32,7 +32,11 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260923-193218'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260923-210201'; // change this on every upload so open copies show "Update ready"
+// Where the Settings > Send Feedback button goes. Leave FEEDBACK_URL empty to email FEEDBACK_EMAIL instead;
+// paste a Google Form link into FEEDBACK_URL and it wins. Either way the build number rides along (see openFeedback).
+const FEEDBACK_URL='';  // Google Form URL - set before release
+const FEEDBACK_EMAIL='gamercrafter1510@gmail.com';
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
@@ -64,8 +68,7 @@ const SKEY='hopscraper_save_v1';
 // "Reduce Flashing & Motion" setting defaults to the system's reduced-motion preference (see RM())
 function prefersRM(){try{return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?1:0}catch(e){return 0}}
 function RM(){try{return !!S.set.rm}catch(e){return false}}
-function isTouchDev(){try{return(navigator.maxTouchPoints>0&&window.matchMedia&&matchMedia('(pointer:coarse)').matches)?1:0}catch(e){return 0}}
-function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,touch:isTouchDev(),gfx:'auto',rm:prefersRM()},
+function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tut:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,shake:1,gfx:'auto',rm:prefersRM()},
  // ver = save format version. tixDay/dtix/clubDay are day numbers (todaySeed-style) and clubMonth a month number, so a
  // clock set backwards grants nothing. clubExp = Club expiry (ms, 0 = no expiry known). txDone = App Store transactions
  // already delivered, iap = one-time products owned (both survive Reset Save, see resetSave()).
@@ -101,6 +104,7 @@ function parseSave(r){const o=JSON.parse(r);if(!isObj(o))throw new Error('bad sa
  for(const k of['coins','tix','bank','pw','tixBuy'])if(s[k]<0)s[k]=0;
  if(typeof s.clubSpinWeek!='number'||!isFinite(s.clubSpinWeek))s.clubSpinWeek=-1;if(typeof s.clubMonth!='number'||!isFinite(s.clubMonth))s.clubMonth=-1;
  s.tixDay=dayNum(s.tixDay);s.dtix=dayNum(s.dtix);s.clubDay=dayNum(s.clubDay);s.tixBuyDay=dayNum(s.tixBuyDay);s.ver=2;
+ delete s.set.touch; // dropped: the Computer/Mobile switch is gone and the layout is always mobile (see touchOn)
  for(const k of['shield','slowmo','xjump','magnet','goldrush'])if(typeof s.cards[k]!='number'||!isFinite(s.cards[k])||s.cards[k]<0)s.cards[k]=0;
  return s}
 // STORE_OK: localStorage works at all. SAVE_LAST: the last good save string (becomes SKEY+'_bak' on the next write).
@@ -295,7 +299,10 @@ addEventListener('pointerup',e=>{if(!touchOn()||!navigator.maxTouchPoints||TILT.
 // Every touch event rebuilds state from the browser's real list of fingers, so a lost "finger up" can never leave you stuck.
 const PB={x:VW-38,y:84,r:22},RB={x:PB.x-60,y:PB.y,r:22},STR=62,DZ=14;
 const tp=new Map();let STK=null,uiTouch=null,tapBlock=0,noteSwipe=null;
-function touchOn(){return !!S.set.touch}
+// Always true: this ships as an iOS app, so the mobile layout is the only layout and the on-screen controls are always
+// drawn. Kept as a function because ~25 call sites read it for copy and margins. Keyboard/mouse are NOT gated by this -
+// they run off their own global listeners (see INPUT), so a laptop can still play and test.
+function touchOn(){return true}
 // clamped into the game area, so touches in the letterbox bars still count (at the nearest edge)
 function tpos(e){const r=cv.getBoundingClientRect();return{x:clamp((e.clientX-r.left)/r.width*VW,0,VW),y:clamp((e.clientY-r.top)/r.height*VH,0,VH)}}
 // "turn your phone sideways" overlay: real touch devices held in portrait only
@@ -594,6 +601,14 @@ function storeOn(){return true}
 function noNativeBuy(){sfx('no');toast('Purchases open in the app','Get Hopscraper on the App Store','info')}
 // open a web page (Terms / Privacy): the iOS wrapper's browser if it has one, else a new tab
 function openURL(u){try{if(window.HopNative&&HopNative.openURL){HopNative.openURL(u);return}}catch(e){}try{window.open(u,'_blank','noopener')}catch(e){}}
+// Feedback target: the form in FEEDBACK_URL with ?v=<build> appended (so a report says which build it came from),
+// else a mailto to FEEDBACK_EMAIL with the build in the subject. '' when neither is set - the caller then says so
+// rather than opening about:blank. Nothing else is attached: no device info, no ids.
+function feedbackURL(){const u=(FEEDBACK_URL||'').trim();if(u)return u+(u.indexOf('?')<0?'?':'&')+'v='+encodeURIComponent(BUILD);
+ const e=(FEEDBACK_EMAIL||'').trim();return e?'mailto:'+e+'?subject='+encodeURIComponent('Hopscraper feedback (build '+BUILD+')'):''}
+// Goes through openURL on purpose: inside the Capacitor webview a bare window.open('mailto:..') silently does nothing,
+// so the HopNative bridge has to take it. Returns false when there's nowhere to send it.
+function openFeedback(){const u=feedbackURL();if(!u)return false;openURL(u);return true}
 // the iOS wrapper replaces this with a real App Store purchase, then calls grantProduct(id, txId)
 function buyProduct(id){try{if(window.HopNative&&HopNative.buy){HopNative.buy(id);return true}}catch(e){}return false}
 function restorePurchases(){try{if(window.HopNative&&HopNative.restore){HopNative.restore();return true}}catch(e){}return false}
@@ -3910,12 +3925,11 @@ SCREENS.menu={enter(){musicPlay(0);TILT.nx=null;if(!this.b)this.b={x:710,y:404,v
    txt(sp?tixTxt():'no tickets',146,1,15,sp?'#c2185b':'#6d6982','right',false);if(sp&&!sel){ctx.globalAlpha=0.5+0.5*Math.sin(gtime*5);ctx.strokeStyle='#ff8fd8';ctx.lineWidth=3;rr(-w/2,-h/2,w,h,12);ctx.stroke();ctx.globalAlpha=1}}});
   txt('Trophies '+Object.keys(S.ach).length+'/'+ACH.length,710,470,15,'#fff');
   if(touchOn()&&navigator.maxTouchPoints>0&&!TILT.on&&!TILT.asked)txt('tap me, then tilt your screen!',710,282,14,'rgba(255,255,255,.6)','center',false);
-  // Power Cards: hidden while you own none (nothing to look at yet), otherwise always one tap away, count on the face
-  {const cn=cardCount();if(cn>0||S.dev)button('cards',VW-196,58,176,42,'Power Cards  x'+cn,{fs:17,bg:'#ffe9a8',col:'#ffd45e'});}
-  button('device',VW-196,18,176,38,touchOn()?'Controls: Mobile':'Controls: Computer',{fs:15});
-  if(!touchOn())txt('M = music on/off     ESC = back',VW/2,VH-20,14,'rgba(255,255,255,.75)');
+  // Power Cards: hidden while you own none (nothing to look at yet), otherwise always one tap away, count on the face.
+  // Sits where the old Controls: Computer/Mobile switch was - that switch is gone, the layout is always mobile now.
+  {const cn=cardCount();if(cn>0||S.dev)button('cards',VW-196,18,176,42,'Power Cards  x'+cn,{fs:17,bg:'#ffe9a8',col:'#ffd45e'});}
   if(S.dev){ctx.fillStyle='rgba(123,220,59,.9)';rr(VW-120,VH-46,100,26,13);ctx.fill();txt('DEV MODE',VW-70,VH-33,14,'#10240a',undefined,false)}},
- onBtn(id){if(id=='device'){S.set.touch=S.set.touch?0:1;save();toast(S.set.touch?'Mobile mode':'Computer mode',S.set.touch?'On-screen buttons while playing':'Keyboard controls','info');return}if(id=='tutorial')return startTutorial();if(id=='play')return S.tut?go('levels'):startTutorial();go(id)}};
+ onBtn(id){if(id=='tutorial')return startTutorial();if(id=='play')return S.tut?go('levels'):startTutorial();go(id)}};
 
 // Optional PAID bonus worlds beyond World 5 (which is free, just progression-gated): each is fully HIDDEN from the tab
 // row until owned (never shown-locked - the Store is the only entry point to buy one), then appears as a normal tab
@@ -4864,16 +4878,20 @@ SCREENS.settings={enter(){this.conf=0},update(){uiNav(this);if(this.conf&&gtime-
   button('gfx',VW/2-180,252,360,44,'Graphics: '+GN[S.set.gfx||'auto'],{fs:20});
   button('reset',VW/2-180,304,360,44,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?15:20});
   button('dev',VW/2-180,356,360,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
+  // Same 8px gap and column width as the rows above, so keyboard nav just walks onto it
+  button('feedback',VW/2-180,404,360,40,'Send Feedback',{fs:18});
   // Footer lays itself out from its real line count, starting a fixed gap BELOW the last button and tightening its line
   // height if it ever needs to. The Less Motion hint is just another footer line, so it can't land on the Dev Mode button.
   {const fl=[];
    if(UI.selId=='rm')fl.push(['Reduce Flashing & Motion: softer warning flashes, calmer wheel lights, no screen shake.',13]);
    fl.push([S.set.gfx=='perf'||(!S.set.gfx||S.set.gfx=='auto')&&AUTOLV==2?'Performance: lower resolution, fewer effects. Best for slow laptops.':S.set.gfx=='high'?'High Quality: sharpest picture. Can lag on slow laptops.':S.set.gfx=='bal'?'Balanced: slightly softer picture, runs smoother.':'Auto: starts sharp, lowers itself if the game starts lagging.',15]);
-   (touchOn()?['Mobile mode is on (switch it from the main menu).','Progress saves automatically on this device.']:['Move: Arrows / A D   Jump: SPACE / W / Up   Drop: Down   Pause: ESC','Progress saves automatically in this browser.']).forEach(l=>fl.push([l,15]));
-   const FY=414,LH=Math.min(26,Math.floor((VH-16-FY)/Math.max(1,fl.length-1)));
+   // no Computer/Mobile switch any more, so this just describes the one layout there is
+   ['Drag on the left to move, tap the right side to jump.','Progress saves automatically on this device.'].forEach(l=>fl.push([l,15]));
+   const FY=460,LH=Math.min(26,Math.floor((VH-16-FY)/Math.max(1,fl.length-1)));
    fl.forEach((l,i)=>txt(l[0],VW/2,FY+i*LH,l[1],'#1f3b2d',undefined,false))}},
  onBtn(id){if(id=='back')return go('menu');
   if(id=='dev'){if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
+  if(id=='feedback'){if(!openFeedback())toast('Feedback is not set up yet','Please try again after the next update','info');return}
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='music')S.set.music=S.set.music?0:1;if(id=='sfx')S.set.sfx=S.set.sfx?0:1;if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='rm'){S.set.rm=S.set.rm?0:1;if(S.set.rm)S.set.shake=0}
