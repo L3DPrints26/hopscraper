@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260924-203708'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260924-215157'; // change this on every upload so open copies show "Update ready"
 // Where the Settings > Send Feedback button goes. Leave FEEDBACK_URL empty to email FEEDBACK_EMAIL instead;
 // paste a Google Form link into FEEDBACK_URL and it wins. Either way the build number rides along (see openFeedback).
 const FEEDBACK_URL='https://docs.google.com/forms/d/e/1FAIpQLSec8ZqpP9d7S8UD6wIwxoaDgJojhNFq6IkY529GwPfrzO_h4A/viewform';  // blank this to fall back to the mailto
@@ -2049,7 +2049,7 @@ function laserWarnK(c,L){const per=L.def.lp||2.4,ph=((G.t*G.spd)%per)/per;
 function laserWarn(c,L){return laserWarnK(c,L)>0}
 function themeOf(){if(!G)return WORLDS[0];if(G.mode=='endless'||G.mode=='daily'){return WORLDS[Math.floor(G.height/60)%5]}return WORLDS[G.L.def.wd]}
 
-function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,keyGot:false,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
+function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,keyGot:false,doorT:0,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
 function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspeed');
  // Gold Rush carry-over: if you clear (or otherwise leave to) a DIFFERENT level while it's still running, the new level
  // gets flooded too for whatever time is left - grabbed here before G gets replaced below. A restart (i==G.idx) does not
@@ -3057,7 +3057,8 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  // rule) - see spawnGoldRush().
  if(L.grCoins)for(const cn of L.grCoins)if(!cn.got&&Math.abs(cn.x-pcx)<16&&Math.abs(cn.y-pcy)<16){cn.got=true;G.coinsRun++;sfx('coin');burst(cn.x,cn.y,'#ffd45e',12);burst(cn.x,cn.y,'#fff6c8',5)}
  if(L.note&&!L.note.got&&Math.abs(L.note.x-pcx)<20&&Math.abs(L.note.y-pcy)<22){L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();if(nf%NOTE_TIX==0){S.tix++;toast('+1 spin ticket','Every '+NOTE_TIX+' notes = 1 spin','info')}save();G.noteShow={i:G.idx,t0:gtime};sfx('check');burst(L.note.x,L.note.y,'#fff3cf',16);if(nf>=NOTES.length)grant('notes')}
- if(L.key&&!L.key.got&&Math.abs(L.key.x-pcx)<18&&Math.abs(L.key.y-pcy)<18){L.key.got=true;G.keyGot=true;sfx('key');burst(L.key.x,L.key.y,'#ffd45e',24);if(S.set.shake)G.shake=4}
+ // G.doorT is the render clock for the door's swing only (see drawWorld's 'D' case) - nothing reads it for physics.
+ if(L.key&&!L.key.got&&Math.abs(L.key.x-pcx)<18&&Math.abs(L.key.y-pcy)<18){L.key.got=true;G.keyGot=true;G.doorT=G.t;sfx('key');burst(L.key.x,L.key.y,'#ffd45e',24);if(S.set.shake)G.shake=4}
  // Gilded Vale treasure chests (L.chests): open every one in the level and its gold vault doors unlock. Deliberately
  // reuses G.keyGot - the flag the key already sets - so isSolid()/'D' rendering need no new case. Like the key, an
  // opened chest STAYS open through a death, so a chest can never be the thing that soft-locks a run.
@@ -3067,7 +3068,7 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
     ch.pay=chestPay();ch.gpay=chestGems();ch.emit=0.22;ch.openT=0;ch.cnt=0;ch.cntT=0;ch.gcnt=0;ch.gcntT=0;
     sfx('coin');if(S.set.shake)G.shake=Math.max(G.shake,2);burst(ch.x,ch.y-4,'#ffd45e',20);burst(ch.x,ch.y-6,'#fff3b0',9)}
    if(!ch.got)left++}
-  if(hit&&!G.keyGot){if(!left){G.keyGot=true;sfx('key');if(S.set.shake)G.shake=4;
+  if(hit&&!G.keyGot){if(!left){G.keyGot=true;G.doorT=G.t;sfx('key');if(S.set.shake)G.shake=4;
     if(L.hasDoor)toast('Vault open','Every chest found - the gold doors are open','ach');
     else toast('Every chest found','You have stripped this hall of its gold','ach')}
    else toast('Chest opened',left+(left>1?' chests':' chest')+' still locked away','info')}}
@@ -4494,8 +4495,20 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
     ctx.globalAlpha=hot?0.85:0.5;ctx.strokeStyle=col;ctx.lineWidth=2.2;ctx.setLineDash([5,4]);rpath(px+2,py+2,TS-4,TS-4,6,6,6,6);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1}
    break}
   case'X':drawCrumble(L,ti,x,y,px,py);break;
-  case'D':if(!G.keyGot){ctx.drawImage(tileSpr(ti,'D',0,0),px-4,py-4);if(L.g[y-1][x]!='D'){ctx.fillStyle='#3b2a08';ctx.beginPath();ctx.arc(px+12,py+10,3,0,7);ctx.fill();ctx.fillRect(px+11,py+10,2,7)}}
-   else{ctx.strokeStyle='rgba(217,164,65,.35)';ctx.setLineDash([3,4]);ctx.lineWidth=1.5;ctx.strokeRect(px+2,py+2,TS-4,TS-4);ctx.setLineDash([])}break;
+  // LOCKED DOOR. Two baked sprites per tile-role: v=0 is the LEAF (the door itself), v=1 is the JAMB it hangs in.
+  // Locked = the jamb is hidden behind a full-width leaf. Unlocked = the jamb stays and the leaf SWINGS: compressed
+  // horizontally about its own hinge edge and darkened as its face turns away from the light, ending as a thin
+  // edge-on sliver folded back against the frame - so the door visibly STANDS OPEN instead of blinking out of
+  // existence (the old open state was four dashed lines). Both sprites come out of tileSpr's cache and the swing is
+  // one drawImage under a transform, so nothing here allocates per frame.
+  case'D':{const dm=doorMask(L,x,y);
+   if(!G.keyGot){ctx.drawImage(tileSpr(ti,'D',dm,0),px-4,py-4);break}
+   ctx.drawImage(tileSpr(ti,'D',dm,1),px-4,py-4);
+   // Reduce Flashing & Motion: no swing, the door is simply already open - the end state is identical either way.
+   const k=RM()?1:clamp((G.t-(G.doorT||0))/0.5,0,1),e=1-(1-k)*(1-k)*(1-k),s=1-0.885*e,hx=(dm&4)?px+TS:px;
+   ctx.save();ctx.translate(hx,0);ctx.scale(s,1);ctx.translate(-hx,0);
+   ctx.drawImage(tileSpr(ti,'D',dm,0),px-4,py-4);
+   ctx.globalAlpha=0.5*e;ctx.fillStyle='#0b0812';ctx.fillRect(px,py,TS,TS);ctx.globalAlpha=1;ctx.restore();break}
   case'~':{const gld=th.deco==7; // Gilded Vale runs the same lava system, poured as molten GOLD (art only, see tileSpr's '~')
    // white-hot crest into a deep orange body: the Vale's tiles are yellow-gold, so the melt has to sit clearly HOTTER
    // and more orange than them or a pour of molten metal reads as just another gold floor
@@ -4572,38 +4585,134 @@ function tileSpr(ti,c,mask,v){const key=ti+c+mask+'_'+v;let s=SPR.get(key);if(s)
   else if(c=='~'){const gr=ctx.createLinearGradient(0,4,0,28);
    if(th.deco==7){gr.addColorStop(0,'#f6c53a');gr.addColorStop(1,'#a35c07')}else{gr.addColorStop(0,'#ff8c2a');gr.addColorStop(1,'#d4321a')}
    ctx.fillStyle=gr;ctx.fillRect(4,4,24,24)}
-  else if(c=='D'){ctx.fillStyle='#d9a441';ctx.fillRect(4,4,24,24);ctx.fillStyle='#8a5f14';ctx.fillRect(8,4,3,24);ctx.fillRect(15,4,3,24);ctx.fillRect(22,4,3,24);ctx.strokeStyle='#8a5f14';ctx.lineWidth=2;ctx.strokeRect(5,5,22,22)}});
+  else if(c=='D'){if(v)bakeJamb(th,mask,4,4);else bakeDoor(th,mask,4,4)}});
  SPR.set(key,cvs);return cvs}
-// ONE-WAY (PASS-THROUGH) PLANK. Still drawn entirely inside the TOP 9px of the tile, so chunkOf's vf branch keeps
-// mirroring it about the tile centre for upside-down levels exactly as it did - nothing here reaches outside that band.
-// The previous art said "one-way" with two big chevrons per tile; tiled across a run they merged into a continuous
-// zigzag and the whole plank read as a strip of saw teeth. Rebuilt around three separate statements, each carried by a
-// different feature, so the plank still reads if any one of them is missed:
-//  1. IT IS A LEDGE, NOT GROUND - a 7.4px slab with a hard bright standing edge on top, less than a third of a solid
-//     tile's 24px mass, hanging in the air on two dark clips at the tile seams instead of sitting on anything.
-//  2. THE UNDERSIDE IS OPEN - the bottom edge is drawn as a BROKEN, gapped line where the top edge is solid and
-//     unbroken. Solid above / gapped below is the direction message, and it survives down to 2px.
-//  3. WHICH WAY YOU COME THROUGH - ONE up-arrow per tile, centred, with clear plank either side, so a run of planks
-//     is an evenly spaced row of arrows rather than a zigzag.
-// The ink rule from the contrast pass is kept on all three marks: near-black (#0a0814) under near-white (#f2f4fb) on
-// the top rim, on the broken underside and on the arrow, so each is dark-on-pale and light-on-dark at the same time.
-// The body is now mixed toward th.top (the world's BRIGHT accent) instead of th.tile, which also puts it a long way
-// from the dark body of a solid block - the two can no longer be confused by colour either.
-function bakeOneway(th,mask,px,py){const lf=mask&4,rt=mask&8,rL=lf?0:4,rR=rt?0:4;
- ctx.fillStyle='rgba(0,0,0,.28)';rpath(px+(lf?0:1),py+3.2,TS-(lf?0:1)-(rt?0:1),7,rL,rR,rR,rL);ctx.fill();
- const g=ctx.createLinearGradient(0,py,0,py+8.2);g.addColorStop(0,mix(th.top,'#ffffff',0.5));g.addColorStop(0.5,mix(th.top,'#ffffff',0.12));g.addColorStop(1,shade(th.top,0.7));
- ctx.fillStyle=g;rpath(px,py,TS,8.2,rL,rR,rR,rL);ctx.fill();
- ctx.save();rpath(px,py,TS,8.2,rL,rR,rR,rL);ctx.clip();
- ctx.fillStyle='#0a0814';ctx.fillRect(px,py,TS,1.2);
- if(!lf)ctx.fillRect(px,py,1.5,8.2);if(!rt)ctx.fillRect(px+TS-1.5,py,1.5,8.2);
- ctx.fillStyle='#f2f4fb';ctx.fillRect(px+(lf?0:1.9),py+1.2,TS-(lf?0:1.9)-(rt?0:1.9),1.15);
- ctx.fillStyle='rgba(10,8,20,.16)';ctx.fillRect(px,py+5.1,TS,0.7);
- ctx.fillStyle='#0a0814';for(let i=0;i<4;i++)ctx.fillRect(px+1.3+i*6,py+6.9,3.4,1.6);ctx.restore();
- ctx.fillStyle='#0a0814';for(let i=0;i<4;i++)ctx.fillRect(px+1.3+i*6,py+8.1,3.4,0.9);
- ctx.lineCap='round';ctx.lineJoin='round';
- ctx.beginPath();ctx.moveTo(px+7.6,py+5.7);ctx.lineTo(px+12,py+2.8);ctx.lineTo(px+16.4,py+5.7);
- ctx.strokeStyle='#0a0814';ctx.lineWidth=2.9;ctx.stroke();ctx.strokeStyle='#f2f4fb';ctx.lineWidth=1.45;ctx.stroke();
- ctx.lineCap='butt';ctx.lineJoin='miter'}
+// ================= LOCKED DOOR =================
+// The key's opposite number, and the only object in the game that stands between you and the rest of the level, so it
+// is drawn as a real piece of joinery instead of the flat gold block with a dot on it that it used to be:
+//   MATERIAL   a dark forged-iron leaf (faintly tinted toward the world's accent so each world's door belongs to it)
+//              carrying BRASS furniture - head and foot straps with rivets, edge banding, hinges, an escutcheon.
+//              Brass because the key is brass/gold: the two are made of the same stuff, which is the pairing said in
+//              material rather than in a label. There is only ever ONE key per level (L.key, and in the Gilded Vale
+//              the chest set that stands in for it), so no per-key colour coding is needed.
+//   LOCKED     a keyhole you could actually put that key into - round bow over a tapered ward - on a raised brass
+//              escutcheon, dead centre of the door's own height (the old dot sat on the TOP tile, so a six-tile door
+//              wore its lock up by the lintel).
+//   OPEN       see drawWorld's 'D' case: the leaf swings back to an edge-on sliver and the jamb is left standing.
+// CONTRAST: a door tile has parallax behind it, not wall, so the silhouette gets the same dark-under-bright rule the
+// rest of the foreground uses, but built out of the object instead of stroked on top - the shadow gap between leaf and
+// frame is the dark line, the brass edge banding is the bright one. The dark body holds against pale skies (Green
+// Fields, Laser Lab), the brass holds against near-black ones (Monster Woods), and both hold against the Vale's gold.
+// mask: 1 door above, 2 below, 4 left, 8 right (so a multi-tile door has no internal seams), 16 this tile wears the lock.
+const DKI='#14101c',DBR='#f0c265';
+function doorR(mask){const up=mask&1,dn=mask&2,lf=mask&4,rt=mask&8,R=7;
+ return[(!up&&!lf)?R:0,(!up&&!rt)?R:0,(!dn&&!rt)?R:0,(!dn&&!lf)?R:0]}
+function bakeDoor(th,mask,px,py){const up=mask&1,dn=mask&2,lf=mask&4,rt=mask&8,lk=mask&16;
+ const c=doorR(mask),tl=c[0],tr=c[1],br=c[2],bl=c[3];
+ const x0=px-(lf?1:0),y0=py-(up?1:0),w=TS+(lf?1:0)+(rt?1:0),h=TS+(up?1:0)+(dn?1:0);
+ ctx.fillStyle='rgba(0,0,0,.4)';rpath(x0+1.6,y0+2.2,w,h,tl,tr,br,bl);ctx.fill();
+ // forged iron, lit from the left, with a ~10% pull toward the world accent so the door reads as of its world
+ const g=ctx.createLinearGradient(px,0,px+TS,0);g.addColorStop(0,mix(th.acc,'#4c4257',0.88));g.addColorStop(0.45,mix(th.acc,'#2e2740',0.9));g.addColorStop(1,mix(th.acc,'#1b1727',0.9));
+ ctx.fillStyle=g;rpath(x0,y0,w,h,tl,tr,br,bl);ctx.fill();
+ ctx.save();rpath(x0,y0,w,h,tl,tr,br,bl);ctx.clip();
+ // ONE recessed panel running the whole height of the door: the head/foot straps take 9px off the end tiles and the
+ // middle tiles bleed, so a six-tile door is one long panel and not six stacked boxes.
+ const pt=up?py-1:py+9,pb=dn?py+TS+1:py+TS-9;
+ if(pb-pt>2){const pl=lf?px-1:px+4.5,pr=rt?px+TS+1:px+TS-4.5;
+  ctx.fillStyle='rgba(8,6,14,.5)';rpath(pl,pt,pr-pl,pb-pt,up?0:3,up?0:3,dn?0:3,dn?0:3);ctx.fill();
+  // the panel's top light and bottom shadow belong to the PANEL, not to each tile - drawn only where the panel
+  // actually ends, or a tall door grows a lit seam at every tile boundary
+  if(!up){ctx.fillStyle='rgba(255,236,190,.09)';ctx.fillRect(pl+1.2,pt+1.2,pr-pl-2.4,1.1)}
+  if(!dn){ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(pl+1.2,pb-2.3,pr-pl-2.4,1.1)}
+  ctx.fillStyle='rgba(255,230,180,.13)';if(!rt)ctx.fillRect(pr-1.3,pt+(up?0:1),1.3,pb-pt-(up?0:1)-(dn?0:1));
+  ctx.fillStyle='rgba(0,0,0,.4)';if(!lf)ctx.fillRect(pl,pt+(up?0:1),1.3,pb-pt-(up?0:1)-(dn?0:1))}
+ // brass straps across the head and the foot of the door, riveted
+ const sw=TS+(lf?1:0)+(rt?1:0),sx=px-(lf?1:0),strap=(sy)=>{const sg=ctx.createLinearGradient(0,sy,0,sy+5.4);sg.addColorStop(0,'#ffe3a4');sg.addColorStop(0.45,DBR);sg.addColorStop(1,'#7a5210');
+  ctx.fillStyle=sg;ctx.fillRect(sx,sy,sw,5.4);
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(sx,sy+5.4,sw,1.1);
+  ctx.fillStyle='rgba(60,36,2,.85)';ctx.beginPath();ctx.arc(px+5,sy+2.7,1.5,0,7);ctx.arc(px+19,sy+2.7,1.5,0,7);ctx.fill();
+  ctx.fillStyle='rgba(255,246,214,.9)';ctx.beginPath();ctx.arc(px+4.6,sy+2.3,0.7,0,7);ctx.arc(px+18.6,sy+2.3,0.7,0,7);ctx.fill()};
+ if(!up)strap(py+2.6);if(!dn)strap(py+TS-8);
+ // ...and the LOCK RAIL, the strap the lock is mounted on. Only on doors more than two tiles tall, where the head and
+ // foot straps are too far apart to hold a long panel together on their own (a one-tile gate already has both).
+ if(lk&&(up||dn))strap(py+9.3);
+ // THE LOCK: a raised brass escutcheon with a keyhole shaped like the key that opens it (round bow, tapered ward).
+ // Nudged toward the seam on a double door so the plate lands near the pair's centre rather than the leaf's.
+ if(lk){const cx=px+12+(rt?4:0),cy=py+12;
+  ctx.fillStyle='rgba(0,0,0,.5)';rr(cx-6.9,cy-8.2,15,18,4.5);ctx.fill();
+  const eg=ctx.createLinearGradient(0,cy-9,0,cy+9);eg.addColorStop(0,'#ffeec2');eg.addColorStop(0.42,DBR);eg.addColorStop(1,'#a06f14');
+  ctx.fillStyle=eg;rr(cx-7.5,cy-9,15,18,4.5);ctx.fill();
+  ctx.strokeStyle='rgba(48,28,2,.95)';ctx.lineWidth=1.3;rr(cx-7.5,cy-9,15,18,4.5);ctx.stroke();
+  ctx.fillStyle='rgba(255,252,236,.75)';ctx.fillRect(cx-5.1,cy-7.4,10.2,1.2);
+  ctx.fillStyle=DKI;ctx.beginPath();ctx.arc(cx,cy-2.4,2.9,0,7);ctx.fill();
+  ctx.beginPath();ctx.moveTo(cx-1.6,cy-0.6);ctx.lineTo(cx+1.6,cy-0.6);ctx.lineTo(cx+3,cy+5.4);ctx.lineTo(cx-3,cy+5.4);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(255,245,215,.5)';ctx.beginPath();ctx.arc(cx-1.1,cy-3.4,1,0,7);ctx.fill()}
+ // hinge knuckles on the leaf's outer edge, at the head and the foot - the side it will swing about
+ if(!lf||!rt){const hx=lf?px+TS-5.2:px+0.2,hg=(hy)=>{ctx.fillStyle='rgba(0,0,0,.5)';rr(hx-0.5,hy-0.5,6,8.2,2.2);ctx.fill();
+   const kg=ctx.createLinearGradient(hx,0,hx+5,0);kg.addColorStop(0,'#ffe9b6');kg.addColorStop(1,'#95651a');
+   ctx.fillStyle=kg;rr(hx,hy,5,7.2,2);ctx.fill();ctx.fillStyle='rgba(50,30,2,.8)';ctx.fillRect(hx+1.6,hy+1,1.8,5.2)};
+  if(!up)hg(py+9.6);if(!dn)hg(py+TS-16.8)}
+ // SILHOUETTE: shadow gap (near-black) outside, brass edge banding inside. Dark-on-pale and light-on-dark at once,
+ // and both are things the door is actually made of rather than an outline drawn over it.
+ ctx.fillStyle=DKI;
+ if(!up)ctx.fillRect(px,py,TS,1.7);if(!dn)ctx.fillRect(px,py+TS-1.7,TS,1.7);
+ if(!lf)ctx.fillRect(px,py,1.7,TS);if(!rt)ctx.fillRect(px+TS-1.7,py,1.7,TS);
+ ctx.fillStyle=DBR;
+ if(!up)ctx.fillRect(px+(tl?2:0),py+1.7,TS-(tl?2:0)-(tr?2:0),1.3);
+ if(!dn)ctx.fillRect(px+(bl?2:0),py+TS-3,TS-(bl?2:0)-(br?2:0),1.3);
+ if(!lf)ctx.fillRect(px+1.7,py+(up?0:2),1.3,TS-(up?0:2)-(dn?0:2));
+ if(!rt)ctx.fillRect(px+TS-3,py+(up?0:2),1.3,TS-(up?0:2)-(dn?0:2));
+ ctx.restore()}
+// THE JAMB - what is left standing once the leaf has swung back. Deliberately OPEN in the middle (you walk through it,
+// so the eye has to see the level straight through the hole) with the weight carried entirely by the frame: a brass
+// lip with its shadow, an inner falloff a few pixels deep so the opening has depth, the hinges the leaf is still
+// hanging on, and on the lock tile the strike plate with the hole the bolt has just come out of.
+function bakeJamb(th,mask,px,py){const up=mask&1,dn=mask&2,lf=mask&4,rt=mask&8,lk=mask&16;
+ const c=doorR(mask),tl=c[0],tr=c[1],br=c[2],bl=c[3];
+ ctx.save();rpath(px,py,TS,TS,tl,tr,br,bl);ctx.clip();
+ const ig=ctx.createLinearGradient(px,0,px+TS,0);ig.addColorStop(0,'rgba(6,5,12,.62)');ig.addColorStop(0.4,'rgba(6,5,12,.12)');ig.addColorStop(0.72,'rgba(6,5,12,.12)');ig.addColorStop(1,'rgba(6,5,12,.5)');
+ ctx.fillStyle=ig;ctx.fillRect(px,py,TS,TS);
+ if(!up){const tg=ctx.createLinearGradient(0,py,0,py+8);tg.addColorStop(0,'rgba(6,5,12,.7)');tg.addColorStop(1,'rgba(6,5,12,0)');ctx.fillStyle=tg;ctx.fillRect(px,py,TS,8)}
+ if(!dn){const bg=ctx.createLinearGradient(0,py+TS-8,0,py+TS);bg.addColorStop(0,'rgba(6,5,12,0)');bg.addColorStop(1,'rgba(6,5,12,.55)');ctx.fillStyle=bg;ctx.fillRect(px,py+TS-8,TS,8)}
+ if(lk){const cx=px+12+(rt?4:0),cy=py+12;ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(cx+4.6,cy-6.4,4.4,13);
+  ctx.fillStyle='rgba(190,140,46,.9)';ctx.fillRect(cx+4,cy-7,4.4,13);ctx.fillStyle=DKI;ctx.fillRect(cx+5.4,cy-2.4,2.6,4.4)}
+ if(!lf||!rt){const hx=lf?px+TS-5.2:px+0.2,hg=(hy)=>{ctx.fillStyle='rgba(0,0,0,.5)';rr(hx-0.5,hy-0.5,6,8.2,2.2);ctx.fill();
+   ctx.fillStyle='rgba(176,126,38,.92)';rr(hx,hy,5,7.2,2);ctx.fill()};
+  if(!up)hg(py+9.6);if(!dn)hg(py+TS-16.8)}
+ ctx.fillStyle=DKI;
+ if(!up)ctx.fillRect(px,py,TS,1.7);if(!dn)ctx.fillRect(px,py+TS-1.7,TS,1.7);
+ if(!lf)ctx.fillRect(px,py,1.7,TS);if(!rt)ctx.fillRect(px+TS-1.7,py,1.7,TS);
+ ctx.fillStyle='rgba(206,154,56,.95)';
+ if(!up)ctx.fillRect(px+(tl?2:0),py+1.7,TS-(tl?2:0)-(tr?2:0),1.2);
+ if(!dn)ctx.fillRect(px+(bl?2:0),py+TS-2.9,TS-(bl?2:0)-(br?2:0),1.2);
+ if(!lf)ctx.fillRect(px+1.7,py+(up?0:2),1.2,TS-(up?0:2)-(dn?0:2));
+ if(!rt)ctx.fillRect(px+TS-2.9,py+(up?0:2),1.2,TS-(up?0:2)-(dn?0:2));
+ ctx.restore()}
+// Which door tile wears the lock, and how each tile joins its neighbours. Walked ONCE per level and cached on L: a
+// level has a handful of door tiles and they never move, so this must never run inside the draw loop proper.
+// The lock goes on the middle row of the LEFTMOST column, so a six-tile door is locked at waist height rather than up
+// by the lintel, and a double door is locked once rather than twice.
+function doorMask(L,x,y){let m=L.dmk;
+ if(!m){m=L.dmk=new Map();
+  for(const dd of L.dyn){if(dd[2]!='D')continue;const X=dd[0],Y=dd[1];let a=0,b=0;
+   while(tAt(L,X,Y-1-a)=='D')a++;while(tAt(L,X,Y+1+b)=='D')b++;const il=tAt(L,X-1,Y)=='D';
+   m.set(Y*L.W+X,(tAt(L,X,Y-1)=='D'?1:0)|(tAt(L,X,Y+1)=='D'?2:0)|(il?4:0)|(tAt(L,X+1,Y)=='D'?8:0)|((!il&&a==((a+b)>>1))?16:0))}}
+ const v=m.get(y*L.W+x);return v===undefined?16:v}
+// ONE-WAY (PASS-THROUGH) PLANK - the ORIGINAL art, restored verbatim from Hopscraper.backup-before-menu-redesign.html
+// after two later passes (near-black rim + bevel + hanging teeth, then the bright ledge / broken underside / clips /
+// single arrow rebuild) were reverted at the owner's request.
+// INVARIANT KEPT FROM THE FLOAT-BELOW-A-PLATFORM FIX: everything here stays in the TOP of the tile (body py..py+9, its
+// drop shadow py+3..py+12), which is what lets chunkOf's L.vf branch mirror the whole 32x32 sprite about the tile
+// centre on upside-down levels so the plank's face meets your feet at the tile's BOTTOM edge. Do not draw below py+12.
+function bakeOneway(th,mask,px,py){const lf=mask&4,rt=mask&8;
+ ctx.fillStyle='rgba(0,0,0,.28)';rpath(px,py+3,TS,9,lf?0:5,rt?0:5,rt?0:5,lf?0:5);ctx.fill();
+ const g=ctx.createLinearGradient(0,py,0,py+9);g.addColorStop(0,shade(th.tile,1.7));g.addColorStop(1,shade(th.tile,1.0));
+ ctx.fillStyle=g;rpath(px,py,TS,9,lf?0:5,rt?0:5,rt?0:5,lf?0:5);ctx.fill();
+ ctx.fillStyle=th.top;rpath(px+(lf?0:2),py,TS-(lf?0:2)-(rt?0:2),3.5,lf?0:3,rt?0:3,0,0);ctx.fill();
+ ctx.fillStyle='rgba(255,255,255,.75)';ctx.fillRect(px+(lf?0:3),py+0.6,TS-(lf?0:3)-(rt?0:3),1.2);
+ ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.6;ctx.lineCap='round';
+ for(let i=0;i<2;i++){const cx2=px+7+i*10;ctx.beginPath();ctx.moveTo(cx2-3,py+8);ctx.lineTo(cx2,py+5.2);ctx.lineTo(cx2+3,py+8);ctx.stroke()}
+ ctx.lineCap='butt'}
 // CRUMBLING BLOCK, resting state - "this one is held together, and not well".
 // The fuse-bar-and-heating-metal version this replaces put a gauge and a glow on the block, which is HUD language
 // pasted onto a piece of world: it read as a decorated tile rather than as a thing about to fail. The new idea is
@@ -4658,26 +4767,7 @@ function bakeSolid(th,mask,vv,px,py){const up=mask&1,dn=mask&2,lf=mask&4,rt=mask
   else if(th.deco==7){ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(px+3+h*5,py+2.6,6,1.4);ctx.fillStyle='rgba(112,68,6,.3)';ctx.fillRect(px+2,py+6.2,TS-4,1.3)}}
  ctx.fillStyle='rgba(0,0,0,.14)';if(!lf)ctx.fillRect(px,py+(up?0:7),2,TS-(up?0:7));if(!rt)ctx.fillRect(px+TS-2,py+(up?0:7),2,TS-(up?0:7));
  if(!dn)ctx.fillRect(px,py+TS-3,TS,3);
- if(vv<2){ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(px+4+vv*6,py+11+vv*3,6,4)}
- // FOREGROUND KEYLINE. Measured against every world's parallax, the bare tile body cleared as little as 1.04:1
- // (Monster Woods tile #2b2318 vs its #2c2a3a midground) and 1.05:1 on THE TOP - at that ratio a block you must stand
- // on and a shape painted on the backdrop are literally the same value, which is the "the background looks like
- // shapes" complaint. Fixed with the laser's rule, baked instead of drawn: a near-black rim (#0a0814) with a bright
- // bevel (#f2f4fb) immediately inside it, so the silhouette is dark-on-light and light-on-dark at once and holds on
- // both pale skies and near-black ones. Worst case across all nine worlds goes 1.04:1 -> 4.73:1.
- // EXPOSED FACES ONLY: a face that touches another solid keeps the seamless 1px overdraw it always had, so a solid
- // mass still reads as one mass and gains no internal grid. Clipped to the tile's own rounded path, so nothing ever
- // bleeds into a neighbour's cell.
- ctx.save();rpath(px,py,TS,TS,tl,tr,br,bl);ctx.clip();
- const KW=2.1;ctx.fillStyle='#0a0814';
- if(!up)ctx.fillRect(px,py,TS,1.5);if(!dn)ctx.fillRect(px,py+TS-KW,TS,KW);
- if(!lf)ctx.fillRect(px,py,KW,TS);if(!rt)ctx.fillRect(px+TS-KW,py,KW,TS);
- ctx.fillStyle='#f2f4fb';
- if(!up)ctx.fillRect(px+(tl?2:0),py+1.5,TS-(tl?2:0)-(tr?2:0),1.15);
- if(!dn)ctx.fillRect(px+(bl?2:0),py+TS-KW-1.15,TS-(bl?2:0)-(br?2:0),1.15);
- if(!lf)ctx.fillRect(px+KW,py+(up?0:3),1.15,TS-(up?0:3)-(dn?0:2));
- if(!rt)ctx.fillRect(px+TS-KW-1.15,py+(up?0:3),1.15,TS-(up?0:3)-(dn?0:2));
- ctx.restore()}
+ if(vv<2){ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(px+4+vv*6,py+11+vv*3,6,4)}}
 function drawSpike(px,py,c,th){const vert=c=='^'||c=='v';
  const g=vert?ctx.createLinearGradient(px,0,px+24,0):ctx.createLinearGradient(0,py,0,py+24);
  g.addColorStop(0,'#c9ccd8');g.addColorStop(0.45,'#ffffff');g.addColorStop(1,'#a8adbe');
@@ -4967,12 +5057,14 @@ function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i]
 // LANES. Toasts are overlays, so each screen gets a lane where it keeps no buttons:
 //   MORE WORLDS fills its top-right with product cards, so its toasts rise from the bottom centre;
 //   the MAIN MENU is a centred column with a corner in every direction, so its toasts run down the LEFT edge - and
-//     they are narrower there (232 vs 316) so the stack stops short of PLAY's left edge at x=260 instead of sitting
-//     on top of it. This is the fix for toasts landing on menu buttons.
+//     they are narrower there (232, not 316) and start below the wordmark, so the stack sits in the one empty band
+//     the menu has - left edge, between the wordmark's ink and the credits byline - and clears PLAY, the wordmark and
+//     every other control. Three at a time there rather than four, because that band is 180px tall.
+//     This is the fix for toasts landing on menu buttons.
 //   everywhere else: the usual top-right slide.
 function drawToasts(){const bot=SCR===SCREENS.worlds,men=SCR===SCREENS.menu,W=men?232:316;
- toasts.slice(0,4).forEach((o,i)=>{const k=o.t<0.3?ease(o.t/0.3):o.t>3.2?1-(o.t-3.2)/0.4:1;
-  const x=men?20-(1-k)*300:bot?VW/2-158:VW-330+(1-k)*360,y=men?100+i*62:bot?VH-62-i*62+(1-k)*26:64+i*64;ctx.globalAlpha=clamp(k,0,1);ctx.fillStyle='rgba(20,16,40,.92)';rr(x,y,W,56,12);ctx.fill();ctx.strokeStyle=o.ty=='ach'?'#ffd45e':'#8dd3ff';ctx.lineWidth=2;rr(x,y,W,56,12);ctx.stroke();
+ toasts.slice(0,men?3:4).forEach((o,i)=>{const k=o.t<0.3?ease(o.t/0.3):o.t>3.2?1-(o.t-3.2)/0.4:1;
+  const x=men?20-(1-k)*300:bot?VW/2-158:VW-330+(1-k)*360,y=men?204+i*62:bot?VH-62-i*62+(1-k)*26:64+i*64;ctx.globalAlpha=clamp(k,0,1);ctx.fillStyle='rgba(20,16,40,.92)';rr(x,y,W,56,12);ctx.fill();ctx.strokeStyle=o.ty=='ach'?'#ffd45e':'#8dd3ff';ctx.lineWidth=2;rr(x,y,W,56,12);ctx.stroke();
  if(o.ty=='ach')star5(x+30,y+28,15,'#ffd45e','#b8860b',2);else{ctx.fillStyle='#8dd3ff';ctx.beginPath();ctx.arc(x+30,y+28,10,0,7);ctx.fill()}
  txt(fitStr(o.a,W-64,16),x+54,y+19,16,o.ty=='ach'?'#ffd45e':'#fff','left',false);{const bl=wrapText(o.b||'',W-64,14).slice(0,2);bl.forEach((l,k)=>txt(l,x+54,(bl.length>1?y+32:y+38)+k*15,14,'#d8d5ea','left',false))}ctx.globalAlpha=1})} // subtitle wraps to 2 lines instead of being cut
 function firework(x,y){const hue=rnd(0,360);for(let i=0;i<46;i++){const a=i/46*Math.PI*2,sp=rnd(120,260),l=rnd(0.8,1.4);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l,ml:l,c:`hsl(${hue+rnd(-20,20)},95%,65%)`,s:rnd(2,4),g:160,drag:1.2,sh:'sq'})}sfx('boom')}
@@ -5090,13 +5182,18 @@ function titleWordBase(){let s=SPR.get('titleWordBase');if(s)return s;
  g.strokeStyle='rgba(255,255,255,.5)';g.lineWidth=1.3;xx=bx;for(const ch of word){g.strokeText(ch,xx,by);xx+=g.measureText(ch).width}
  SPR.set('titleWordBase',cvs);return cvs}
 let TITLE_SCRATCH=null;
-function drawTitleWord(t){const base=titleWordBase(),W=base.width,H=base.height;
+// yy = where the wordmark's BASELINE sits (default 205, the title screen's). The main menu draws the same wordmark
+// higher up, so the two screens share one identity instead of the menu having its own flat heading - and because it
+// is gold on a 6px dark outline with a cast shadow, it is legible on every sky the menu can roll, however pale.
+// Reduce Flashing & Motion gets the plain baked sprite: no shine sweep, no bob.
+function drawTitleWord(t,yy){const base=titleWordBase(),W=base.width,H=base.height,Y=(yy==null?205:yy)-TITLE_BY;
+ if(RM()){ctx.drawImage(base,VW/2-W/2,Y);return}
  if(!TITLE_SCRATCH||TITLE_SCRATCH.width!=W){TITLE_SCRATCH=document.createElement('canvas');TITLE_SCRATCH.width=W;TITLE_SCRATCH.height=H}
  const g=TITLE_SCRATCH.getContext('2d');g.clearRect(0,0,W,H);g.drawImage(base,0,0);
  g.save();g.globalCompositeOperation='source-atop';const sweepX=((t*260)%(W+240))-120;
  const sg=g.createLinearGradient(sweepX-50,0,sweepX+50,0);sg.addColorStop(0,'rgba(255,255,255,0)');sg.addColorStop(0.5,'rgba(255,255,255,.6)');sg.addColorStop(1,'rgba(255,255,255,0)');
  g.fillStyle=sg;g.fillRect(0,0,W,H);g.restore();
- ctx.drawImage(TITLE_SCRATCH,VW/2-W/2,205-TITLE_BY+Math.sin(t*1.6)*6)}
+ ctx.drawImage(TITLE_SCRATCH,VW/2-W/2,Y+Math.sin(t*1.6)*6)}
 SCREENS.title={enter(){musicPlay(0);this.t=0;this.pt=gtime;const hp=gtime/TITLE_HOP_DUR;this.hopIdx=Math.floor(hp);this.peaked=(hp-this.hopIdx)>=0.5;this.sx=1;this.sy=1;this.dir=1},
  update(dt){this.t+=dt;if(this.t>0.4&&(pressed.ANY||mouse.click))go('menu')},
  draw(){const t=gtime,fdt=clamp(t-this.pt,0,0.05);this.pt=t;
@@ -5148,21 +5245,50 @@ function menuIcon(k,s,ink,paper){ctx.save();ctx.lineJoin='round';ctx.lineCap='ro
   ctx.beginPath();ctx.moveTo(-s*0.56,-s*0.9);ctx.lineTo(s*0.56,-s*0.9);ctx.lineTo(s*0.3,s*0.08);ctx.lineTo(-s*0.3,s*0.08);ctx.closePath();ctx.fill();
   rr(-s*0.15,s*0.04,s*0.3,s*0.3,s*0.05);ctx.fill();rr(-s*0.5,s*0.32,s*1.0,s*0.28,s*0.1);ctx.fill();
   star5(0,-s*0.5,s*0.28,ink,null,0)}
- else if(k=='bag'){ // backpack: dark flap over a light body, buckle straddling the seam, grab loop on top.
-  // It is the two-TONE split that makes this read at 26px - an outline-only bag was just a rounded blob.
-  // Taller than it is wide, or it reads as a lunchbox: 1.34s across, 1.66s down, plus shoulder straps either side.
-  ctx.strokeStyle=paper;ctx.lineWidth=s*0.18;ctx.beginPath();ctx.arc(0,-s*0.56,s*0.28,Math.PI*1.06,Math.PI*1.94);ctx.stroke();
-  ctx.lineWidth=s*0.16;for(const d of[-1,1]){ctx.beginPath();ctx.arc(d*s*0.62,-s*0.2,s*0.34,d>0?Math.PI*1.55:Math.PI*1.95,d>0?Math.PI*0.45:Math.PI*0.85);ctx.stroke()}
-  rr(-s*0.67,-s*0.52,s*1.34,s*1.66,s*0.3);ctx.fill();
-  ctx.fillStyle=ink;rr(-s*0.67,-s*0.52,s*1.34,s*0.84,s*0.3);ctx.fill();
-  ctx.fillStyle=paper;rr(-s*0.19,s*0.08,s*0.38,s*0.3,s*0.09);ctx.fill();
-  ctx.fillStyle=ink;rr(-s*0.4,s*0.66,s*0.8,s*0.17,s*0.085);ctx.fill()}
- else if(k=='cart'){ // shopping cart: fat handle, a solid basket with three slats, two big wheels
-  ctx.strokeStyle=paper;ctx.lineWidth=s*0.24;ctx.lineCap='round';ctx.lineJoin='round'; // a thin handle disappears at 30px
-  ctx.beginPath();ctx.moveTo(-s*0.94,-s*0.72);ctx.lineTo(-s*0.7,-s*0.72);ctx.lineTo(-s*0.42,s*0.3);ctx.stroke();
-  ctx.fillStyle=paper;ctx.beginPath();ctx.moveTo(-s*0.6,-s*0.42);ctx.lineTo(s*0.98,-s*0.42);ctx.lineTo(s*0.72,s*0.34);ctx.lineTo(-s*0.38,s*0.34);ctx.closePath();ctx.fill();
-  ctx.fillStyle=ink;for(const k2 of[-0.3,0.08,0.46])ctx.fillRect(s*k2,-s*0.28,s*0.11,s*0.48);
-  ctx.fillStyle=paper;for(const wx of[-s*0.16,s*0.52]){ctx.beginPath();ctx.arc(wx,s*0.7,s*0.22,0,7);ctx.fill()}}
+ else if(k=='bag'){ // BACKPACK, to the conventional form: domed top, two shoulder straps looping over from behind,
+  // a small pocket high on the front and a bigger zipped one across the lower front. Flat bottom, soft corners.
+  // The STRAPS are what separate a backpack from a plain bag, and they sit outside the body - so they are drawn in a
+  // light mid tone, never in `ink`. Drawn dark they vanished into the dark button plate, which is what made the
+  // earlier attempts read as a lunchbox.
+  const mid=mixh(paper,ink,0.2),pk=mixh(paper,ink,0.24);
+  ctx.lineCap='round';ctx.strokeStyle=mid;ctx.lineWidth=s*0.19;   // straps: up and over each shoulder, then back down
+  // they have to rise ABOVE the dome and run well past the body's edge, or at 34px they are just two little ears
+  for(const d of[-1,1]){ctx.beginPath();ctx.moveTo(d*s*0.2,-s*0.5);
+   ctx.bezierCurveTo(d*s*0.34,-s*0.98,d*s*0.96,-s*0.84,d*s*0.82,s*0.14);ctx.stroke()}
+  // body: taller than wide, DOMED top, flat bottom with soft corners
+  const P=()=>{ctx.beginPath();ctx.moveTo(-s*0.6,-s*0.18);
+   ctx.bezierCurveTo(-s*0.6,-s*0.78,s*0.6,-s*0.78,s*0.6,-s*0.18);
+   ctx.lineTo(s*0.6,s*0.82);ctx.quadraticCurveTo(s*0.6,s*1.04,s*0.38,s*1.04);
+   ctx.lineTo(-s*0.38,s*1.04);ctx.quadraticCurveTo(-s*0.6,s*1.04,-s*0.6,s*0.82);ctx.closePath()};
+  ctx.fillStyle=paper;P();ctx.fill();
+  ctx.save();P();ctx.clip();ctx.fillStyle='rgba(0,0,0,.13)';ctx.fillRect(s*0.26,-s*0.9,s*1.2,s*2.2);ctx.restore(); // light from the top-left
+  ctx.fillStyle=pk;rr(-s*0.34,-s*0.26,s*0.68,s*0.26,s*0.1);ctx.fill();            // small pocket, just under the dome
+  ctx.fillStyle=pk;rr(-s*0.46,s*0.24,s*0.92,s*0.62,s*0.14);ctx.fill();            // big lower pocket
+  ctx.fillStyle=ink;rr(-s*0.4,s*0.42,s*0.8,s*0.11,s*0.055);ctx.fill();            // zip across it
+  ctx.beginPath();ctx.arc(s*0.36,s*0.475,s*0.13,0,7);ctx.fill()}                  // and its pull tab
+ else if(k=='cart'){ // SHOPPING CART, in three-quarter view rather than flat-on.
+  // Silhouette first: a grip and a raked handle on the left, a basket that is WIDER at the top and leans back, and
+  // two wheels at different distances - the far one smaller, dimmer and set back, which is what gives it depth.
+  // The top rail is drawn as its own bar: that single thick edge is the strongest "this is a cart" cue there is.
+  // The basket is an OPEN wire frame, not a solid block: the grid of cells is the single most recognisable part of a
+  // trolley, so the cells are left empty and the plate shows through them.
+  ctx.lineCap='round';ctx.lineJoin='round';
+  // basket corners: top edge wider and raked, bottom edge shorter - that taper is what stops it reading as a box
+  const TL=[-s*0.56,-s*0.52],TR=[s*1.04,-s*0.36],BR=[s*0.74,s*0.26],BL=[-s*0.26,s*0.26];
+  const lp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+  ctx.strokeStyle=paper;ctx.lineWidth=s*0.2;                                     // grip, its little upward hook, and the post
+  ctx.beginPath();ctx.moveTo(-s*1.04,-s*0.92);ctx.lineTo(-s*1.04,-s*0.76);ctx.lineTo(-s*0.78,-s*0.76);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-s*0.82,-s*0.76);ctx.lineTo(TL[0],TL[1]);ctx.stroke();
+  ctx.strokeStyle=mixh(paper,ink,0.2);ctx.lineWidth=s*0.12;                      // the wire cells: 3 uprights, 2 rails
+  for(const t of[0.26,0.5,0.74]){const a=lp(TL,TR,t),b=lp(BL,BR,t);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
+  for(const t of[0.36,0.7]){const a=lp(TL,BL,t),b=lp(TR,BR,t);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
+  ctx.strokeStyle=paper;ctx.lineWidth=s*0.19;                                    // the frame itself, over the wires
+  ctx.beginPath();ctx.moveTo(TL[0],TL[1]);ctx.lineTo(TR[0],TR[1]);ctx.lineTo(BR[0],BR[1]);ctx.lineTo(BL[0],BL[1]);ctx.closePath();ctx.stroke();
+  ctx.lineWidth=s*0.16;                                                          // bottom rail, running past the basket
+  ctx.beginPath();ctx.moveTo(-s*0.42,s*0.16);ctx.quadraticCurveTo(-s*0.3,s*0.42,s*0.0,s*0.42);ctx.lineTo(s*0.92,s*0.42);ctx.stroke();
+  ctx.fillStyle=paper;                                                           // two wheels, well apart and clear of the basket
+  for(const w of[[-s*0.08,s*0.78,s*0.2],[s*0.66,s*0.78,s*0.2]]){ctx.beginPath();ctx.arc(w[0],w[1],w[2],0,7);ctx.fill()}
+  ctx.fillStyle=ink;for(const w of[[-s*0.08,s*0.78],[s*0.66,s*0.78]]){ctx.beginPath();ctx.arc(w[0],w[1],s*0.07,0,7);ctx.fill()}}
  else if(k=='help'){ // the universal help mark: a solid disc and a question mark nobody has to decode
   ctx.beginPath();ctx.arc(0,0,s*0.94,0,7);ctx.fill();txt('?',0,s*0.05,Math.max(11,Math.round(s*1.3)),ink,'center',false)}
  else if(k=='gear'){ // cog - six FAT teeth, because eight thin ones turn to mush at 26px
@@ -5193,7 +5319,7 @@ function menuDot(ic,col,bw,sel){
  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.arc(2,4,bw/2,0,7);ctx.fill();
  ctx.fillStyle=sel?'#ffd45e':'rgba(15,12,30,.72)';ctx.beginPath();ctx.arc(0,0,bw/2,0,7);ctx.fill();
  ctx.strokeStyle=sel?'#ffffff':'rgba(255,255,255,.26)';ctx.lineWidth=sel?3:2;ctx.beginPath();ctx.arc(0,0,bw/2-1,0,7);ctx.stroke();
- menuIcon(ic,15,sel?'#ffd45e':'#14102a',sel?'#2a2008':col)}
+ menuIcon(ic,17,sel?'#ffd45e':'#14102a',sel?'#2a2008':col)} // 17, not 15: the cart's wire cells need the extra 4px
 // The four "he has been played with" bits behind the speech bubble. Only writes (and only saves) the first time each
 // one is earned, so teaching stops for good across launches instead of restarting every time the game is opened.
 function tfLearn(bit){if(((S.tf|0)&bit)===bit)return;S.tf=(S.tf|0)|bit;save()}
@@ -5209,7 +5335,8 @@ function sceneIcon(k,s,ink,paper){ctx.save();ctx.translate(2,3);menuIcon(k,s,'#1
 // One centre column: PLAY_R with MODE_R slim underneath it. CARD_R is the conditional Power Cards chip beside PLAY.
 // CRED_R is the quiet byline bottom-left. WHL_R is the Prize Wheel's corner. DOT/DOTY: the three top-right circles.
 const PEN={x:0,y:0,w:VW,h:VH},
- PLAY_R={x:260,y:176,w:440,h:132},MODE_R={x:366,y:322,w:228,h:48},
+ WORD_Y=182, // the wordmark's baseline: it is the centrepiece now, sitting directly on top of PLAY
+ PLAY_R={x:300,y:206,w:360,h:104},MODE_R={x:366,y:320,w:228,h:46},
  CARD_R={x:712,y:230,w:150,h:44},CRED_R={x:34,y:434,w:170,h:44},
  WHL_R={x:834,y:360,w:116,h:128},DOT=58,DOTY=18;
 // ---- THE PRIZE WHEEL, AS CORNER FURNITURE ----------------------------------------------------------------------
@@ -5217,14 +5344,18 @@ const PEN={x:0,y:0,w:VW,h:VH},
 // reads as an OBJECT in the world rather than a widget floating on top of it. Its wedges come from the shared
 // miniWheel()/miniWheelSpr() - the same pair the shop's spin rows use - whose widths come from wArcs(WHEEL), the same
 // geometry wSegAt() reads to decide a prize. It cannot drift out of step with the real odds.
-// It only ADVERTISES when there is a reason: dead still with no tickets, a slow turn when a free spin is waiting.
-// R=48 centred in a 116x128 rect at x834: the whole wheel, pointer and shadow included, lands inside 844..940, a
-// clear 20px short of the screen edge. It is corner furniture, not a sliver - cropping it never made it read better.
+// It is also a TRUE PREVIEW: it sits at the real wheel's resting angle, so the pointer is on the same point of the
+// same wedge you will find when you open it. That is why it no longer idles - a turning preview would be a lie.
+// It ADVERTISES a waiting spin with the ticket chip and a soft pulsing ring, neither of which touches the angle.
+// R=48 centred in a 116x128 rect at x834: the whole wheel, pointer and shadow included, lands inside 842..942, a
+// clear 18px short of the screen edge. It is corner furniture, not a sliver - cropping it never made it read better.
 const MWR=48;
 // Drawn in the button's LOCAL space (0,0 = the middle of its rect), so o.bare's selection zoom moves it correctly.
 function drawMiniWheel(bw,bh,sel){const r=MWR,TAU=Math.PI*2,sp=S.dev||S.tix>0,cx=0,cy=0;
  ctx.save();ctx.lineJoin='round';
- miniWheel(cx,cy,r,false,sp); // spin=false pins it still; miniWheel already stops for Reduce Flashing & Motion
+ miniWheel(cx,cy,r,false);
+ // the ring is the only thing that moves, and it moves AROUND the wheel, never the wheel itself
+ if(sp&&!sel&&!RM()){ctx.globalAlpha=0.3+0.35*Math.sin(gtime*3.2);ctx.strokeStyle='#ff8fd8';ctx.lineWidth=3.5;ctx.beginPath();ctx.arc(cx,cy,r+13,0,TAU);ctx.stroke();ctx.globalAlpha=1}
  if(sel){ctx.strokeStyle='#ffd45e';ctx.lineWidth=4;ctx.beginPath();ctx.arc(cx,cy,r+7,0,TAU);ctx.stroke();
   const n='PRIZE WHEEL',w=txtW(n,12)+18;ctx.fillStyle='rgba(15,12,30,.86)';rr(bw/2-w,-bh/2-30,w,24,12);ctx.fill();
   txt(n,bw/2-w/2,-bh/2-18,12,'#ffffff','center',false)}
@@ -5316,7 +5447,9 @@ SCREENS.menu={enter(){musicPlay(0);TILT.nx=null;if(!this.b)this.b={x:480,y:VH-28
   const up=(VH-28)-b.y;ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(b.x,VH-2,Math.max(16,50-up*0.09),8,0,0,7);ctx.fill();
   ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.a);if(b.g)ctx.scale(1.06,1.06);
   drawSq(0,28,56,gtime,{face:1,lx:clamp((PTR.x-b.x)/160,-1,1),ly:clamp((PTR.y-b.y)/160,-1,1),sx:1+b.sq,sy:1-b.sq});ctx.restore();
-  if(this.bl==null)return;
+  // UI.prev is empty on the very first frame after go() - the button list has not been built yet - so the overlap
+  // guard below would have nothing to test against. Stay quiet for that one frame rather than risk covering a control.
+  if(this.bl==null||!UI.prev.length)return;
   // 16px type in a 38px bubble. It flips BELOW him when there is no room above, and clamps to the screen either way,
   // so it stays readable wherever he has been thrown. If the bubble would land on ANY control - or on the reminder
   // banner while that is up - it is simply not drawn this frame: his speech never covers something you can press.
@@ -5340,9 +5473,13 @@ SCREENS.menu={enter(){musicPlay(0);TILT.nx=null;if(!this.b)this.b={x:480,y:VH-28
   // run of the whole screen without ever hiding a control - and it is why "he is over the credits" is only ever a look,
   // never a blocked tap.
   this.drawToy();
-  txt('HOPSCRAPER',44,46,46,'#14265c','left');txt('how high can a square go?',48,78,14,'#1e2a52','left',false);
-  // Club badge sits to the right of the title (it used to overlap the tagline). Capped short of the update banner's lane.
-  if(clubOn()){ctx.font=`bold 46px ${FONT}`;const bx=Math.min(356,48+ctx.measureText('HOPSCRAPER').width+14);ctx.fillStyle='#ffd45e';rr(bx,34,92,24,12);ctx.fill();crownIcon(bx+16,46,9);txt('CLUB',bx+28,47,14,'#3a1470','left',false)}
+  // THE WORDMARK IS THE SCREEN. Not a heading in the corner any more: the game's real title treatment - the same
+  // baked sprite the title screen uses - centred and sitting directly on top of PLAY. The tagline that used to run
+  // under it is gone from here; at this size it had nowhere to sit without crowding either the wordmark or PLAY, and
+  // the title screen already says it at 22px a few seconds earlier.
+  drawTitleWord(gtime,WORD_Y);
+  // Club badge moved to the top-left corner the wordmark vacated.
+  if(clubOn()){ctx.fillStyle='#ffd45e';rr(34,22,104,32,16);ctx.fill();crownIcon(54,38,11);txt('CLUB',70,39,16,'#3a1470','left',false)}
   if(!STORE_OK)txt('Saving is blocked in this browser - progress will not be kept',VW/2,VH-44,14,'#ffb3b3');
   // NO stars/gems/coins here any more: they live in the Shop, which already shows all three, and the home screen is
   // not a dashboard. One fewer plate is one fewer thing competing with PLAY.
@@ -5923,13 +6060,13 @@ function shopTabArt(k,x,y,s,c){ctx.save();ctx.translate(x,y);
  if(k=='c'){ctx.fillStyle=c;rr(-s*0.8,-s*0.8,s*1.6,s*1.6,s*0.34);ctx.fill();ctx.fillStyle='rgba(255,255,255,.85)';rr(-s*0.44,-s*0.3,s*0.32,s*0.34,s*0.08);ctx.fill();rr(s*0.12,-s*0.3,s*0.32,s*0.34,s*0.08);ctx.fill()}
  else if(k=='h')hatIcon(0,0,s);
  else if(k=='t')trailIcon(0,0,s);
- else if(k=='w')miniWheel(0,0,s*0.95,false,false);
+ else if(k=='w')miniWheel(0,0,s*0.95,false);
  else if(k=='p')boxIcon(0,0,s*0.82,c);
  else if(k=='g')gemShape(0,0,s*0.95,c);
  ctx.restore()}
 function fltIcon(k,x,y,s,c){if(k=='all')listIcon(x,y,s,c);
  else if(k=='own')tickIcon(x,y,s,c);
- else if(k=='spin')miniWheel(x,y,s*0.95,false,false);
+ else if(k=='spin')miniWheel(x,y,s*0.95,false);
  else if(k=='earn')star5(x,y,s,c,'rgba(0,0,0,.25)',1.5);
  else boxIcon(x,y,s*0.86,c)}
 // price tag under an item: worn/owned, a coin or gem price, or - for anything locked - a lock plus where it comes
@@ -6139,8 +6276,8 @@ SCREENS.shop={enter(){if(!SHOP_TABS.some(t=>t[0]==this.cat))this.cat='c';if(!FIL
    txt(tixBuyLeft()+' left today',w/2-14,1,14,'#54506a','right',false)}});
   else txt(tixBuyLeft()?'Need '+fmtN(TIX_COST)+' coins for a ticket':'No more ticket swaps today',GX+GW/2,458,14,'#cfccdd');
   if(this.mt>0)txt(fitStr(this.msg,GW-40,15),GX+GW/2,494,15,'#ffd45e');
-  button('od_f',576,100,164,36,'',{bg:prem?'#ffffff':'#8dd3ff',draw:w=>{miniWheel(-w/2+20,0,12,false,false);txt('Prize Wheel',8,1,15,'#1d1a2e','center',false)}});
-  if(pwOn())button('od_p',748,100,156,36,'',{bg:prem?'#8dd3ff':'#ffffff',draw:w=>{miniWheel(-w/2+20,0,12,true,false);txt('Premium',8,1,15,'#1d1a2e','center',false)}});
+  button('od_f',576,100,164,36,'',{bg:prem?'#ffffff':'#8dd3ff',draw:w=>{miniWheel(-w/2+20,0,12,false);txt('Prize Wheel',8,1,15,'#1d1a2e','center',false)}});
+  if(pwOn())button('od_p',748,100,156,36,'',{bg:prem?'#8dd3ff':'#ffffff',draw:w=>{miniWheel(-w/2+20,0,12,true);txt('Premium',8,1,15,'#1d1a2e','center',false)}});
   txt('ODDS',740,156,14,'#c3bfd4',undefined,false);
   // oddsRows()/oddsBand() belong to the wheel - this list borrows them so the shop and the wheel's own odds popup can
   // never print different numbers. segW/oddsTxt is only the fallback if the wheel ever stops exposing them.
@@ -6367,8 +6504,13 @@ function miniWheelSpr(prem,R){R=Math.round(R);const key='miniwheel_'+(prem?'p':'
  g.strokeStyle=prem?'#e0a526':'#5a3fd0';g.lineWidth=3.2;g.beginPath();g.arc(c,c,R-1.3,0,TAU);g.stroke();
  g.fillStyle=prem?'#fff3c0':'#eef0ff';const nb=R<14?8:12;for(let j=0;j<nb;j++){const a=j/nb*TAU;g.beginPath();g.arc(c+Math.cos(a)*(R-1.3),c+Math.sin(a)*(R-1.3),Math.max(1,R*0.075),0,TAU);g.fill()}
  SPR.set(key,cv);return cv}
-// spin=false pins it still (watermarks and icons never turn). Otherwise it idles - and Reduce Flashing & Motion stops that too.
-function miniWheel(x,y,R,prem,spin){const sp=miniWheelSpr(prem,R),rot=(spin===false||RM())?0:gtime*0.55*(prem?-1:1);
+// EVERY mini wheel is a TRUE PREVIEW, never decoration. It is drawn at the real wheel's own resting angle
+// (SCREENS.wheel.rot, the value the spin rework keeps so a spin continues from where the last one stopped), so the
+// pointer sits on exactly the wedge - and exactly the part of that wedge - you will see when the wheel screen opens.
+// There is deliberately NO idle rotation any more: a turning preview would be showing an angle that is not the truth.
+// Availability ("you have a free spin") is signalled by the ticket chip and a soft ring instead - see drawMiniWheel.
+// All instances read the same value, so the menu corner, the shop rows and the odds tabs can never disagree.
+function miniWheel(x,y,R,prem){const sp=miniWheelSpr(prem,R),W=SCREENS.wheel,rot=(W&&W.rot?W.rot[prem?'p':'r']:0)||0;
  ctx.save();ctx.translate(x,y);
  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.arc(1.5,2.5,R+1,0,7);ctx.fill();
  ctx.save();ctx.rotate(rot);ctx.drawImage(sp,-sp.width/2,-sp.height/2);ctx.restore();
@@ -6448,12 +6590,25 @@ function ghostBtn(x,y,w,h,label,bg,fg,fs){ctx.fillStyle='rgba(0,0,0,.25)';rr(x+3
 // stand between the player and a paid spin. Kept as a function so the call sites (and the layouts that branch on it)
 // stay exactly as they were.
 function pwOn(){return true}
+// ---- ONE ANGLE, EVERYWHERE ------------------------------------------------------------------------------------
+// SCREENS.wheel.rot is the single source of truth for where each wheel is pointing, and this is the ONLY thing that
+// turns it when nobody is spinning. It runs every frame on every screen, so the little wheel in the menu corner, the
+// rows in the shop and the full wheel screen are all showing the same angle at the same moment: watch the corner
+// preview turn, open the wheel, and the big one carries on from exactly there - no jump, no reset.
+// It stops dead for a spin, for the prize reveal (the pointer must not creep off the wedge you just won while you
+// are looking at it) and for Reduce Flashing & Motion. It is far too slow, and a spin adds far too much random
+// rotation, for the drift to be timed into a chosen outcome - and wSegAt still reads this same value, so whatever
+// the pointer is on IS the prize.
+function wheelIdle(dt){const W=SCREENS.wheel;if(!W||W.spin||W.rev||RM())return;
+ const TAU=Math.PI*2,d=dt*(TAU/38);
+ W.rot.r=(W.rot.r+d)%TAU;W.rot.p=(W.rot.p-d)%TAU} // the premium wheel turns the other way, as it always has
 SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
  enter(a){if(typeof a=='string')a={from:a};a=a||{};this.from=a.from||'menu';if(a.prem!=null)this.prem=!!a.prem;if(!pwOn())this.prem=false;this.spin=null;this.rev=null;this.modal=null;this.pa=0;this.pv=0;FX.length=0;musicPlay(0);UI.selId='spin'},
  segs(){return this.prem?PWHEEL:WHEEL},
  update(dt){updParts(FX,dt);const m=this.prem?'p':'r',segs=this.segs(),sp=this.spin;
   const st=Math.min(dt,0.05);this.pv+=(-110*this.pa-10*this.pv)*st;this.pa+=this.pv*st;
-  if(!sp&&!(this.landed&&this.landed[m]))this.rot[m]+=dt*(Math.PI*2/25); // slow idle drift before the first spin; after a spin the wheel stays exactly where it stopped
+  // (the idle drift is no longer done here - it lives in wheelIdle(), which runs every frame on every screen so the
+  //  corner preview and this screen are always turning at exactly the same angle)
   // Deceleration curve. Exponent 5 over a long duration is the "real wheel" feel the owner asked for back: a hard
   // whip at the start, then a long crawl where the last wedge or two takes a second each and you can watch it die.
   if(sp){sp.t+=dt;const u=clamp(sp.t/sp.d,0,1);const r=sp.r0+(sp.r1-sp.r0)*(1-Math.pow(1-u,5));
@@ -7038,12 +7193,12 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  try{
  // M un-mutes to an audible level: if the Music slider itself was dragged to 0, "Music on" has to actually mean on
  if(pressed.MUTE){S.set.music=S.set.music?0:1;if(S.set.music&&!vnum('vmus',0.8))S.set.vmus=defSave().set.vmus;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
- const updOn=UPD&&(SCR===SCREENS.menu||SCR===SCREENS.title||SCR===SCREENS.levels),UR=SCR===SCREENS.menu?{x:310,y:100,w:330,h:36}:SCR===SCREENS.levels?{x:VW-300,y:20,w:280,h:38}:{x:VW/2-160,y:20,w:320,h:38};
+ const updOn=UPD&&(SCR===SCREENS.menu||SCR===SCREENS.title||SCR===SCREENS.levels),UR=SCR===SCREENS.menu?{x:300,y:382,w:330,h:36}:SCR===SCREENS.levels?{x:VW-300,y:20,w:280,h:38}:{x:VW/2-160,y:20,w:320,h:38};
  if(updOn&&mouse.click&&inR(mouse,UR)){mouse.click=false;try{location.reload()}catch(e){}}
  // remTap runs BEFORE the screen's own update so a tap that landed on the reminder isn't also read as a menu press -
  // and it only clears the click when it really was inside the banner, so the menu keeps every other tap
  if(!rot&&remTap())mouse.click=false;
- if(!rot){SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);remUpd(dt)}
+ if(!rot){SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);remUpd(dt);wheelIdle(dt)}
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(SCR!==SCREENS.play&&(STK||tp.size))tReset(); // (not on the win beat, so held fingers carry into the next Marathon level)
  UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();
