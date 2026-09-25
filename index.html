@@ -32,7 +32,7 @@ canvas{touch-action:none;-webkit-touch-callout:none;position:absolute;left:50%;t
 <canvas id="c" tabindex="0"></canvas>
 <script>
 'use strict';
-const BUILD='20260924-220114'; // change this on every upload so open copies show "Update ready"
+const BUILD='20260924-222033'; // change this on every upload so open copies show "Update ready"
 // Where the Settings > Send Feedback button goes. Leave FEEDBACK_URL empty to email FEEDBACK_EMAIL instead;
 // paste a Google Form link into FEEDBACK_URL and it wins. Either way the build number rides along (see openFeedback).
 const FEEDBACK_URL='https://docs.google.com/forms/d/e/1FAIpQLSec8ZqpP9d7S8UD6wIwxoaDgJojhNFq6IkY529GwPfrzO_h4A/viewform';  // blank this to fall back to the mailto
@@ -6759,17 +6759,120 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   if(id=='buytix'){if(buyTix()){sfx('buy');toast('+1 spin ticket',fmtN(TIX_COST)+' coins exchanged','ach')}else sfx('no');return}}};
 
 // ================= LEADERBOARDS =================
-// own bests for now. The iOS version sends these to Game Center via submitScore().
-function boardRows(){const tm=t=>t?fmtT(t):'--:--',rows=[['Marathon',tm(S.speedBest)],['Hard Marathon',tm(S.hspeedBest)]];
- COURSES.forEach((c,i)=>rows.push([c.n,tm((S.course[i]||{}).t)]));
- rows.push(['Endless height',S.endBest+'m']);rows.push(['Daily Climb (today)',(S.daily.d==todayStr()?S.daily.h:0)+'m']);
- for(let w=0;w<5;w++)rows.push(['World '+(w+1)+' total time',tm(worldTime(w))]);
- rows.push(['Stars',totalStars()+' / '+STAR_MAX+(bonusStars()?'  (+'+bonusStars()+' bonus)':'')]);return rows}
-SCREENS.boards={enter(){},update(){uiNav(this);if(pressed.ESC)go('trophies')},onBtn(){go('trophies')},
- draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('LEADERBOARDS');const rows=boardRows();
-  rows.forEach((r,i)=>{const col=i<7?0:1,x=col?490:50,y=92+(i%7)*52;ctx.fillStyle='rgba(15,12,30,.45)';rr(x,y,420,44,12);ctx.fill();
-   txt(r[0],x+18,y+22,17,'#fff','left',false);txt(r[1],x+402,y+22,19,'#ffd45e','right',false)});
-  txt('Online leaderboards arrive with Game Center.',VW/2,VH-44,15,'#c9c6dd',undefined,false)}};
+// ONE MODEL, already shaped like an online board: every entry is {id, your value, your rank}. `id` is EXACTLY the
+// string submitScore() already posts (world1..world5, stars, marathon, hmarathon, endless, daily, course0..3), `v` is
+// read straight out of the save, and `rank` comes from lbRank(). lbRank() returns null for everything today, because
+// nothing in this build can know a rank: the iOS wrapper's submitScore is a no-op and there is no GameKit in the
+// project at all. Wiring Game Center up is therefore ONE function - lbRank(id) starts returning {r,of} - and the row
+// and the detail panel already have the place to print it. No layout work, no new save state.
+// NOTHING HERE IS EVER INVENTED. No rival names, no sample times, no placeholder ranks, no filler rows. A name on a
+// leaderboard reads as a real person and a screenshot of it is a claim about the game. Where an online board would
+// eventually list other people, the screen says plainly that global boards come later and shows the player's own
+// records instead - see the foot line in draw().
+const LB_TABS=[['w','Worlds','#5fc93a'],['r','Runs','#4aa8e8'],['c','Courses','#ffb02e']];
+// LEFT column = tabs (y84) over the list (y142..490). RIGHT column = the detail panel, which runs the FULL height of
+// the two of them (88..490) so the screen reads as two columns rather than a list with a short card beside it.
+const LB_X=24,LB_LW=512,LB_DX=552,LB_DW=384,LB_Y=142,LB_H=348,LB_DY=88,LB_DH=402;
+// THE GAME CENTER HOOK. Return {r:<your place>,of:<total entries>} once real boards exist; null means "no online board
+// for this id", which is the truth today and is drawn as a plain "-", never as a guess.
+function lbRank(id){return null}
+// how many levels of world w already have a time. worldTime() is all-or-nothing, so this is what lets an unset world
+// row say something useful instead of just "nothing yet".
+function worldTimed(w){const a=w<4?w*8:NL;let n=0;for(let i=a;i<a+8;i++){const r=S.lv[i];if(r&&r.t)n++}return n}
+function lbBoards(cat){const B=[];
+ if(cat=='w'){for(let w=0;w<5;w++){const wi=w<4?w:5,tm=worldTime(w),nt=worldTimed(w); // world 5 is Rocket Yard = WORLDS[5]; WORLDS[4] is THE TOP
+   B.push({id:'world'+(w+1),n:'World '+(w+1),sub:WORLDS[wi].n,k:'t',v:tm,c:WORLDS[wi].acc,ic:'story',
+    how:tm?'Your best time on all 8 levels, added up.':nt+' of 8 levels timed. A world time needs all 8.'})}
+  B.push({id:'stars',n:'Stars',sub:'Story total',k:'s',v:totalStars(),c:'#ffd45e',ic:'star',
+   how:'Three a level: clear it, every gem, beat par.'+(bonusStars()?'  Bonus worlds add '+bonusStars()+' more.':'')})}
+ // an unlock hint is only ever shown to someone who is actually still locked out: a board that already HAS a record
+ // (or a save that has clearly been there) describes the mode instead, so a real time is never captioned "to unlock".
+ else if(cat=='r'){const f=!!S.finale||!!S.dev||!!S.speedBest,hf=!!S.dev||!!S.hspeedBest||!!(S.hard[NL-1]&&S.hard[NL-1].done),e=worldDone(1)||!!S.endBest||!!S.daily.d;
+  B.push({id:'marathon',n:'Marathon',sub:'Every story level, one timer',k:'t',v:S.speedBest,c:'#4aa8e8',ic:'mara',
+   how:f?'One run, no breaks, deaths included.':'Reach THE TOP to unlock it.'});
+  B.push({id:'hmarathon',n:'Hard Marathon',sub:'Every hard level, one timer',k:'t',v:S.hspeedBest,c:'#ec4e63',ic:'mara',
+   how:hf?'One air jump, no checkpoints, one clock.':'Clear Hard Mode THE TOP to unlock it.'});
+  B.push({id:'endless',n:'Endless Climb',sub:'Highest you have ever climbed',k:'m',v:S.endBest,c:'#ff7043',ic:'endless',
+   how:e?'A new tower every run. The lava never stops.':'Clear World 2 to unlock the climbs.'});
+  B.push({id:'daily',n:'Daily Climb',sub:'Today’s tower',k:'m',v:(S.daily.d==todayStr()?S.daily.h:0),c:'#ff77c8',ic:'daily',
+   how:e?'Same tower for everyone. A new one in '+cdStr()+'.':'Clear World 2 to unlock the climbs.'})}
+ else COURSES.forEach((c,i)=>{const t=(S.course[i]||{}).t||0;
+  B.push({id:'course'+i,n:c.n,sub:c.sub,k:'t',v:t,ci:i,md:medalOf(i,t),ic:'speed',c:['#27b865','#e0a02a','#e0762a','#e0384a'][c.diff]})});
+ for(const b of B)b.rank=lbRank(b.id);
+ return B}
+function lbVal(b){return b.k=='s'?b.v+' / '+STAR_MAX:b.k=='m'?(b.v?b.v+'m':'—'):(b.v?fmtT(b.v):'—')}
+function lbSet(b){return b.k=='s'||b.v>0}
+// a row wears the medal it actually won, otherwise the mode's own icon in the mode's own colour
+function lbIcon(b,x,y){ctx.save();ctx.translate(x,y);
+ if(b.ic=='star')star5(0,0,13,'#ffd45e','#b8860b',2);
+ // the row plate is white, and silver on white is barely a shape - the medal keeps a dark enough outline to read on it
+ else if(b.md!=null&&b.md>=0)star5(0,0,13,medalCol(b.md),'rgba(40,32,70,.7)',2);
+ else modeIcon(b.ic,13,'#1d1a2e',b.c||'#ffffff');
+ ctx.restore()}
+// `from` is sticky the same way Trophies' is, so a future entry point only has to pass it. Back with no argument keeps
+// Trophies' own sticky `from` intact, which is what makes "menu -> trophies -> boards -> back -> back" land on the menu.
+SCREENS.boards={enter(a){if(a&&a.from)this.from=a.from;else if(!this.from)this.from='trophies';
+  if(!LB_TABS.some(t=>t[0]==this.cat))this.cat='w';this.sel=null},
+ update(){uiNav(this);const s=UI.selId||'';if(s.startsWith('lb_'))this.sel=s.slice(3);if(pressed.ESC)go(this.from||'trophies')},
+ onBtn(id){if(id=='back')return go(this.from||'trophies');
+  if(id.startsWith('tb_')){if(this.cat!=id.slice(3)){this.cat=id.slice(3);this.sel=null}return}
+  if(id.startsWith('lb_'))this.sel=id.slice(3)},
+ draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('LEADERBOARDS');
+  // ONE RAIL, the shop's: the tabs are sized to fill exactly the span the list under them uses, and they stop at the
+  // list's right edge - which also keeps every control of this screen clear of the top-right toast lane (x>=630).
+  const TB=LB_TABS,tw=Math.floor((LB_LW-(TB.length-1)*8)/TB.length);
+  TB.forEach((t,i)=>{const on=this.cat==t[0];
+   button('tb_'+t[0],LB_X+i*(tw+8),84,tw,48,t[1],{fs:19,bg:on?mixh('#ffffff',t[2],0.34):'#ffffff',col:mixh('#ffffff',t[2],0.34),acc:on?t[2]:null})});
+  const B=lbBoards(this.cat);if(!B.some(b=>b.id==this.sel))this.sel=B[0].id;
+  ctx.fillStyle='rgba(12,9,26,.72)';rr(LB_X,LB_Y,LB_LW,LB_H,18);ctx.fill();
+  // rows size themselves to the tab's board count, so 4 courses and 6 world rows both fill the rail without paging
+  const n=B.length,gap=6,rh=Math.min(56,Math.floor((LB_H-16-(n-1)*gap)/n)),y0=LB_Y+Math.round((LB_H-(n*rh+(n-1)*gap))/2);
+  B.forEach((b,i)=>{const on=this.sel==b.id;
+   button('lb_'+b.id,LB_X+8,y0+i*(rh+gap),LB_LW-16,rh,'',{bg:on?'#ffe9a8':'#ffffff',col:'#ffe9a8',acc:on?'#e0b83a':(b.c||null),draw:(bw,bh)=>{
+    lbIcon(b,-bw/2+30,0);
+    txt(fitStr(b.n,bw-250,17),-bw/2+56,-9,17,'#1d1a2e','left',false);
+    txt(fitStr(b.sub,bw-250,13),-bw/2+56,11,13,'#5d5a70','left',false);
+    // the value sits on the top line and the rank on the line under it - today that second line is simply empty,
+    // because there is no rank to print and a dash on every row would read as broken rather than as honest
+    txt(lbVal(b),bw/2-18,lbSet(b)&&b.rank?-9:0,20,lbSet(b)?'#1d1a2e':'#8b88a0','right',false);
+    if(b.rank)txt('#'+fmtN(b.rank.r)+' of '+fmtN(b.rank.of),bw/2-18,11,13,'#5d5a70','right',false)}})});
+  this.detail(B.find(b=>b.id==this.sel));
+  textPlate('Global leaderboards are coming in a later update. These are your bests on this device.',VW/2,514,15,'#ffffff')},
+ // The shop's detail panel, same job: the selected thing, big, with the one line that says how you move it.
+ detail(b){const X=LB_DX,Y=LB_DY,W=LB_DW,H=LB_DH,cx=X+W/2;
+  ctx.fillStyle='rgba(12,9,26,.72)';rr(X,Y,W,H,18);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.16)';ctx.lineWidth=2;rr(X,Y,W,H,18);ctx.stroke();
+  if(!b)return;
+  txt(fitStr(b.n,W-36,24),cx,Y+40,24,'#ffd45e');
+  txt(fitStr(b.sub,W-36,13),cx,Y+66,13,'#c9c6dd',undefined,false);
+  ctx.fillStyle='rgba(255,255,255,.07)';rr(X+18,Y+86,W-36,106,14);ctx.fill();
+  const set=lbSet(b);
+  txt(b.k=='s'?'YOUR TOTAL':'YOUR BEST',cx,Y+110,12,'#9d9ab4',undefined,false);
+  txt(set?lbVal(b):'Not set yet',cx,Y+152,set?40:24,set?'#ffffff':'#8b88a0');
+  // THE PENDING STATE. The slot an online rank will live in, empty and saying so - this is what stands in for the
+  // other players an online board would show, and it is the only thing on the screen that is not a real record.
+  ctx.fillStyle='rgba(255,255,255,.07)';rr(X+18,Y+206,W-36,64,14);ctx.fill();
+  txt('GLOBAL RANK',X+36,Y+228,12,'#9d9ab4','left',false);
+  txt(b.rank?'of '+fmtN(b.rank.of)+' players':'Not live yet',X+36,Y+250,12,'#6f6c88','left',false);
+  txt(b.rank?'#'+fmtN(b.rank.r):'—',X+W-36,Y+238,b.rank?28:26,b.rank?'#ffd45e':'#6f6c88','right',false);
+  if(b.ci!=null){const p=courseTimes(b.ci);
+   txt('MEDAL TIMES',cx,Y+292,12,'#9d9ab4',undefined,false);
+   [2,1,0].forEach((m,k)=>{const mx=X+18+(W-36)*(k+0.5)/3,got=b.md>=m;
+    star5(mx,Y+322,15,got?medalCol(m):'rgba(255,255,255,.12)',got?'rgba(0,0,0,.35)':'rgba(255,255,255,.22)',2);
+    txt(medalName(m),mx,Y+352,12,got?medalCol(m):'#8a87a0',undefined,false);
+    txt(fmtT(p[k]),mx,Y+372,13,got?'#ffffff':'#8a87a0',undefined,false)})}
+  else{const zy=Y+282,zb=Y+H-16,hl=wrapText(b.how,W-44,14).slice(0,3);let hy=zy+Math.round((zb-zy)/2)-(hl.length-1)*10;
+   // the context zone carries the one piece of real detail the board has, when it has one: which of a world's 8 levels
+   // are actually timed, or how far the star total has come. Never a filler graphic - a board with nothing more to say
+   // (the marathons, the climbs) just centres its caption in the space.
+   if(b.k=='s'){const f=clamp(b.v/STAR_MAX,0,1);ctx.fillStyle='rgba(255,255,255,.14)';rr(X+40,zy+8,W-80,14,7);ctx.fill();
+    if(f>0){ctx.fillStyle=f>=1?'#7bdc3b':'#ffd45e';rr(X+40,zy+8,Math.max(14,(W-80)*f),14,7);ctx.fill()}
+    hy=zy+56-(hl.length-1)*10}
+   else if(b.id.indexOf('world')==0){const w=+b.id.slice(5)-1,a=w<4?w*8:NL;
+    for(let k=0;k<8;k++){const r=S.lv[a+k],on=!!(r&&r.t),px=X+40+k*((W-80)/7);
+     ctx.fillStyle=on?(b.c||'#ffd45e'):'rgba(255,255,255,.14)';ctx.beginPath();ctx.arc(px,zy+15,7,0,7);ctx.fill();
+     if(on){ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1.5;ctx.stroke()}}
+    hy=zy+56-(hl.length-1)*10}
+   hl.forEach((l,i)=>txt(l,cx,hy+i*20,14,'#d8d5ea',undefined,false))}}};
 
 SCREENS.pin={enter(){typedDigit=null;typedDel=false;this.buf='';this.bad=0;this.ok=0;musicPlay(0)},
  update(dt){if(this.ok>0){this.ok-=dt;if(this.ok<=0){S.dev=1;save();toast('DEV MODE ON','Every level unlocked','ach');go('menu')}return}
@@ -6858,10 +6961,13 @@ SCREENS.inv={enter(){if(!INV_TABS.some(t=>t[0]==this.tab))this.tab='c';this.pg=0
   {const cols=Math.min(10,ACH.length),sp=Math.min(48,520/cols),x0=VW/2-(cols-1)*sp/2;
    ACH.forEach((a,i)=>{const on=!!S.ach[a.id],px=x0+(i%cols)*sp,py=252+Math.floor(i/cols)*42;
     star5(px,py,15,on?'#ffd45e':'rgba(255,255,255,.14)',on?'#b8860b':null,2)})}
-  button('openach',VW/2-130,418,260,48,'Open trophies',{fs:19,bg:'#ffe9a8',acc:'#e0b83a'})},
+  button('openach',VW/2-268,418,260,48,'Open trophies',{fs:19,bg:'#ffe9a8',acc:'#e0b83a'});
+  // records live one step from the trophies, not three - and Back from there comes straight back HERE (see boards' `from`)
+  button('openlb',VW/2+8,418,260,48,'Leaderboards',{fs:19,bg:'#cfe3ff',acc:'#4aa8e8'})},
  onBtn(id){if(id=='back')return go('menu');
   if(id.startsWith('tb_')){this.tab=id.slice(3);this.pg=0;this.msg='';this.mt=0;return}
   if(id=='opennotes')return go('notes',{from:'inv'});
+  if(id=='openlb')return go('boards',{from:'inv'});
   if(id=='openach')return go('trophies',{from:'inv'});
   if(id=='ivp'){this.pg=Math.max(0,this.pg-1);return}
   if(id=='ivn'){this.pg=Math.min(this.pages()-1,this.pg+1);return}
@@ -6873,7 +6979,7 @@ SCREENS.inv={enter(){if(!INV_TABS.some(t=>t[0]==this.tab))this.tab='c';this.pg=0
 // boards and back does not quietly re-point Back at the main menu. Every old entry point still lands on 'menu'.
 SCREENS.trophies={enter(a){if(a&&a.from)this.from=a.from;else if(!this.from)this.from='menu'},
  update(){uiNav(this);if(pressed.ESC)go(this.from||'menu')},
- onBtn(id){if(id=='notes')return go('notes',{from:'trophies'});if(id=='boards')return go('boards');go(this.from||'menu')},
+ onBtn(id){if(id=='notes')return go('notes',{from:'trophies'});if(id=='boards')return go('boards',{from:'trophies'});go(this.from||'menu')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('TROPHIES  '+Object.keys(S.ach).length+'/'+ACH.length);
   button('boards',140,18,150,42,'Leaderboards',{fs:16,bg:'#cfe3ff'});
   button('notes',VW-200,18,180,42,'Notes '+notesFound()+'/'+NOTES.length,{fs:17,bg:'#fff3cf'});
