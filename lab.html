@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Difficulty Lab</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0a14;overflow:hidden;
+    font-family:"Trebuchet MS","Segoe UI",Verdana,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
+  canvas{display:block;position:absolute;inset:0;margin:auto;image-rendering:auto}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* =============================================================================
+   DIFFICULTY LAB  —  a standalone test level. Not part of Hopscraper.
+   -----------------------------------------------------------------------------
+   Built to answer one question: why do OvO, Big Tower Tiny Square and Geometry
+   Dash feel so much harder than Hopscraper?
+
+   The obvious answer is wrong. Those games are not hard because they took the
+   forgiveness out. Celeste has coyote time, input buffering, and lets you wall
+   jump from two pixels off the wall - a quarter of a tile at its resolution -
+   and it is still brutal. Super Meat Boy is the same. Forgiveness is what makes
+   a hard game feel fair instead of broken.
+
+   What actually makes them hard is the LEVEL, and specifically four things:
+
+     1. CHAIN LENGTH. A room is one unbroken sequence of precise moves. There is
+        nowhere inside it to stand still. Miss the seventh move and you do all
+        seven again. Hopscraper's levels are a series of single jumps with safe
+        ground between them, so a mistake costs one jump, not a run.
+
+     2. TOLERANCE. Gaps here are sized to the jump arc with about one tile of
+        slack. Hopscraper's are sized with three or four, so almost any jump
+        that is roughly right lands.
+
+     3. FORWARD PRESSURE. Timed hazards mean you cannot stop mid-chain and plan.
+        You have to have already decided.
+
+     4. NO FREE VERTICAL. You get ONE wall jump per wall. You cannot ride a
+        single wall upward - you must alternate, or land. This is the thing that
+        makes Hopscraper's Endless collapse into hugging one wall and mashing.
+
+   So this level KEEPS coyote time and jump buffering, and removes the double
+   jump and the free wall refill. Same controls quality, far higher demands.
+   ============================================================================= */
+
+const VW = 960, VH = 540, TS = 24;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+
+/* ---- physics. Deliberately close to Hopscraper so the comparison is fair. --- */
+const GRAV_UP = 1050, GRAV_DN = 1400, MAXFALL = 560;
+const RUN = 250, ACC_G = 3000, ACC_A = 2300, TURN = 5000, FRIC = 2800;
+const JUMP_V = 430;           // 88px of rise = 3.6 tiles. No second jump, ever.
+const WJ_X = 205, WJ_Y = 430; // NOT bigger than the ground jump. In Hopscraper it is.
+const SLIDE = 150;            // wall slide speed
+const COYOTE = 0.08;          // KEPT. ~5 frames, the Celeste number.
+const BUFFER = 0.10;          // KEPT. Press jump slightly early and it still fires.
+const DT = 1/120;
+
+/* ---- the tower ------------------------------------------------------------
+   Legend:  # solid   ^ spike (up)   v spike (down)   < spike (right-facing wall)
+            > spike (left-facing wall)   = thin platform (stand on, jump through)
+            X crumbles 0.35s after you touch it        ~ lava
+            S start   C checkpoint     E exit
+            1..4 saw anchors (paired: a saw runs between the two of the same digit)
+            L laser gate (blinks; see LASER_PERIOD)
+   Each room is a single chain. The checkpoint is at the ENTRANCE of a room, so
+   a death costs you that room and nothing else - Big Tower Tiny Square's rule.
+   26 wide. Read bottom-up: the player climbs.
+--------------------------------------------------------------------------- */
+const MAP = [
+  '##########################',
+  '#E.......................#',   // 1  top
+  '#=====...................#',
+  '#....#..............^^^^.#',
+  '#....#..............######',
+  '#....#...................#',
+  '#....#####=====..........#',
+  '#.............#..........#',
+  '#.^^^^^^^^....#..........#',
+  '#.########....#..........#',
+  '#.............#....^^^^^.#',
+  '#....4........#....#####.#',
+  '#.............#..........#',
+  '#...=====.....#..........#',
+  '#.............#..........#',
+  '#.........4...#..........#',
+  '#C........................#'.slice(0,26),  // 17  room 5 entrance
+  '##########################',
+  '#........................#',   // 19 room 4: the alternating shaft
+  '#..#..................#..#',
+  '#..#..................#..#',
+  '#..#...L..............#..#',
+  '#..#..................#..#',
+  '#..#..................#..#',
+  '#..#..................#..#',
+  '#..#....^^^^^^^^^^....#..#',
+  '#..#....##########....#..#',
+  '#..#..................#..#',
+  '#..#..................#..#',
+  '#..#.......L..........#..#',
+  '#..#..................#..#',
+  '#..####################..#',
+  '#........................#',
+  '#C.......................#',   // 34 room 4 entrance
+  '##########################',
+  '#........................#',   // 36 room 3: crumble run over lava
+  '#...XX...XX...XX...XX....#',
+  '#........................#',
+  '#~~~~~~~~~~~~~~~~~~~~~~~~#',
+  '#........................#',
+  '#..=====.........=====...#',
+  '#........................#',
+  '#......3.................#',
+  '#........................#',
+  '#........3...............#',
+  '#........................#',
+  '#C.......................#',   // 47 room 3 entrance
+  '##########################',
+  '#........................#',   // 49 room 2: the saw corridor
+  '#.....................#..#',
+  '#..2..................#..#',
+  '#.....................#..#',
+  '#####=====............#..#',
+  '#........................#',
+  '#..........2.............#',
+  '#........................#',
+  '#...^^^^^^^^^^^^^^^^.....#',
+  '#...################.....#',
+  '#........................#',
+  '#C.......................#',   // 60 room 2 entrance
+  '##########################',
+  '#........................#',   // 62 room 1: the tolerance lesson
+  '#..=====.....=====.......#',
+  '#........................#',
+  '#.......^^^^^....^^^^....#',
+  '#.......#####....####....#',
+  '#........................#',
+  '#...1....................#',
+  '#........................#',
+  '#........1...............#',
+  '#........................#',
+  '#S.......................#',   // 72 start
+  '##########################',
+];
+
+const W = 26, H = MAP.length;
+const at = (x,y) => (x<0||y<0||x>=W||y>=H) ? '#' : (MAP[y][x] || '.');
+const SOLID = c => c==='#';
+const THIN  = c => c==='=';
+const HURT  = c => c==='^'||c==='v'||c==='<'||c==='>'||c==='~';
+
+/* ---- build the level from the map ---------------------------------------- */
+const saws = [], lasers = [], crumbs = new Map();
+let start = {x:1,y:72}, exit = {x:1,y:1};
+const checkpoints = [];
+(function build(){
+  const anchors = {};
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const c = at(x,y);
+    if (c==='S') start = {x,y};
+    else if (c==='E') exit = {x,y};
+    else if (c==='C') checkpoints.push({x,y});
+    else if (c>='1'&&c<='4'){ (anchors[c] = anchors[c]||[]).push({x,y}); }
+    else if (c==='L') lasers.push({x,y,ph:(x*0.37+y*0.11)%1});
+    else if (c==='X') crumbs.set(y*W+x, {t:-1});
+  }
+  for (const k in anchors){
+    const a = anchors[k];
+    if (a.length>=2) saws.push({
+      ax:a[0].x*TS+TS/2, ay:a[0].y*TS+TS/2,
+      bx:a[1].x*TS+TS/2, by:a[1].y*TS+TS/2,
+      ph: Math.random(), sp: 0.42 + 0.06*saws.length
+    });
+  }
+  checkpoints.sort((p,q)=>q.y-p.y);       // bottom-up = play order
+})();
+const LASER_PERIOD = 1.9, LASER_ON = 0.85;
+
+/* ---- state ---------------------------------------------------------------- */
+let p, cam = {y:0}, T = 0, deaths = 0, best = null, cpIndex = -1, won = false, hint = 0;
+function spawnPoint(){
+  return cpIndex < 0 ? start : checkpoints[cpIndex];
+}
+function reset(full){
+  if (full){ cpIndex = -1; deaths = 0; T = 0; won = false; }
+  const s = spawnPoint();
+  p = { x:s.x*TS+4, y:s.y*TS+TS-16, w:16, h:16, vx:0, vy:0,
+        onG:false, coy:0, buf:0, face:1, wall:0, wallSide:0,
+        usedWall:0,            // which wall was last jumped from: -1, 0 or 1
+        dead:false, dt:0, sx:1, sy:1 };
+  for (const [,c] of crumbs) c.t = -1;
+  cam.y = clamp(p.y - VH*0.55, 0, H*TS - VH);
+  hint = 2.2;
+}
+const clamp = (v,a,b)=> v<a?a:v>b?b:v;
+
+/* ---- input ---------------------------------------------------------------- */
+const keys = {L:false,R:false,J:false};
+let jumpEdge = false;
+addEventListener('keydown', e=>{
+  if (['ArrowLeft','a','A'].includes(e.key)) keys.L = true;
+  if (['ArrowRight','d','D'].includes(e.key)) keys.R = true;
+  if ([' ','ArrowUp','w','W'].includes(e.key)){ if(!keys.J) jumpEdge = true; keys.J = true; e.preventDefault(); }
+  if (e.key==='r'||e.key==='R') reset(true);
+});
+addEventListener('keyup', e=>{
+  if (['ArrowLeft','a','A'].includes(e.key)) keys.L = false;
+  if (['ArrowRight','d','D'].includes(e.key)) keys.R = false;
+  if ([' ','ArrowUp','w','W'].includes(e.key)) keys.J = false;
+});
+/* touch: left half steers, right half jumps - same split as Hopscraper */
+const touches = new Map();
+function touchUpdate(){
+  keys.L = keys.R = false;
+  let jump = false;
+  for (const t of touches.values()){
+    if (t.x < cv.width/2){ const dx = t.x - t.ox; if (dx < -8) keys.L = true; else if (dx > 8) keys.R = true; }
+    else jump = true;
+  }
+  if (jump && !keys.J) jumpEdge = true;
+  keys.J = jump;
+}
+for (const ev of ['touchstart','touchmove','touchend','touchcancel'])
+  cv.addEventListener(ev, e=>{
+    e.preventDefault();
+    if (ev==='touchstart') for (const t of e.changedTouches) touches.set(t.identifier,{x:t.clientX*(cv.width/cv.clientWidth), ox:t.clientX*(cv.width/cv.clientWidth)});
+    if (ev==='touchmove')  for (const t of e.changedTouches){ const o=touches.get(t.identifier); if(o) o.x = t.clientX*(cv.width/cv.clientWidth); }
+    if (ev==='touchend'||ev==='touchcancel') for (const t of e.changedTouches) touches.delete(t.identifier);
+    touchUpdate();
+  }, {passive:false});
+
+/* ---- collision ------------------------------------------------------------ */
+function solidAt(x,y,fallingThrough){
+  const c = at(x,y);
+  if (SOLID(c)) return true;
+  if (THIN(c)) return !fallingThrough;
+  if (c==='X'){ const cr = crumbs.get(y*W+x); return !cr || cr.t < 0.35; }
+  return false;
+}
+function hits(px,py,pw,ph,fallingThrough){
+  const x0 = Math.floor(px/TS), x1 = Math.floor((px+pw-1)/TS);
+  const y0 = Math.floor(py/TS), y1 = Math.floor((py+ph-1)/TS);
+  for (let y=y0;y<=y1;y++) for (let x=x0;x<=x1;x++) if (solidAt(x,y,fallingThrough)) return true;
+  return false;
+}
+
+/* ---- step ----------------------------------------------------------------- */
+function step(dt){
+  T += dt;
+  for (const [,c] of crumbs) if (c.t >= 0) c.t += dt;
+  if (p.dead){ p.dt += dt; if (p.dt > 0.16) reset(false); return; }   // instant respawn
+  if (won) return;
+
+  const want = (keys.R?1:0) - (keys.L?1:0);
+  const acc = p.onG ? ACC_G : ACC_A;
+  if (want){
+    if (want * p.vx < 0) p.vx += want * TURN * dt;
+    else p.vx += want * acc * dt;
+    p.vx = clamp(p.vx, -RUN, RUN);
+    p.face = want;
+  } else if (p.onG){
+    const f = FRIC*dt;
+    p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx)*f;
+  }
+
+  /* --- wall detection. ONE jump per wall: you have to alternate or land. --- */
+  const touchL = hits(p.x-2, p.y+2, p.w, p.h-4, false) && want<=0;
+  const touchR = hits(p.x+2, p.y+2, p.w, p.h-4, false) && want>=0;
+  p.wall = p.onG ? 0 : (touchL ? -1 : touchR ? 1 : 0);
+
+  if (keys.J && jumpEdge) p.buf = BUFFER;
+  jumpEdge = false;
+  p.buf -= dt; p.coy -= dt;
+
+  if (p.buf > 0){
+    if (p.onG || p.coy > 0){                       // ground jump (coyote time kept)
+      p.vy = -JUMP_V; p.buf = 0; p.coy = 0; p.onG = false;
+      p.usedWall = 0; p.sx = 0.74; p.sy = 1.3;
+    } else if (p.wall && p.wall !== p.usedWall){   // wall jump, but NOT the same wall twice
+      p.vy = -WJ_Y; p.vx = -p.wall * WJ_X;
+      p.usedWall = p.wall;                          // spent. Other wall or ground to reset.
+      p.buf = 0; p.sx = 0.8; p.sy = 1.25; p.face = -p.wall;
+    }
+  }
+  if (!keys.J && p.vy < -120) p.vy += 1400*dt;      // variable height: release = shorter hop
+
+  p.vy += (p.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
+  if (p.wall && p.vy > SLIDE) p.vy = SLIDE;
+  p.vy = Math.min(p.vy, MAXFALL);
+
+  /* --- move, axis at a time --- */
+  const through = keys.L===false && keys.R===false ? false : false;
+  let nx = p.x + p.vx*dt;
+  if (hits(nx, p.y, p.w, p.h, false)) { p.vx = 0; nx = p.x; }
+  p.x = clamp(nx, TS, (W-1)*TS - p.w);
+
+  const wasG = p.onG; p.onG = false;
+  let ny = p.y + p.vy*dt;
+  const fallingThrough = p.vy < 0;                  // thin platforms: pass going up
+  if (hits(p.x, ny, p.w, p.h, fallingThrough)){
+    if (p.vy > 0){
+      ny = Math.floor((ny + p.h)/TS)*TS - p.h;
+      p.onG = true; p.usedWall = 0;                 // landing resets the wall too
+      if (!wasG){ p.sx = 1.35; p.sy = 0.68; }
+      /* start the fuse on any crumbling tile underfoot */
+      const ty = Math.floor((ny + p.h + 1)/TS);
+      for (let x = Math.floor(p.x/TS); x <= Math.floor((p.x+p.w-1)/TS); x++){
+        const cr = crumbs.get(ty*W + x); if (cr && cr.t < 0) cr.t = 0;
+      }
+    } else ny = Math.floor(ny/TS)*TS + TS;
+    p.vy = 0;
+  }
+  p.y = ny;
+  if (p.onG) p.coy = COYOTE;
+  p.sx += (1-p.sx)*Math.min(1, dt*14); p.sy += (1-p.sy)*Math.min(1, dt*14);
+
+  /* --- death --- */
+  const cx = p.x + p.w/2, cy = p.y + p.h/2;
+  for (let y = Math.floor(p.y/TS); y <= Math.floor((p.y+p.h-1)/TS); y++)
+    for (let x = Math.floor(p.x/TS); x <= Math.floor((p.x+p.w-1)/TS); x++)
+      if (HURT(at(x,y))) return die();
+  for (const s of saws){
+    const q = sawPos(s);
+    if (Math.hypot(q.x-cx, q.y-cy) < 19) return die();
+  }
+  for (const l of lasers){
+    if (!laserOn(l)) continue;
+    const ly = l.y*TS + TS/2;
+    if (Math.abs(ly - cy) < 10) return die();       // full-width horizontal beam
+  }
+  if (p.y > H*TS + 60) return die();
+
+  /* --- checkpoints and the exit --- */
+  for (let i=0;i<checkpoints.length;i++){
+    const c = checkpoints[i];
+    if (i > cpIndex && Math.abs(c.x*TS+12 - cx) < 200 && Math.abs(c.y*TS+12 - cy) < 20) cpIndex = i;
+  }
+  if (Math.abs(exit.x*TS+12 - cx) < 22 && Math.abs(exit.y*TS+12 - cy) < 22){
+    won = true; if (best == null || T < best) best = T;
+  }
+
+  const target = clamp(p.y - VH*0.55, 0, H*TS - VH);
+  cam.y += (target - cam.y) * Math.min(1, dt*7);
+  if (hint > 0) hint -= dt;
+}
+function die(){ if (p.dead) return; p.dead = true; p.dt = 0; deaths++; }
+function sawPos(s){
+  const k = (Math.sin((T + s.ph*10) * s.sp * Math.PI*2) + 1)/2;
+  return { x: s.ax + (s.bx-s.ax)*k, y: s.ay + (s.by-s.ay)*k };
+}
+function laserOn(l){ return ((T/LASER_PERIOD + l.ph) % 1) < LASER_ON/LASER_PERIOD; }
+
+/* ---- drawing -------------------------------------------------------------- */
+function shade(hex, m){
+  const n = parseInt(hex.slice(1),16);
+  const r = clamp(Math.round((n>>16)*m),0,255), g = clamp(Math.round(((n>>8)&255)*m),0,255), b = clamp(Math.round((n&255)*m),0,255);
+  return `rgb(${r},${g},${b})`;
+}
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+const TILE = '#2b3350', TOP = '#7ee0ff';
+
+function draw(){
+  /* sky */
+  const g = ctx.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,'#141033'); g.addColorStop(1,'#2a1f52');
+  ctx.fillStyle = g; ctx.fillRect(0,0,VW,VH);
+  /* a few parallax bands so the climb reads as motion */
+  ctx.fillStyle = 'rgba(255,255,255,.035)';
+  for (let i=0;i<7;i++){ const y = ((i*140 - cam.y*0.25) % (VH+200)) - 100; ctx.fillRect(0,y,VW,60); }
+
+  ctx.save();
+  const ox = (VW - W*TS)/2;
+  ctx.translate(Math.round(ox), Math.round(-cam.y));
+
+  const y0 = Math.max(0, Math.floor(cam.y/TS)-1), y1 = Math.min(H-1, Math.floor((cam.y+VH)/TS)+1);
+  for (let y=y0;y<=y1;y++) for (let x=0;x<W;x++){
+    const c = at(x,y), px = x*TS, py = y*TS;
+    if (SOLID(c)){
+      const open = !SOLID(at(x,y-1));
+      const gr = ctx.createLinearGradient(0,py,0,py+TS);
+      gr.addColorStop(0, shade(TILE,1.3)); gr.addColorStop(.35, TILE); gr.addColorStop(1, shade(TILE,.7));
+      ctx.fillStyle = gr;
+      const r = 7, tl = (open && !SOLID(at(x-1,y)))?r:0, tr2 = (open && !SOLID(at(x+1,y)))?r:0;
+      rr(px,py,TS,TS,0); ctx.fill();
+      if (tl||tr2){ ctx.fillStyle = gr; rr(px,py,TS,TS,r); ctx.fill(); }
+      if (open){
+        ctx.fillStyle = TOP; ctx.fillRect(px,py,TS,5);
+        ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(px,py+1,TS,2);
+      }
+    } else if (THIN(c)){
+      ctx.fillStyle = '#6a7ba8'; rr(px+1,py+6,TS-2,7,3); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(px+2,py+7,TS-4,2);
+    } else if (c==='X'){
+      const cr = crumbs.get(y*W+x); const f = cr && cr.t>=0 ? cr.t/0.35 : 0;
+      if (f >= 1) continue;
+      ctx.globalAlpha = 1 - f*0.55;
+      ctx.fillStyle = f>0 ? '#c76a3a' : '#8a6a4a';
+      const j = f>0 ? Math.sin(T*60)*1.6*f : 0;
+      rr(px+1+j,py+1,TS-2,TS-2,4); ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(px+3,py+TS*0.45,TS-6,1.5);
+      ctx.globalAlpha = 1;
+    } else if (c==='^'||c==='v'){
+      ctx.fillStyle = '#c8ccd8';
+      for (let i=0;i<3;i++){
+        const bx = px + i*8;
+        ctx.beginPath();
+        if (c==='^'){ ctx.moveTo(bx,py+TS); ctx.lineTo(bx+4,py+3); ctx.lineTo(bx+8,py+TS); }
+        else { ctx.moveTo(bx,py); ctx.lineTo(bx+4,py+TS-3); ctx.lineTo(bx+8,py); }
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (c==='~'){
+      const lg = ctx.createLinearGradient(0,py,0,py+TS);
+      lg.addColorStop(0,'#ff8c2a'); lg.addColorStop(1,'#d4321a');
+      ctx.fillStyle = lg; ctx.fillRect(px,py,TS,TS);
+      ctx.fillStyle='rgba(255,220,140,.5)';
+      ctx.fillRect(px, py + Math.sin(T*3 + x)*1.5, TS, 2);
+    } else if (c==='C'){
+      const done = checkpoints.findIndex(q=>q.x===x&&q.y===y) <= cpIndex;
+      ctx.fillStyle = done ? '#7bdc3b' : 'rgba(255,255,255,.28)';
+      ctx.fillRect(px+10, py+2, 3, TS-4);
+      ctx.beginPath(); ctx.moveTo(px+13,py+3); ctx.lineTo(px+24,py+8); ctx.lineTo(px+13,py+13); ctx.closePath(); ctx.fill();
+    } else if (c==='E'){
+      ctx.fillStyle = '#ffd45e'; ctx.shadowColor='#ffd45e'; ctx.shadowBlur = 14 + Math.sin(T*4)*5;
+      rr(px+2,py+2,TS-4,TS-4,6); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle='#4a3600'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('TOP', px+12, py+13);
+    }
+  }
+
+  /* lasers */
+  for (const l of lasers){
+    const on = laserOn(l), ly = l.y*TS + TS/2;
+    ctx.globalAlpha = on ? 1 : 0.22;
+    ctx.strokeStyle = on ? '#ff4d6d' : '#7a2a3a';
+    ctx.lineWidth = on ? 5 : 2;
+    ctx.beginPath(); ctx.moveTo(TS, ly); ctx.lineTo((W-1)*TS, ly); ctx.stroke();
+    if (on){ ctx.globalAlpha=.3; ctx.lineWidth=12; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+
+  /* saws */
+  for (const s of saws){
+    const q = sawPos(s);
+    ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(s.ax,s.ay); ctx.lineTo(s.bx,s.by); ctx.stroke();
+    ctx.save(); ctx.translate(q.x,q.y); ctx.rotate(T*9);
+    ctx.fillStyle='#b9c0d0'; ctx.beginPath();
+    for (let i=0;i<14;i++){ const a=i/14*Math.PI*2, r=(i%2?11:17); ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#5a6274'; ctx.beginPath(); ctx.arc(0,0,4.5,0,7); ctx.fill();
+    ctx.restore();
+  }
+
+  /* player */
+  if (!p.dead){
+    const w = p.w*p.sx, h = p.h*p.sy, x = p.x + p.w/2, y = p.y + p.h;
+    const col = '#ff4d6d';
+    const pg = ctx.createLinearGradient(0,y-h,0,y);
+    pg.addColorStop(0, shade(col,1.25)); pg.addColorStop(.55, col); pg.addColorStop(1, shade(col,.8));
+    ctx.fillStyle = pg; rr(x-w/2, y-h, w, h, w*0.24); ctx.fill();
+    ctx.strokeStyle = shade(col,.55); ctx.lineWidth = 1.4; rr(x-w/2, y-h, w, h, w*0.24); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.33)'; rr(x-w/2+2, y-h+2, 3, h*0.34, 1.5); ctx.fill();
+    /* eyes, looking where you are going */
+    const lx = p.face*1.2;
+    for (const sd of [-1,1]){
+      const ex = x + sd*w*0.2 + lx - 2, ey = y - h*0.64 - 2.4;
+      ctx.fillStyle='#fff'; ctx.fillRect(ex, ey, 4, 5);
+      ctx.fillStyle='#16131f'; ctx.fillRect(ex+1+lx*0.4, ey+1.4, 2, 2);
+    }
+    /* a spent wall shows as a small mark, so the rule is visible while you play */
+    if (p.usedWall){
+      ctx.fillStyle='rgba(255,255,255,.45)';
+      ctx.fillRect(x + p.usedWall*(w/2+2) - 1, y-h*0.7, 2, h*0.4);
+    }
+  } else {
+    ctx.fillStyle='rgba(255,77,109,.8)';
+    for (let i=0;i<8;i++){ const a=i/8*Math.PI*2, r=6+p.dt*120;
+      ctx.fillRect(p.x+8+Math.cos(a)*r-2, p.y+8+Math.sin(a)*r-2, 4,4); }
+  }
+  ctx.restore();
+
+  /* ---- HUD ---- */
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  hudPill(14, 12, 128, 30);
+  ctx.fillStyle='#fff'; ctx.font='bold 17px Trebuchet MS';
+  ctx.fillText('Deaths  ' + deaths, 26, 28);
+  hudPill(152, 12, 132, 30);
+  ctx.fillStyle='#fff'; ctx.fillText('Time  ' + T.toFixed(1) + 's', 164, 28);
+  hudPill(294, 12, 150, 30);
+  ctx.fillStyle='#9fe8ff'; ctx.fillText('Room  ' + (cpIndex+2) + ' / ' + (checkpoints.length+1), 306, 28);
+
+  if (hint > 0){
+    ctx.globalAlpha = Math.min(1, hint);
+    ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.font='bold 16px Trebuchet MS';
+    ctx.fillText('ONE wall jump per wall - you must alternate, or land', VW/2, VH-38);
+    ctx.globalAlpha = 1;
+  }
+  if (won){
+    ctx.fillStyle='rgba(8,6,18,.82)'; ctx.fillRect(0,0,VW,VH);
+    ctx.textAlign='center'; ctx.fillStyle='#ffd45e'; ctx.font='bold 46px Trebuchet MS';
+    ctx.fillText('THE TOP', VW/2, VH/2-40);
+    ctx.fillStyle='#fff'; ctx.font='bold 21px Trebuchet MS';
+    ctx.fillText(deaths + ' deaths  ·  ' + T.toFixed(1) + ' seconds', VW/2, VH/2+6);
+    if (best!=null){ ctx.fillStyle='#9fe8ff'; ctx.font='bold 16px Trebuchet MS';
+      ctx.fillText('best ' + best.toFixed(1) + 's', VW/2, VH/2+36); }
+    ctx.fillStyle='rgba(255,255,255,.6)'; ctx.font='bold 15px Trebuchet MS';
+    ctx.fillText('R to run it again', VW/2, VH/2+72);
+  }
+}
+function hudPill(x,y,w,h){ ctx.fillStyle='rgba(12,10,26,.72)'; rr(x,y,w,h,9); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=1.5; rr(x,y,w,h,9); ctx.stroke(); }
+
+/* ---- fit + loop ----------------------------------------------------------- */
+function fit(){
+  const s = Math.min(innerWidth/VW, innerHeight/VH);
+  cv.width = VW; cv.height = VH;
+  cv.style.width = Math.round(VW*s)+'px';
+  cv.style.height = Math.round(VH*s)+'px';
+}
+addEventListener('resize', fit); fit();
+
+let last = performance.now(), acc = 0;
+function loop(now){
+  acc += Math.min(0.1, (now-last)/1000); last = now;
+  while (acc >= DT){ step(DT); acc -= DT; }
+  draw();
+  requestAnimationFrame(loop);
+}
+reset(true);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
