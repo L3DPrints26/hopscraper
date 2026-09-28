@@ -1997,7 +1997,7 @@ const COINS=[[[34,18],[4,18],[21,12],[15,18],[26,18]],[[21,8],[1,30],[22,30],[4,
 const wdOf=i=>LEVELS[i].wd;
 // bonus worlds (wd>=6) are labeled off their own wd + position within their own group, found dynamically - safe no
 // matter which order World 6/7/8's LEVELS entries end up appended in.
-const lvLabel=i=>{const d=LEVELS[i];if(d&&d.wd>=6)return d.wd+'-'+(i-LEVELS.findIndex(l=>l.wd==d.wd)+1);
+const lvLabel=i=>{if(window.LAB_IDX!=null&&i===window.LAB_IDX)return 'LAB';const d=LEVELS[i];if(d&&d.wd>=6)return d.wd+'-'+(i-LEVELS.findIndex(l=>l.wd==d.wd)+1);
  return i>=NL?'5-'+(i-NL+1):i==NL-1?'TOP':(Math.floor(i/8)+1)+'-'+(i%8+1)};
 // Level index -> the TAB INDEX the level select shows it under. This is NOT wdOf(): the story tab row is
 // [4 main worlds, Rockets, each OWNED bonus world..., THE TOP last], so a world number and a tab index only happen to
@@ -8387,7 +8387,7 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
   /* A BUILD STAMP. Checking whether a deploy has landed needs a string that only
      exists in THIS build - twice now a check matched text present in the old file
      as well and reported a deploy that had not happened. */
-  window.LAB_BUILD = '20260928222941';
+  window.LAB_BUILD = '20260928223304';
   var LAB = {
  "wd": 1,
  "n": "The Long Way Up",
@@ -8437,6 +8437,13 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
   ],
   [
    "#",
+   19,
+   42,
+   3,
+   1
+  ],
+  [
+   "#",
    4,
    41,
    3,
@@ -8468,6 +8475,13 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
    21,
    37,
    3,
+   1
+  ],
+  [
+   "#",
+   13,
+   37,
+   2,
    1
   ],
   [
@@ -8718,6 +8732,7 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
 };
   LEVELS.push(LAB);
   var IDX = LEVELS.length - 1;
+  window.LAB_IDX = IDX;
   COINS[IDX] = COINS[IDX] || [];
   NOTES[IDX] = null;                    // no hidden note in the lab level
 
