@@ -2481,7 +2481,7 @@ function laserWarnK(c,L){const per=L.def.lp||2.4,ph=((G.t*G.spd)%per)/per;
 function laserWarn(c,L){return laserWarnK(c,L)>0}
 function themeOf(){if(!G)return WORLDS[0];if(G.mode=='endless'||G.mode=='daily'){return WORLDS[Math.floor(G.height/60)%5]}return WORLDS[G.L.def.wd]}
 
-function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,keyGot:false,doorT:0,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
+function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,bank:null,keyGot:false,doorT:0,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
 function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspeed');
  // Gold Rush carry-over: if you clear (or otherwise leave to) a DIFFERENT level while it's still running, the new level
  // gets flooded too for whatever time is left - grabbed here before G gets replaced below. A restart (i==G.idx) does not
@@ -2634,8 +2634,12 @@ function spawn(){const L=G.L,s=G.checkpoint||L.start;if(L.rk){L.rk.length=0;for(
  // pickups: die() already drops these with the particle shower in Story Mode, but doing it here as well makes spawn()
  // the ONE place that guarantees "back to a freshly generated level", so no future respawn path can forget. (Chests,
  // checkpoints and the key deliberately survive a death - see die()/step() - so they are not in this list.)
- for(const o of L.gems){o.got=false;if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}}
- for(const o of L.coins){o.got=false;if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}}
+ // ...back to the level as it was AT THE LAST CHECKPOINT, not as it was generated:
+ // anything picked up before the flag stays picked up. See bankPickups().
+ L.gems.forEach((o,i)=>{o.got=bankGot('g',i);if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}});
+ L.coins.forEach((o,i)=>{o.got=bankGot('c',i);if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}});
+ if(L.grCoins)L.grCoins.forEach((o,i)=>{o.got=bankGot('gr',i)});
+ if(G.bank){G.gemsRun=G.bank.gemsRun;G.coinsRun=G.bank.coinsRun}
  if(G.spawnX==null){G.spawnX=G.player.x;G.spawnY=G.player.y} // fairness timer reference point: only the very first spawn of this run
  if(L.rise&&!L.rise.endless){G.lavaY=L.H*TS+TS;G.riseT=0}
  burst(G.player.x+8,G.player.y+14,'#ffffff',10,'puff')}
@@ -2710,11 +2714,30 @@ function hurt(L,p){const hx=p.x+2.5,hy=p.y+2.5,hw=p.w-5,hh=p.h-5;
  for(const b of L.rov||[])if(Math.abs(b.x-cx)<30&&Math.abs(b.y-cy)<30&&circRect(b.x,b.y,6,hx,hy,hw,hh)){b.life=0;return true}
  return false}
 
+// PICKUPS SURVIVE A CHECKPOINT. Reaching a flag used to save your position and
+// nothing else: every gem and coin you had picked up went back on the map, so a
+// death after a checkpoint made you re-collect the whole section. Players read
+// that as losing progress they had already earned, and they are right - the flag
+// is the game saying "this much is done".
+//
+// So a checkpoint takes a snapshot, and death and respawn restore THAT instead of
+// restoring nothing. You still have to finish the level to actually bank them -
+// clearing the level is what pays out - but you no longer re-do work behind a
+// flag you already reached.
+function bankPickups(){const L=G.L;G.bank={
+ g:L.gems.map(o=>o.got), c:L.coins.map(o=>o.got),
+ gr:(L.grCoins||[]).map(o=>o.got),
+ gemsRun:G.gemsRun, coinsRun:G.coinsRun}}
+// got-state to fall back to for pickup i of `kind` - the checkpoint's value, or
+// false when no checkpoint has been reached yet.
+function bankGot(kind,i){const B=G.bank;return B?!!B[kind][i]:false}
 function die(){const p=G.player;if(p.dead)return;p.dead=true;G.deaths++;S.st.deaths++;G.respT=0.65;sfx('die');if(S.set.shake)G.shake=5.5;
- if(G.mode!='endless'&&G.mode!='daily'){let lost=0;for(const gm of G.L.gems)if(gm.got){gm.got=false;lost++}G.gemsRun=0;
-  for(const cn of G.L.coins)if(cn.got){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}
-  if(G.L.grCoins)for(const cn of G.L.grCoins)if(cn.got){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}
-  G.coinsRun=0;
+ if(G.mode!='endless'&&G.mode!='daily'){const B=G.bank;let lost=0;
+  // only the pickups taken SINCE the last checkpoint go back on the map
+  G.L.gems.forEach((gm,i)=>{if(gm.got&&!bankGot('g',i)){gm.got=false;lost++}});
+  G.L.coins.forEach((cn,i)=>{if(cn.got&&!bankGot('c',i)){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}});
+  if(G.L.grCoins)G.L.grCoins.forEach((cn,i)=>{if(cn.got&&!bankGot('gr',i)){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}});
+  G.gemsRun=B?B.gemsRun:0;G.coinsRun=B?B.coinsRun:0;
   for(const o of G.L.gems.concat(G.L.coins))if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null} // undo Magnet pulls
   if(lost)for(let k=0;k<lost;k++)G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#5ff4ff',s:5,g:700,sh:'sq'})}
  burst(p.x+8,p.y+8,colorOf(S.eq.c,gtime),28,'die');burst(p.x+8,p.y+8,'#ffffff',8,'die')}
@@ -3631,7 +3654,7 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
     else toast('Every chest found','Not a coin left in this hall','ach')}
    else toast('Chest opened',left+(left>1?' chests':' chest')+' still locked away','info')}}
  // checkpoints only ever move forward (flag order in the level data), trigger covers the whole drawn flag
- L.checks.forEach((c,ci)=>{if(!c.on&&ci>(G.checkIdx==null?-1:G.checkIdx)&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-22&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkIdx=ci;G.checkpoint={x:c.x,y:c.y};sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}});
+ L.checks.forEach((c,ci)=>{if(!c.on&&ci>(G.checkIdx==null?-1:G.checkIdx)&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-22&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkIdx=ci;G.checkpoint={x:c.x,y:c.y};bankPickups();sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}});
  // exit trigger covers the drawn door (it extends above the exit tile)
  if(L.exit.y>0&&Math.abs(L.exit.x*TS+12-pcx)<14&&pcy>L.exit.y*TS-20&&pcy<L.exit.y*TS+28)return win();
  if(p.y>L.H*TS+40||p.y<-80)return die();
@@ -8387,7 +8410,7 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
   /* A BUILD STAMP. Checking whether a deploy has landed needs a string that only
      exists in THIS build - twice now a check matched text present in the old file
      as well and reported a deploy that had not happened. */
-  window.LAB_BUILD = '20260928224108';
+  window.LAB_BUILD = '20260928225559';
   var LAB = {
  "wd": 1,
  "n": "The Long Way Up",
@@ -8471,6 +8494,13 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
    1
   ],
   [
+   "^",
+   28,
+   39,
+   2,
+   1
+  ],
+  [
    "X",
    15,
    36,
@@ -8486,7 +8516,7 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
   ],
   [
    "^",
-   6,
+   4,
    31,
    2,
    1
@@ -8496,6 +8526,13 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
    14,
    28,
    4,
+   1
+  ],
+  [
+   "^",
+   16,
+   27,
+   2,
    1
   ],
   [
@@ -8527,6 +8564,13 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
    1
   ],
   [
+   "^",
+   4,
+   15,
+   2,
+   1
+  ],
+  [
    "#",
    16,
    12,
@@ -8545,6 +8589,13 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
    26,
    8,
    4,
+   1
+  ],
+  [
+   "^",
+   28,
+   7,
+   2,
    1
   ],
   [
@@ -8571,14 +8622,14 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
   [
    "l",
    2,
-   26,
+   25,
    30,
    1
   ],
   [
    "L",
    2,
-   14,
+   13,
    30,
    1
   ]
