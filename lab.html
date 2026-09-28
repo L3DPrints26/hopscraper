@@ -8384,6 +8384,10 @@ go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
    reachable, all four gems reachable, zero dead platforms.
    ======================================================================== */
 (function(){
+  /* A BUILD STAMP. Checking whether a deploy has landed needs a string that only
+     exists in THIS build - twice now a check matched text present in the old file
+     as well and reported a deploy that had not happened. */
+  window.LAB_BUILD = '20260928222941';
   var LAB = {
  "wd": 1,
  "n": "The Long Way Up",
