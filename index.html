@@ -2561,7 +2561,7 @@ const TUT={wd:0,n:'Tutorial',W:112,H:22,t:60,s:[3,18],e:[108,18],k:[[33,18]],key
   [55,61,'Saws hurt. Wait for it to move, then go.',null],[62,66,'Bounce pads launch you way up. Try it!',null],[67,79,'Lava = instant ouch. Cracked blocks fall after you step on them.',null],
   [80,91,'Grab the key to open the gold door.',null],[92,99,'Lasers blink. Go when they turn off.',null],[100,105,'Arrow floors push you along.',null],[106,111,"That's it! Touch the door to finish.",null]]};
 function startTutorial(){const L=buildLevel(TUT);G=newG({mode:'tut',idx:-1,L,intro:0,tipT:0});spawn();updCam(0,true);musicPlay(0);go('play')}
-function startEndless(daily){const seed=daily?todaySeed():(Math.random()*1e9|0);const def=genEndless(seed);const L=buildLevel(def,{skipBlocked:true});
+function startEndless(daily){TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?todaySeed():(Math.random()*1e9|0);const def=genEndless(seed);const L=buildLevel(def,{skipBlocked:true});
  G=newG({mode:daily?'daily':'endless',idx:-1,L,lavaY:(L.start.y+7)*TS,tipT:6,dailyDay:daily?todayStr():''});
  spawn();updCam(0,true);musicPlay(6);go('play')}
 // HARD MODE: one air jump instead of two, plus a stack of modifiers per level
