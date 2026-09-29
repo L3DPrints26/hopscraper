@@ -166,14 +166,22 @@ function addCoins(n){n=Math.max(0,Math.round(n*coinMult()));S.coins+=n;return n}
 // again) grants nothing extra, and the catch-up count comes from the real gap between two day numbers.
 function dailyTix(){const d=todaySeed(),last=dayNum(S.tixDay);if(d<=last)return;
  const n=last?daysOwed(last,d):1;S.tixDay=d;S.tix+=n;save();
- toast(n>1?'+'+n+' free spins!':'Free spin ready!',n>1?'Daily tickets for the days you missed':'Your daily ticket is here','ach')}
+ toast(n>1?'+'+n+' free spins!':'Free spin ready!',n>1?'For the days you missed':'Your daily ticket is here','ach')}
 // coins -> Prize Wheel tickets. Coins are otherwise a shop-only currency, so this gives late-game coins somewhere to go.
 // Capped per day (TIX_BUY_MAX) on the same forward-only day number as dailyTix, so a clock set back never refills it.
 const TIX_COST=500,TIX_BUY_MAX=3;
-// hidden notes -> Prize Wheel tickets. One ticket every NOTE_TIX notes found (owner's call: was 3, now 4). With 33
-// notes in the game that is 8 tickets over a whole playthrough instead of 11. Every place that grants or DESCRIBES
-// this rate reads the constant, so the wheel screen's "Get tickets" list can never drift from what the code does.
-const NOTE_TIX=4;
+// HIDDEN NOTES NO LONGER PAY A TICKET. There is one note per level, so "a ticket
+// every 4 notes" was a ticket every four LEVELS - far and away the biggest source
+// of spins in the game and the reason the wheel never felt scarce. Owner's call:
+// a ticket should cost a WORLD, not four levels.
+//
+// Clearing a world already pays exactly one, and always did: levelWon() grants
+// 'w1'..'w4' on the eighth level of each world (and 'rocket' for the Rocket Yard),
+// and grant() hands over a ticket with every achievement. So the fix is only to
+// stop the notes paying as well - nothing needed adding.
+//
+// Notes still count toward the 'notes' achievement for finding all of them, which
+// pays its one ticket like any other trophy.
 function tixBuyUsed(){return todaySeed()>dayNum(S.tixBuyDay)?0:Math.max(0,S.tixBuy|0)}
 function tixBuyLeft(){return Math.max(0,TIX_BUY_MAX-tixBuyUsed())}
 function canBuyTix(){return tixBuyLeft()>0&&(!!S.dev||S.coins>=TIX_COST)}
@@ -210,8 +218,152 @@ function audioInit(){if(AC){if(AC.state!=='running'&&!document.hidden)AC.resume(
  // UI bus: menu clicks/ticks get their own fader and stay DRY (no reverb send) so they read as interface, not as world
  uiGain=AC.createGain();uiGain.connect(sf);
  applyVol();if(mus.want!=null)musicPlay(mus.want)}catch(e){AC=null}}
-// suspend audio while the page is hidden, resume when it comes back
-document.addEventListener('visibilitychange',()=>{if(!AC)return;try{(document.hidden?AC.suspend():AC.resume()).catch(()=>{})}catch(e){}});
+// Suspend audio while the page is hidden, resume when it comes back.
+//
+// A PLAIN resume() ON visibilitychange IS NOT ENOUGH IN THE iOS APP. Swiping the
+// app away without closing it and coming back leaves WebKit's AudioContext in
+// 'interrupted' - its own state, not one of the three in the spec - and a resume()
+// from there is ignored unless it happens inside a user gesture. visibilitychange
+// is not a gesture, so the context stayed silent for the whole rest of the
+// session: every sound kept being scheduled against a clock that never advanced.
+// Reported from a real device; it does not reproduce in a desktop browser, where
+// the bare resume() above always worked.
+//
+// Three chances instead of one: try now (all that desktop needs), keep trying on
+// a short timer while iOS brings the audio session back, and if it is STILL not
+// running, arm a one-shot listener that retries inside the next touch. One tap
+// anywhere fixes it - including the tap the player was about to make anyway.
+const AWAKE_EV=['pointerdown','touchstart','touchend','mousedown','keydown'];
+let awakeT=null,awakeArmed=false,awakeGen=0;
+function awakeArm(){if(awakeArmed)return;awakeArmed=true;for(const e of AWAKE_EV)addEventListener(e,awakeGesture,true)}
+function awakeDisarm(){if(!awakeArmed)return;awakeArmed=false;for(const e of AWAKE_EV)removeEventListener(e,awakeGesture,true)}
+function awakeGesture(){audioWake(0,true)}
+// EVERY route back to sound ends here, so there is one place that has to be right.
+// Re-applying the mix matters: the gain nodes are rebuilt from scratch by audioInit()
+// after a rebuild, and applyVol() is what turns the player's slider positions and the
+// music/sfx/ui on-off flags back into gain values. Without it a rebuilt graph plays at
+// audioInit()'s defaults and ignores a muted setting.
+// Called whenever the clock has been SEEN to advance. Not when the state looks right -
+// that is what fooled every earlier fix.
+function audioHealthy(){audioRebuilds=0;zombSeen=0}
+function audioResumed(){
+ try{applyVol()}catch(e){}
+ // musTick stops scheduling while the context is not running, and clears nothing, so the
+ // interval usually survives - but after a rebuild it was cleared deliberately.
+ if(mus.want!=null&&!mus.timer)musicPlay(mus.want);
+ // The clock jumped while we were away. musTick re-bases itself when it is more than 5s
+ // behind, but doing it here means the first bar after coming back is not a burst of
+ // catch-up notes.
+ try{if(AC&&mus.next<AC.currentTime)mus.next=AC.currentTime+0.05}catch(e){}}
+// LAST RESORT. On iOS an 'interrupted' context sometimes cannot be resumed AT ALL - the
+// game was already calling resume() from inside taps (audioInit does it) and the owner
+// still came back to silence on a build that had the retry loop. When resume has plainly
+// stopped working, throw the context away and build a new one. Everything hangs off AC,
+// so audioInit() rebuilds the whole graph; mus.timer/song must be cleared first or
+// musicPlay() sees the song already playing and returns without rewiring it.
+// REBUILDS ARE CAPPED. WebKit allows only a handful of AudioContexts per page, and once
+// that ceiling is hit `new AudioContext()` fails - which would leave the game permanently
+// silent, i.e. worse than the bug this is trying to fix. Two attempts, then stop and let
+// resume() keep trying instead.
+// A LIMIT PER INCIDENT, NOT A LIFETIME BUDGET. This counter used to never reset, so after
+// two rebuilds the session was out of chances - background the app a third time and it
+// stayed silent permanently. audioHealthy() clears it the moment the clock is seen moving
+// again, which is the only honest evidence that the audio is working.
+const AUDIO_REBUILD_MAX=2;let audioRebuilds=0;
+function audioRebuild(){
+ if(audioRebuilds>=AUDIO_REBUILD_MAX)return false;
+ audioRebuilds++;
+ try{if(AC&&AC.close)AC.close().catch(()=>{})}catch(e){}
+ AC=null;master=musGain=sfxGain=uiGain=verb=null;
+ if(mus.timer){clearInterval(mus.timer);mus.timer=null}
+ const want=mus.want;mus.song=-1;mus.step=0;mus.next=0;
+ audioInit();
+ if(AC&&want!=null)musicPlay(want);
+ return !!AC}
+// A ZOMBIE CONTEXT: state 'running', clock frozen. This is the failure that actually
+// happens on iOS after the app is backgrounded, and it was invisible to every check here
+// because they all asked about state. AC.currentTime only advances while the context is
+// really rendering, so the clock is the honest signal and the state is not.
+let zombT=null,zombLast=-1,zombSeen=0;
+function audioAlive(){
+ // Sampled by audioWatch below; a single reading cannot tell you anything.
+ try{return AC?AC.currentTime:-1}catch(e){return -1}}
+function audioWatch(){
+ if(zombT){clearTimeout(zombT);zombT=null}
+ if(!AC||document.hidden)return;
+ const t0=audioAlive();
+ zombT=setTimeout(()=>{
+  zombT=null;
+  if(!AC||document.hidden)return;
+  const moved=audioAlive()-t0;
+  if(moved>0.005){audioHealthy();return}      // healthy: the clock is advancing
+  // Frozen. Two goes at reviving it, then give up rather than churn contexts.
+  if(++zombSeen>2)return;
+  if(AC.state!=='running'){audioWake(0,true);return}
+  if(audioRebuild())audioResumed();
+  audioWatch();                                // confirm the new one is actually alive
+ },600);
+}
+function audioWake(tries,gesture){
+ if(!AC){audioInit();if(!AC)return}
+ if(document.hidden)return;
+ const t=tries||0;
+ // Whatever else happens below, check the clock afterwards. A context that reports
+ // 'running' is not evidence of anything on its own.
+ audioWatch();
+ // A gesture is the only context iOS reliably honours, so when we are inside one and
+ // resume() has already had its chances, rebuild instead of asking a sixth time.
+ if(gesture&&t===0&&AC.state!=='running'&&awakeGen>0){if(audioRebuild()){awakeDisarm();audioResumed();return}}
+ // A tap is also the best moment to deal with a zombie, because a rebuild started inside
+ // a gesture is the one iOS is most likely to honour.
+ if(gesture&&AC.state==='running'&&zombSeen>0){if(audioRebuild()){audioResumed();zombSeen=0;awakeDisarm();return}}
+ try{AC.resume().catch(()=>{})}catch(e){}
+ if(awakeT){clearTimeout(awakeT);awakeT=null}
+ // resume() is async, so state is usually still stale on this line - that is what
+ // the retry below is for, not a hedge.
+ if(AC.state==='running'){audioResumed();return}   // do NOT disarm: the clock may still be frozen
+ // Arm the gesture retry IMMEDIATELY, not after the retries run out. The first thing a
+ // player does on coming back is tap, and that tap used to land in the 3s dead zone and
+ // be wasted.
+ awakeArm();
+ if(t<12){awakeT=setTimeout(()=>audioWake(t+1),250);return}
+ awakeGen++}
+document.addEventListener('visibilitychange',()=>{if(!AC)return;
+ // DO NOT SUSPEND. iOS interrupts the context by itself when the app backgrounds, and a
+ // script suspend stacked on top of an OS interruption is the state resume() cannot
+ // reliably get out of. Letting the OS own it is the one combination never tried, and it
+ // costs nothing: the game pauses anyway, and musTick stops scheduling while the context
+ // is not running (see its AC.state guard).
+ if(document.hidden)return;
+ audioWake(0)});
+// The iPad's Home button does not always fire visibilitychange in a WKWebView, so the
+// window-level events are not belt-and-braces here - sometimes they are the only signal.
+addEventListener('blur',()=>{if(AC&&!document.hidden)awakeArm()});
+// A STANDING WATCHDOG, because "it has to work from ANYWHERE" means not relying on
+// catching a visibility event. iOS does not always fire one, the event can arrive before
+// the audio session is back, and the game can be on any screen when it happens. So stop
+// trying to enumerate the ways audio can die and just watch the one thing that proves it
+// is alive: whether the clock moved since the last look.
+//
+// Costs one timer every 2s and two property reads. It does nothing at all while the page
+// is hidden, while there is no context, or while the clock is advancing normally.
+let wdLast=-1;
+setInterval(()=>{
+ if(!AC||document.hidden){wdLast=-1;return}
+ let now=-1;try{now=AC.currentTime}catch(e){return}
+ const was=wdLast;wdLast=now;
+ if(was<0)return;                       // first look after becoming visible: no baseline yet
+ if(now-was>0.005){audioHealthy();return}
+ // Two seconds of a frozen clock. If the state agrees it is stopped, the normal wake path
+ // handles it; if the state still claims 'running', this is the zombie and only a rebuild
+ // gets out of it.
+ if(AC.state!=='running'){audioWake(0);return}
+ if(audioRebuild()){audioResumed();wdLast=-1}
+},2000);
+// pageshow fires on a bfcache restore, where visibilitychange may not.
+addEventListener('pageshow',()=>{if(!document.hidden)audioWake(0)});
+
+addEventListener('focus',()=>{if(!document.hidden)audioWake(0)});
 // soft synth voice: filtered osc with pitch + amp envelope
 function voice(o){if(!AC)return;const t=AC.currentTime+(o.d||0),len=o.len||0.2,pk=o.v==null?0.2:o.v;
  const osc=AC.createOscillator();osc.type=o.w||'sine';if(o.det)osc.detune.value=o.det;
@@ -929,7 +1081,7 @@ function resetSave(){const o=S,n=defSave();
 // and small wedges are interleaved so it looks like a fairground wheel. The odds lists sort a copy (see oddsRows).
 // The 'cards' segment is the FREE route to Power Cards (the paid Card Pack was retired in the store collapse).
 const WHEEL=[{n:'25 coins',k:'c',v:25,w:22,col:'#ffc93c'},{n:'2 gems',k:'g',v:2,w:14,col:'#4dabff'},
- {n:'50 coins',k:'c',v:50,w:18,col:'#ff8f3c'},{n:'+1 ticket',k:'t',v:1,w:11,col:'#ff8fd8'},
+ {n:'50 coins',k:'c',v:50,w:18,col:'#ff8f3c'},{n:'+2 tickets',k:'t',v:2,w:11,col:'#ff8fd8'},
  {n:'Mystery Item',k:'s',v:0,w:5,col:'#9b5de5'},{n:'100 coins',k:'c',v:100,w:11,col:'#7bdc3b'},
  {n:'Power Card',l:'CARD',k:'cards',v:1,w:9,col:'#20b8c9'},{n:'250 coins',k:'c',v:250,w:4,col:'#ff4d6d'},
  {n:'5 gems',k:'g',v:5,w:6,col:'#2ee6c5'}];
@@ -1018,7 +1170,7 @@ function grantSetOrRefund(items,label,extraGems){const p={};
  return p}
 // prizes are granted the moment you spin (closing the game mid-spin never loses them); the wheel just shows it
 function awardWheel(i){const s=WHEEL[i],p={seg:i,k:s.k,txt:s.n,sub:''};
- if(s.k=='c'){S.coins+=s.v}else if(s.k=='g'){S.bank+=s.v;S.earned+=s.v}else if(s.k=='t'){S.tix+=s.v;p.txt='+1 ticket';p.sub='Spin again!'}
+ if(s.k=='c'){S.coins+=s.v}else if(s.k=='g'){S.bank+=s.v;S.earned+=s.v}else if(s.k=='t'){S.tix+=s.v;p.txt='+'+s.v+' ticket'+(s.v>1?'s':'');p.sub=s.v>1?'That is '+s.v+' more spins':'Spin again!'}
  // one Power Card of whichever regular type you have least of (ties random), so the free route fills gaps rather than
  // piling onto a type you already hoard. Gold Rush stays a Gold Supporter Pack exclusive. Stock full -> 60 coins instead.
  else if(s.k=='cards'){const reg=CARD_TYPES.filter(k=>k!='goldrush'&&(S.cards[k]||0)<CARD_MAX);
@@ -1102,11 +1254,11 @@ const CARD_TYPES=['shield','slowmo','xjump','magnet','goldrush'];
 const CARD_NAMES={shield:'Shield',slowmo:'Slow-Mo',xjump:'Extra Jump',magnet:'Magnet',goldrush:'Gold Rush'};
 // Plain language, and every line matches what the code actually does: what it does, how long, and the catch.
 // Kept under ~78 characters so the activation toast (2 wrapped lines) never clips them.
-const CARD_DESC={shield:'Blocks one deadly hit.  60s',
- slowmo:'Everything at 0.6x speed.  20s',
- xjump:'One extra mid-air jump. Rest of the level.',
- magnet:'Coins and gems fly to you.  30s',
- goldrush:'Coins fill the level. Finish to keep them.  60s'};
+const CARD_DESC={shield:'Blocks one deadly hit  ·  60s',
+ slowmo:'Everything at 0.6x  ·  20s',
+ xjump:'One extra air jump, all level',
+ magnet:'Coins and gems fly to you  ·  30s',
+ goldrush:'Coins everywhere - finish to keep them'};
 const CARD_DUR={shield:60,slowmo:20,magnet:30,goldrush:60};
 const CARD_MAX=5;
 // only usable while actually playing a Story Mode level — checked here, not just in the UI, so hard/speed/endless/daily/course can never trigger it
@@ -2337,7 +2489,7 @@ function laserWarnK(c,L){const per=L.def.lp||2.4,ph=((G.t*G.spd)%per)/per;
 function laserWarn(c,L){return laserWarnK(c,L)>0}
 function themeOf(){if(!G)return WORLDS[0];if(G.mode=='endless'||G.mode=='daily'){return WORLDS[Math.floor(G.height/60)%5]}return WORLDS[G.L.def.wd]}
 
-function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,keyGot:false,doorT:0,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
+function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,bank:null,keyGot:false,doorT:0,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
 function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspeed');
  // Gold Rush carry-over: if you clear (or otherwise leave to) a DIFFERENT level while it's still running, the new level
  // gets flooded too for whatever time is left - grabbed here before G gets replaced below. A restart (i==G.idx) does not
@@ -2490,8 +2642,12 @@ function spawn(){const L=G.L,s=G.checkpoint||L.start;if(L.rk){L.rk.length=0;for(
  // pickups: die() already drops these with the particle shower in Story Mode, but doing it here as well makes spawn()
  // the ONE place that guarantees "back to a freshly generated level", so no future respawn path can forget. (Chests,
  // checkpoints and the key deliberately survive a death - see die()/step() - so they are not in this list.)
- for(const o of L.gems){o.got=false;if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}}
- for(const o of L.coins){o.got=false;if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}}
+ // ...back to the level as it was AT THE LAST CHECKPOINT, not as it was generated:
+ // anything picked up before the flag stays picked up. See bankPickups().
+ L.gems.forEach((o,i)=>{o.got=bankGot('g',i);if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}});
+ L.coins.forEach((o,i)=>{o.got=bankGot('c',i);if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null}});
+ if(L.grCoins)L.grCoins.forEach((o,i)=>{o.got=bankGot('gr',i)});
+ if(G.bank){G.gemsRun=G.bank.gemsRun;G.coinsRun=G.bank.coinsRun}
  if(G.spawnX==null){G.spawnX=G.player.x;G.spawnY=G.player.y} // fairness timer reference point: only the very first spawn of this run
  if(L.rise&&!L.rise.endless){G.lavaY=L.H*TS+TS;G.riseT=0}
  burst(G.player.x+8,G.player.y+14,'#ffffff',10,'puff')}
@@ -2566,11 +2722,30 @@ function hurt(L,p){const hx=p.x+2.5,hy=p.y+2.5,hw=p.w-5,hh=p.h-5;
  for(const b of L.rov||[])if(Math.abs(b.x-cx)<30&&Math.abs(b.y-cy)<30&&circRect(b.x,b.y,6,hx,hy,hw,hh)){b.life=0;return true}
  return false}
 
+// PICKUPS SURVIVE A CHECKPOINT. Reaching a flag used to save your position and
+// nothing else: every gem and coin you had picked up went back on the map, so a
+// death after a checkpoint made you re-collect the whole section. Players read
+// that as losing progress they had already earned, and they are right - the flag
+// is the game saying "this much is done".
+//
+// So a checkpoint takes a snapshot, and death and respawn restore THAT instead of
+// restoring nothing. You still have to finish the level to actually bank them -
+// clearing the level is what pays out - but you no longer re-do work behind a
+// flag you already reached.
+function bankPickups(){const L=G.L;G.bank={
+ g:L.gems.map(o=>o.got), c:L.coins.map(o=>o.got),
+ gr:(L.grCoins||[]).map(o=>o.got),
+ gemsRun:G.gemsRun, coinsRun:G.coinsRun}}
+// got-state to fall back to for pickup i of `kind` - the checkpoint's value, or
+// false when no checkpoint has been reached yet.
+function bankGot(kind,i){const B=G.bank;return B?!!B[kind][i]:false}
 function die(){const p=G.player;if(p.dead)return;p.dead=true;G.deaths++;S.st.deaths++;G.respT=0.65;sfx('die');if(S.set.shake)G.shake=5.5;
- if(G.mode!='endless'&&G.mode!='daily'){let lost=0;for(const gm of G.L.gems)if(gm.got){gm.got=false;lost++}G.gemsRun=0;
-  for(const cn of G.L.coins)if(cn.got){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}
-  if(G.L.grCoins)for(const cn of G.L.grCoins)if(cn.got){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}
-  G.coinsRun=0;
+ if(G.mode!='endless'&&G.mode!='daily'){const B=G.bank;let lost=0;
+  // only the pickups taken SINCE the last checkpoint go back on the map
+  G.L.gems.forEach((gm,i)=>{if(gm.got&&!bankGot('g',i)){gm.got=false;lost++}});
+  G.L.coins.forEach((cn,i)=>{if(cn.got&&!bankGot('c',i)){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}});
+  if(G.L.grCoins)G.L.grCoins.forEach((cn,i)=>{if(cn.got&&!bankGot('gr',i)){cn.got=false;G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#ffd45e',s:5,g:700,sh:'ci'})}});
+  G.gemsRun=B?B.gemsRun:0;G.coinsRun=B?B.coinsRun:0;
   for(const o of G.L.gems.concat(G.L.coins))if(o.ox!=null){o.x=o.ox;o.y=o.oy;o.ox=o.oy=null} // undo Magnet pulls
   if(lost)for(let k=0;k<lost;k++)G.parts.push({x:p.x+8,y:p.y+8,vx:rnd(-90,90),vy:rnd(-160,-60),l:0.7,ml:0.7,c:'#5ff4ff',s:5,g:700,sh:'sq'})}
  burst(p.x+8,p.y+8,colorOf(S.eq.c,gtime),28,'die');burst(p.x+8,p.y+8,'#ffffff',8,'die')}
@@ -3470,7 +3645,7 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
  // Gold Rush bonus coins: picked up exactly like L.coins above (same G.coinsRun counter, same bank-on-clear/lose-on-death
  // rule) - see spawnGoldRush().
  if(L.grCoins)for(const cn of L.grCoins)if(!cn.got&&Math.abs(cn.x-pcx)<16&&Math.abs(cn.y-pcy)<16){cn.got=true;G.coinsRun++;sfx('coin');burst(cn.x,cn.y,'#ffd45e',12);burst(cn.x,cn.y,'#fff6c8',5)}
- if(L.note&&!L.note.got&&Math.abs(L.note.x-pcx)<20&&Math.abs(L.note.y-pcy)<22){L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();if(nf%NOTE_TIX==0){S.tix++;toast('+1 spin ticket','Every '+NOTE_TIX+' notes = 1 spin','info')}save();G.noteShow={i:G.idx,t0:gtime};sfx('check');burst(L.note.x,L.note.y,'#fff3cf',16);if(nf>=NOTES.length)grant('notes')}
+ if(L.note&&!L.note.got&&Math.abs(L.note.x-pcx)<20&&Math.abs(L.note.y-pcy)<22){L.note.got=true;S.notes[G.idx]=1;const nf=notesFound();save();G.noteShow={i:G.idx,t0:gtime};sfx('check');burst(L.note.x,L.note.y,'#fff3cf',16);if(nf>=NOTES.length)grant('notes')}
  // G.doorT is the render clock for the door's swing only (see drawWorld's 'D' case) - nothing reads it for physics.
  if(L.key&&!L.key.got&&Math.abs(L.key.x-pcx)<18&&Math.abs(L.key.y-pcy)<18){L.key.got=true;G.keyGot=true;G.doorT=G.t;sfx('key');burst(L.key.x,L.key.y,'#ffd45e',24);if(S.set.shake)G.shake=4}
  // Gilded Vale treasure chests (L.chests): open every one in the level and its gold vault doors unlock. Deliberately
@@ -3483,11 +3658,11 @@ function step(dt){const L=G.L,p=G.player;G.t+=dt;
     sfx('coin');if(S.set.shake)G.shake=Math.max(G.shake,2);burst(ch.x,ch.y-4,'#ffd45e',20);burst(ch.x,ch.y-6,'#fff3b0',9)}
    if(!ch.got)left++}
   if(hit&&!G.keyGot){if(!left){G.keyGot=true;G.doorT=G.t;sfx('key');if(S.set.shake)G.shake=4;
-    if(L.hasDoor)toast('Vault open','Every chest found - the gold doors are open','ach');
-    else toast('Every chest found','You have stripped this hall of its gold','ach')}
+    if(L.hasDoor)toast('Vault open','The gold doors are open','ach');
+    else toast('Every chest found','Not a coin left in this hall','ach')}
    else toast('Chest opened',left+(left>1?' chests':' chest')+' still locked away','info')}}
  // checkpoints only ever move forward (flag order in the level data), trigger covers the whole drawn flag
- L.checks.forEach((c,ci)=>{if(!c.on&&ci>(G.checkIdx==null?-1:G.checkIdx)&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-22&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkIdx=ci;G.checkpoint={x:c.x,y:c.y};sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}});
+ L.checks.forEach((c,ci)=>{if(!c.on&&ci>(G.checkIdx==null?-1:G.checkIdx)&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-22&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkIdx=ci;G.checkpoint={x:c.x,y:c.y};bankPickups();sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}});
  // exit trigger covers the drawn door (it extends above the exit tile)
  if(L.exit.y>0&&Math.abs(L.exit.x*TS+12-pcx)<14&&pcy>L.exit.y*TS-20&&pcy<L.exit.y*TS+28)return win();
  if(p.y>L.H*TS+40||p.y<-80)return die();
@@ -3806,7 +3981,7 @@ function saveEndless(){if(G.endSaved)return G.endSaved;const dly=G.mode=='daily'
 function onWinDone(){
  // Straight into 1-1 the first time: MODES is almost entirely locked this early and reads as a wall of padlocks.
  // A refresher replay (S.tut already set) goes back to the story level select instead of restarting the game for you.
- if(G.mode=='tut'){const first=!S.tut;S.tut=1;if(first){S.bank+=5;S.earned+=5}save();toast('Tutorial complete!',first?'+5 gems. Here we go - level 1-1.':'Nice refresher.','ach');return first?startLevel(0,'story'):go('levels')}
+ if(G.mode=='tut'){const first=!S.tut;S.tut=1;if(first){S.bank+=5;S.earned+=5}save();toast('Tutorial complete!',first?'+5 gems - on to level 1-1':'Nice refresher.','ach');return first?startLevel(0,'story'):go('levels')}
  if(G.mode=='course'){const i=G.idx,rec=S.course[i]||(S.course[i]={t:0});const r={i,t:G.time,deaths:G.deaths,best:false,gems:G.gemsRun};
   if(!rec.t||G.time<rec.t){rec.t=G.time;r.best=true;submitScore('course'+i,rec.t)}
   S.bank+=G.gemsRun;S.earned+=G.gemsRun;r.medal=medalOf(i,rec.t);
@@ -5814,7 +5989,11 @@ function uiNav(scr){const L=UI.prev;if(!L.length)return;let cur=L.find(b=>b.id==
 
 const toasts=[],FX=[];
 function toast(a,b,ty){toasts.push({a,b,ty,t:0})}
-function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i].t+=dt;if(toasts[i].t>3.6)toasts.splice(i,1)}} // only the 4 visible ones age, the rest wait their turn
+// TOAST_LIFE was 3.6s, of which 0.3 fades in and the last 0.4 fades out - so under three seconds fully readable,
+// for two lines. The owner's note: they do not stay long enough. 5.4 gives four and a half seconds of solid text,
+// which is roughly twice as long as it takes to read one, without the lane filling up on a busy screen.
+const TOAST_LIFE=5.4,TOAST_IN=0.3,TOAST_OUT=0.45;
+function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i].t+=dt;if(toasts[i].t>TOAST_LIFE)toasts.splice(i,1)}} // only the 4 visible ones age, the rest wait their turn
 // MORE WORLDS fills the top-right with product cards, so its toasts rise from the bottom centre instead of sliding in
 // over one. Everywhere else they keep the usual top-right slide.
 // LANES. Toasts are overlays, so each screen gets a lane where it keeps no buttons:
@@ -5826,7 +6005,7 @@ function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i]
 //     This is the fix for toasts landing on menu buttons.
 //   everywhere else: the usual top-right slide.
 function drawToasts(){const bot=SCR===SCREENS.worlds,men=SCR===SCREENS.menu,W=men?232:316;
- toasts.slice(0,men?3:4).forEach((o,i)=>{const k=o.t<0.3?ease(o.t/0.3):o.t>3.2?1-(o.t-3.2)/0.4:1;
+ toasts.slice(0,men?3:4).forEach((o,i)=>{const k=o.t<TOAST_IN?ease(o.t/TOAST_IN):o.t>TOAST_LIFE-TOAST_OUT?1-(o.t-(TOAST_LIFE-TOAST_OUT))/TOAST_OUT:1;
   const x=men?20-(1-k)*300:bot?VW/2-158:VW-330+(1-k)*360,y=men?204+i*62:bot?VH-62-i*62+(1-k)*26:64+i*64;ctx.globalAlpha=clamp(k,0,1);ctx.fillStyle='rgba(20,16,40,.92)';rr(x,y,W,56,12);ctx.fill();ctx.strokeStyle=o.ty=='ach'?'#ffd45e':'#8dd3ff';ctx.lineWidth=2;rr(x,y,W,56,12);ctx.stroke();
  if(o.ty=='ach')star5(x+30,y+28,15,'#ffd45e','#b8860b',2);else{ctx.fillStyle='#8dd3ff';ctx.beginPath();ctx.arc(x+30,y+28,10,0,7);ctx.fill()}
  txt(fitStr(o.a,W-64,16),x+54,y+19,16,o.ty=='ach'?'#ffd45e':'#fff','left',false);{const bl=wrapText(o.b||'',W-64,14).slice(0,2);bl.forEach((l,k)=>txt(l,x+54,(bl.length>1?y+32:y+38)+k*15,14,'#d8d5ea','left',false))}ctx.globalAlpha=1})} // subtitle wraps to 2 lines instead of being cut
@@ -7570,7 +7749,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    else ghostBtn(620,258,280,70,busy?'SPINNING...':'SPIN!','rgba(255,255,255,.6)','#5d5c6b',28);
    // five small sentences down the panel was a block nobody read. Two paired lines, and the coin swap is gone from
    // here entirely - the swap button sits right under the wheel saying the same thing with a coin on it.
-   const how=['GET TICKETS','1 a day  ·  1 a trophy','1 per '+NOTE_TIX+' notes  ·  1 a daily climb'];
+   const how=['GET TICKETS','1 a day  ·  1 a trophy','1 a world cleared  ·  1 a daily climb'];
    how.forEach((l,i)=>txt(l,760,412+i*21,i?14:15,i?'#d8d5ea':'#fff',undefined,false))}
   else{txt('PREMIUM WHEEL',760,110,30,'#ffd45e');txt('Every spin wins something.',760,140,14,'#f0dcff',undefined,false);
    gemShape(704,190,14,'#5ff4ff');txt(curTxt(S.bank)+' gems',728,192,28,'#fff','left');
@@ -7998,7 +8177,7 @@ SCREENS.settings={enter(){this.conf=0},
   if(id=='howto')return startTutorial();
   if(sldClick(b))return; // a tap straight on a track sets the value there; the drag path is sldUpd's job
   if(id=='dev'){if(!DEV_OK)return;if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
-  if(id=='feedback'){if(!openFeedback())toast('Feedback is not set up yet','Please try again after the next update','info');return}
+  if(id=='feedback'){if(!openFeedback())toast('Feedback is not set up yet','Try again after the next update','info');return}
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='rm'){S.set.rm=S.set.rm?0:1;if(S.set.rm)S.set.shake=0}
@@ -8215,7 +8394,7 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  // frames, bail out to the menu (which draws from save data only) and say so, instead of locking the player out.
  }catch(e){console.error(e);
   if(++drawErrs>=30){drawErrs=0;
-   try{if(G)G.won=0;go('menu');toast('Something went wrong','Back to the menu - your progress is saved','info')}catch(e2){console.error(e2)}}}
+   try{if(G)G.won=0;go('menu');toast('Something went wrong','Your progress is saved','info')}catch(e2){console.error(e2)}}}
  for(const k in pressed)delete pressed[k];mouse.click=false;typedDigit=null;typedDel=false;
  requestAnimationFrame(frame)}
 go('intro');dailyTix();requestAnimationFrame(frame);setTimeout(chkUpd,4000);
