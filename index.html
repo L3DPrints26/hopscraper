@@ -46,6 +46,42 @@ const FEEDBACK_URL='https://docs.google.com/forms/d/e/1FAIpQLSc4JvTeXdCw_mJ4SoVA
 const FEEDBACK_EMAIL='gamercrafter1510@gmail.com';
 // ================= CORE =================
 const TS=24,VW=960,VH=540,DT=1/120;
+// ================= PLAY TRACE =================
+// Records what the PLAYER actually does - position, velocity, whether they are on
+// the ground or on a wall, air jumps left - plus events for jumps, deaths and
+// level changes. Exists because levels were being designed against a reachability
+// model ("can this tile be touched") instead of against real movement, and the
+// result was levels that were technically solvable and horrible to play.
+// Off until switched on in Settings, costs nothing while off, never auto-sends.
+const TRACE={on:false,buf:[],ev:[],max:60000,acc:0,every:1/60,lvl:''};
+function traceTick(dt){
+ if(!TRACE.on||!G||!G.player||TRACE.buf.length>=TRACE.max)return;
+ TRACE.acc+=dt;if(TRACE.acc<TRACE.every)return;TRACE.acc=0;
+ const p=G.player;
+ TRACE.buf.push([+(G.t||0).toFixed(3),Math.round(p.x),Math.round(p.y),
+  Math.round(p.vx),Math.round(p.vy),
+  (p.onG?1:0)|(p.wall?2:0)|(p.dead?4:0)|(keys.L?8:0)|(keys.R?16:0)|(keys.J?32:0),
+  p.aj|0]);
+}
+function traceEv(k,ex){
+ if(!TRACE.on)return;
+ const o={t:+(((G&&G.t)||0)).toFixed(3),k,lvl:TRACE.lvl};
+ if(ex)for(const q in ex)o[q]=ex[q];
+ TRACE.ev.push(o);
+}
+function traceDump(){
+ const data={v:1,when:Date.now(),ts:TS,dt:DT,
+  cols:['t','x','y','vx','vy','flags(1=ground,2=wall,4=dead,8=left,16=right,32=jump)','airJumpsLeft'],
+  jump:{JV:JV,AJV:AJV,GRAVU:GRAVU,GRAVD:GRAVD,RUN:RUN,AIRJ:AIRJ,WJX:WJX,WJY:WJY},
+  ev:TRACE.ev,buf:TRACE.buf};
+ try{
+  const b=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download='hopscraper-play-'+Date.now()+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  return TRACE.buf.length;
+ }catch(e){return -1}
+}
 const cv=document.getElementById('c');let ctx=cv.getContext('2d');
 function withCtx(g,fn){const o=ctx;ctx=g;try{fn()}finally{ctx=o}}
 const SPR=new Map();
@@ -2490,7 +2526,7 @@ function laserWarn(c,L){return laserWarnK(c,L)>0}
 function themeOf(){if(!G)return WORLDS[0];if(G.mode=='endless'||G.mode=='daily'){return WORLDS[Math.floor(G.height/60)%5]}return WORLDS[G.L.def.wd]}
 
 function newG(o){return Object.assign({t:0,time:0,deaths:0,jumps:0,gemsRun:0,coinsRun:0,parts:[],shake:0,cam:{x:0,y:0},checkpoint:null,bank:null,keyGot:false,doorT:0,won:false,winT:0,winDone:0,intro:2.4,acc:0,spd:1,riseMul:1,lavaY:0,riseT:0,height:0,tipT:0,respT:0,moved:false,spawnX:null,spawnY:null},o)}
-function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspeed');
+function startLevel(i,mode){const def=LEVELS[i],hard=(mode=='hard'||mode=='hspeed');TRACE.lvl=lvLabel(i);traceEv('start',{mode:mode||'story',name:def&&def.n});
  // Gold Rush carry-over: if you clear (or otherwise leave to) a DIFFERENT level while it's still running, the new level
  // gets flooded too for whatever time is left - grabbed here before G gets replaced below. A restart (i==G.idx) does not
  // carry it - same as every other Power Card, a restart forfeits the already-spent charge.
@@ -2739,7 +2775,7 @@ function bankPickups(){const L=G.L;G.bank={
 // got-state to fall back to for pickup i of `kind` - the checkpoint's value, or
 // false when no checkpoint has been reached yet.
 function bankGot(kind,i){const B=G.bank;return B?!!B[kind][i]:false}
-function die(){const p=G.player;if(p.dead)return;p.dead=true;G.deaths++;S.st.deaths++;G.respT=0.65;sfx('die');if(S.set.shake)G.shake=5.5;
+function die(){const p=G.player;if(p.dead)return;traceEv('death',{x:Math.round(p.x),y:Math.round(p.y),vx:Math.round(p.vx),vy:Math.round(p.vy)});p.dead=true;G.deaths++;S.st.deaths++;G.respT=0.65;sfx('die');if(S.set.shake)G.shake=5.5;
  if(G.mode!='endless'&&G.mode!='daily'){const B=G.bank;let lost=0;
   // only the pickups taken SINCE the last checkpoint go back on the map
   G.L.gems.forEach((gm,i)=>{if(gm.got&&!bankGot('g',i)){gm.got=false;lost++}});
@@ -3561,7 +3597,7 @@ function updChests(L,dt){if(!L.chests||!L.chests.length)return;let done=false;co
     if(ch.pay<=0&&ch.gpay<=0&&!ch.fly.length)done=true}}}
  if(done)save()}                                              // one save per finished stream, not one per coin
 
-function step(dt){const L=G.L,p=G.player;G.t+=dt;
+function step(dt){const L=G.L,p=G.player;G.t+=dt;traceTick(dt);
  updMovers(L,G.t*G.spd);updRockets(L,dt);updRovers(L,dt);updAsteroids(L,dt);updOgres(L);updGhosts(L,dt);updPlats(L,G.t*G.spd);updCrumble(L,dt);updLava(dt);updChests(L,dt);
  if(L.exit.y>0&&Math.random()<9*dt)G.parts.push({x:L.exit.x*TS+rnd(5,19),y:L.exit.y*TS+20,vx:0,vy:rnd(-50,-20),l:0.8,ml:0.8,c:'#ffffff',s:2,g:0,sh:'sq'}); // exit sparkles (~9/s)
  p.px=p.x;p.py=p.y; // previous position for render interpolation
@@ -8159,8 +8195,15 @@ SCREENS.settings={enter(){this.conf=0},
   button('shake',514,176,188,42,'Shake: '+on(S.set.shake),{fs:17});button('rm',706,176,188,42,'Less Motion: '+on(S.set.rm),{fs:15});
   panel(498,246,418,188);sectTitle('GAME',520,272);
   button('feedback',514,284,386,40,'Send Feedback',{fs:18});
-  if(DEV_OK)button('dev',514,332,386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
-  button('reset',514,DEV_OK?380:332,386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
+  // Play trace: lets a real run be recorded and handed over, so levels can be built
+  // around how the player actually moves instead of around what a solver can reach.
+  // Half-width pair on ONE row: the footer hint line starts at y452, so this panel
+  // has to end above it or it draws straight over the text.
+  button('trace',514,332,188,40,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
+   {fs:TRACE.on?15:16,bg:TRACE.on?'#c8f5cf':'#ffffff'});
+  button('tracesave',706,332,188,40,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
+  if(DEV_OK)button('dev',514,428,386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
+  button('reset',514,DEV_OK?428:380,386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
   // How to Play lives HERE - it is where people look for it, and it is also the way to replay the tutorial once the
   // first run has forced it. Credits is NOT here any more: it is the byline in the main menu's bottom-left corner.
   // Pushed LAST so the first Audio slider keeps the default keyboard selection.
@@ -8178,6 +8221,15 @@ SCREENS.settings={enter(){this.conf=0},
   if(sldClick(b))return; // a tap straight on a track sets the value there; the drag path is sldUpd's job
   if(id=='dev'){if(!DEV_OK)return;if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
   if(id=='feedback'){if(!openFeedback())toast('Feedback is not set up yet','Try again after the next update','info');return}
+  if(id=='trace'){TRACE.on=!TRACE.on;
+   if(TRACE.on){TRACE.buf.length=0;TRACE.ev.length=0;TRACE.acc=0;toast('Recording your play','Go play a level, then come back and save','info')}
+   else toast('Recording stopped',TRACE.buf.length+' samples ready to save','info');
+   return}
+  if(id=='tracesave'){if(!TRACE.buf.length){toast('Nothing recorded yet','Tap Record Play, play a bit, then come back','info');return}
+   const n=traceDump();
+   if(n<0)toast('Could not save','This browser blocked the download','bad');
+   else toast('Saved '+n+' samples','Check your downloads folder','good');
+   return}
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='rm'){S.set.rm=S.set.rm?0:1;if(S.set.rm)S.set.shake=0}
