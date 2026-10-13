@@ -8199,9 +8199,15 @@ SCREENS.settings={enter(){this.conf=0},
   // around how the player actually moves instead of around what a solver can reach.
   // Half-width pair on ONE row: the footer hint line starts at y452, so this panel
   // has to end above it or it draws straight over the text.
-  button('trace',514,332,188,40,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
-   {fs:TRACE.on?15:16,bg:TRACE.on?'#c8f5cf':'#ffffff'});
-  button('tracesave',706,332,188,40,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
+  /* Play-trace controls are a DEVELOPER tool, not a feature. They stay on the
+   * web build (where the owner records runs for level design) and are hidden in
+   * the shipped iOS app, where a 'Record My Play' button in Settings would just
+   * puzzle players and invite questions from App Review. */
+  if(!window.HopNative){
+   button('trace',514,332,188,40,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
+    {fs:TRACE.on?15:16,bg:TRACE.on?'#c8f5cf':'#ffffff'});
+   button('tracesave',706,332,188,40,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
+  }
   if(DEV_OK)button('dev',514,428,386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
   button('reset',514,DEV_OK?428:380,386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
   // How to Play lives HERE - it is where people look for it, and it is also the way to replay the tutorial once the
