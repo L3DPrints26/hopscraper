@@ -6029,7 +6029,7 @@ function toast(a,b,ty){toasts.push({a,b,ty,t:0})}
 // for two lines. The owner's note: they do not stay long enough. 5.4 gives four and a half seconds of solid text,
 // which is roughly twice as long as it takes to read one, without the lane filling up on a busy screen.
 const TOAST_LIFE=5.4,TOAST_IN=0.3,TOAST_OUT=0.45;
-function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i].t+=dt;if(toasts[i].t>TOAST_LIFE)toasts.splice(i,1)}} // only the 4 visible ones age, the rest wait their turn
+function updToasts(dt){for(let i=Math.min(toastSlots(),toasts.length)-1;i>=0;i--){toasts[i].t+=dt;if(toasts[i].t>TOAST_LIFE)toasts.splice(i,1)}} // only the 4 visible ones age, the rest wait their turn
 // MORE WORLDS fills the top-right with product cards, so its toasts rise from the bottom centre instead of sliding in
 // over one. Everywhere else they keep the usual top-right slide.
 // LANES. Toasts are overlays, so each screen gets a lane where it keeps no buttons:
@@ -6040,8 +6040,13 @@ function updToasts(dt){for(let i=Math.min(4,toasts.length)-1;i>=0;i--){toasts[i]
 //     every other control. Three at a time there rather than four, because that band is 180px tall.
 //     This is the fix for toasts landing on menu buttons.
 //   everywhere else: the usual top-right slide.
+// How many toasts may be on screen at once. The SHOP gets one: its right-hand product panel starts just
+// under the first toast row, so a second toast lands on the subscription's price and the Terms of Use / Privacy
+// links. Subscribing fires three at once (welcome, Club skin, daily gems) - owner saw them buried the panel.
+// Extra toasts are not dropped, they wait: updToasts only ages the visible ones.
+function toastSlots(){return SCR===SCREENS.shop?1:SCR===SCREENS.menu?3:4}
 function drawToasts(){const bot=SCR===SCREENS.worlds,men=SCR===SCREENS.menu,W=men?232:316;
- toasts.slice(0,men?3:4).forEach((o,i)=>{const k=o.t<TOAST_IN?ease(o.t/TOAST_IN):o.t>TOAST_LIFE-TOAST_OUT?1-(o.t-(TOAST_LIFE-TOAST_OUT))/TOAST_OUT:1;
+ toasts.slice(0,toastSlots()).forEach((o,i)=>{const k=o.t<TOAST_IN?ease(o.t/TOAST_IN):o.t>TOAST_LIFE-TOAST_OUT?1-(o.t-(TOAST_LIFE-TOAST_OUT))/TOAST_OUT:1;
   const x=men?20-(1-k)*300:bot?VW/2-158:VW-330+(1-k)*360,y=men?204+i*62:bot?VH-62-i*62+(1-k)*26:64+i*64;ctx.globalAlpha=clamp(k,0,1);ctx.fillStyle='rgba(20,16,40,.92)';rr(x,y,W,56,12);ctx.fill();ctx.strokeStyle=o.ty=='ach'?'#ffd45e':'#8dd3ff';ctx.lineWidth=2;rr(x,y,W,56,12);ctx.stroke();
  if(o.ty=='ach')star5(x+30,y+28,15,'#ffd45e','#b8860b',2);else{ctx.fillStyle='#8dd3ff';ctx.beginPath();ctx.arc(x+30,y+28,10,0,7);ctx.fill()}
  txt(fitStr(o.a,W-64,16),x+54,y+19,16,o.ty=='ach'?'#ffd45e':'#fff','left',false);{const bl=wrapText(o.b||'',W-64,14).slice(0,2);bl.forEach((l,k)=>txt(l,x+54,(bl.length>1?y+32:y+38)+k*15,14,'#d8d5ea','left',false))}ctx.globalAlpha=1})} // subtitle wraps to 2 lines instead of being cut
@@ -7436,9 +7441,14 @@ SCREENS.shop={enter(){// Ask the App Store for the catalogue the moment the shop
    const prY=clamp(py+18,340,356);
    txt(mem?'You are a Club member':priceTxt(p),740,prY,24,mem?'#7bdc3b':'#ffd45e');
    let ny=prY+32;
-   if(this.mt>0)txt(this.msg,740,ny,14,'#ffd45e',undefined,false);
+   // MEMBERS get a real button to manage or cancel, instead of being told to go dig through Settings. It
+   // opens Apple's own subscription sheet. Non-members keep the renewal terms Apple requires on a purchase screen.
+   if(mem){if(window.HopNative&&HopNative.manageSubscriptions)button('manage',588,ny-14,332,34,'Manage / Cancel Subscription',{fs:14})}
+   else if(this.mt>0)txt(this.msg,740,ny,14,'#ffd45e',undefined,false);
    else{const rl=wrapText('Renews monthly. Cancel anytime in Settings > Apple ID > Subscriptions.',330,13);rl.forEach((l,i)=>txt(l,740,ny-5+i*15,13,'#b9b6c6',undefined,false));ny+=(rl.length-1)*15}
-   if(mem&&dayNum(S.clubDay)>=todaySeed()&&ny+20<=410)txt('Next +10 gems in '+cdStr(),740,ny+20,13,'#ffd45e',undefined,false);
+   // The daily-gems timer used to sit at y<=410, right on top of the Terms/Privacy row at 412. It only draws
+   // now when it genuinely clears that row, and never in the member view where the Manage button lives.
+   if(!mem&&dayNum(S.clubDay)>=todaySeed()&&ny+20<=396)txt('Next +10 gems in '+cdStr(),740,ny+20,13,'#ffd45e',undefined,false);
    // Apple requires Terms of Use + Privacy Policy links on the subscription screen
    // 34 tall, not 28: at landscape-phone scale a 28px row is about 19 CSS px, too small to hit reliably
    button('terms',588,412,164,36,'Terms of Use',{fs:14});button('privacy',756,412,164,36,'Privacy Policy',{fs:14});
@@ -7510,7 +7520,7 @@ SCREENS.shop={enter(){// Ask the App Store for the catalogue the moment the shop
   if(id=='seeworlds')return go('worlds',{from:'shop'});
   if(id=='restore'){if(!restorePurchases())noNativeBuy();return}
   if(id=='buytix'){if(buyTix()){sfx('buy');this.msg='+1 spin ticket';this.mt=1.5}else{sfx('no');this.msg='Not enough coins';this.mt=1.5}return}
-  if(id=='devclub'){setClub(!clubOn());this.msg=clubOn()?'DEV: Club active':'DEV: Club off';this.mt=1.5;return}if(id=='terms')return openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');if(id=='privacy')return openURL('https://l3dprints26.github.io/hopscraper/privacy.html');
+  if(id=='devclub'){setClub(!clubOn());this.msg=clubOn()?'DEV: Club active':'DEV: Club off';this.mt=1.5;return}if(id=='terms')return openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');if(id=='manage'){try{if(window.HopNative&&HopNative.manageSubscriptions)return HopNative.manageSubscriptions()}catch(e){}return openURL('https://apps.apple.com/account/subscriptions')}if(id=='privacy')return openURL('https://l3dprints26.github.io/hopscraper/privacy.html');
   if(id.startsWith('pr_')){const p=PRODUCTS[+id.slice(3)];if(prodOwned(p)){this.msg=p.type=='sub'?'You are already a member':'You already own this';this.mt=1.5;return}
    if(!cardPackRoom(p)){this.msg='Card stock full (max '+CARD_BUY_MAX+' each). Use some first';this.mt=2.5;sfx('no');return}
    return this.ask({p})}
