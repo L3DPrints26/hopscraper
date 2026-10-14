@@ -7209,7 +7209,7 @@ const SUB_EMPTY={all:['Nothing of this kind yet','Keep climbing - more unlocks a
 let _dp={d:'',it:null};
 function dailyPickItem(){const d=todayStr();if(_dp.d!=d){const pool=ITEMS.filter(it=>(it.coins||it.cost)&&!it.pack&&!it.iap);
   const R=mulberry(todaySeed()+777);_dp={d,it:pool.length?pool[Math.floor(R()*pool.length)]:null}}return _dp.it}
-SCREENS.shop={enter(){// Ask the App Store for the catalogue the moment the shop opens, so the wait
+SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the moment the shop opens, so the wait
  // happens while the player is browsing instead of after they tap Buy. On a cold
  // start the first answer can take several seconds; a tap must never sit silent.
  try{if(window.HopNative&&HopNative.refreshProducts&&HopNative.loadedCount&&HopNative.loadedCount()===0)HopNative.refreshProducts()}catch(e){}
@@ -7392,7 +7392,7 @@ SCREENS.shop={enter(){// Ask the App Store for the catalogue the moment the shop
     packBlurb(p).forEach((l,i)=>txt(l,0,-bh/2+138+i*18,13,'#3f3b52','center',false));
     ctx.fillStyle=own?'#9a98aa':'#27b865';rr(-52,bh/2-40,104,28,14);ctx.fill();
     txt(own?'Owned':priceTxt(p),0,bh/2-26,16,'#fff','center',false)}})});
-  const s=UI.selId||'',p=s.startsWith('pr_')?PRODUCTS[+s.slice(3)]:null;
+  const s=UI.selId||'',p=this.panelProduct();
   if(!p){txt('PACKS',740,150,30,'#fff');
    wrapText('One bonus world plus its cosmetics. Buy once, keep forever.',330,16).forEach((l,i)=>txt(l,740,190+i*22,16,'#d8d5ea',undefined,false));
    txt('No ads. Ever.',740,290,16,'#7bdc3b',undefined,false)}
@@ -7421,7 +7421,7 @@ SCREENS.shop={enter(){// Ask the App Store for the catalogue the moment the shop
     txt(fitStr('+10 gems a day · 2x coins · weekly Premium spin · monthly skin',bw-190,13),-bw/2+70,11,13,sel?'#3a1470':'#d8d5ea','left',false);
     ctx.fillStyle=own?'#9a98aa':tc;rr(bw/2-112,-13,104,26,13);ctx.fill();
     txt(own?'Member':priceTxt(sub),bw/2-60,0,15,own?'#fff':(sel?'#ffd45e':'#3a1470'),'center',false)}})}
-  const s=UI.selId||'',p=s.startsWith('pr_')?PRODUCTS[+s.slice(3)]:null;
+  const s=UI.selId||'',p=this.panelProduct();
   if(!p){txt('GEMS & CLUB',740,150,28,'#fff');
    coinIcon(600,196,9,gtime*2);txt('From playing levels',616,197,15,'#ffd45e','left',false);
    gemShape(600,226,9,'#5ff4ff');txt('From gems, new stars and the wheel',616,227,15,'#8dd3ff','left',false);
@@ -7432,6 +7432,16 @@ SCREENS.shop={enter(){// Ask the App Store for the catalogue the moment the shop
   button('restore',620,452,240,40,'Restore Purchases',{fs:16})},
  // ---- the right-hand detail panel, shared by both product tabs. One function, so a pack and a gem tier can never
  // drift into two different-looking panels.
+ // WHICH PRODUCT THE RIGHT-HAND PANEL SHOWS. It used to be read straight off UI.selId - the panel existed only
+ // while a product card was the selection. But the panel has buttons of its own (Terms of Use, Privacy Policy,
+ // Manage), and a tap is two frames: the finger landing moves the selection onto the button, the next frame draws
+ // the panel - and with a button selected instead of a product there was no panel, so the button vanished before
+ // the tap could land on it, and uiNav fell back to the first button on screen. Owner on an iPad: 'it highlights
+ // the back button and gets off the club, so it ain't doing anything'. Reproduced exactly through the real input
+ // path. The panel now remembers its product, together with the tab it belongs to, so switching tab clears it.
+ panelProduct(){const s=UI.selId||'';
+  if(s.startsWith('pr_')){const i=+s.slice(3);if(PRODUCTS[i])this.pSel={cat:this.cat,i}}
+  return this.pSel&&this.pSel.cat===this.cat?PRODUCTS[this.pSel.i]:null},
  prodPanel(p){
   // the panel stacks downward from the perk list instead of on fixed rows, so the price line and the "Click again to buy"
   // message keep a real gap however many lines the perks wrap to
