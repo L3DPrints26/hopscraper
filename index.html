@@ -156,7 +156,7 @@ function parseSave(r){const o=JSON.parse(r);if(!isObj(o))throw new Error('bad sa
  for(const k of['coins','tix','dbl','bank','club','chaos','world6','goldworld','monsterworld','clubExp','earned','pw','tixBuy'])if(typeof s[k]!='number'||!isFinite(s[k]))s[k]=0;
  for(const k of['coins','tix','bank','pw','tixBuy'])if(s[k]<0)s[k]=0;
  if(typeof s.clubSpinWeek!='number'||!isFinite(s.clubSpinWeek))s.clubSpinWeek=-1;if(typeof s.clubMonth!='number'||!isFinite(s.clubMonth))s.clubMonth=-1;
- s.tixDay=dayNum(s.tixDay);s.dtix=dayNum(s.dtix);s.clubDay=dayNum(s.clubDay);s.tixBuyDay=dayNum(s.tixBuyDay);s.ver=2;
+ if(!isObj(s.wpend))delete s.wpend;s.tixDay=dayNum(s.tixDay);s.dtix=dayNum(s.dtix);s.clubDay=dayNum(s.clubDay);s.tixBuyDay=dayNum(s.tixBuyDay);s.ver=2;
  delete s.set.touch; // dropped: the Computer/Mobile switch is gone and the layout is always mobile (see touchOn)
  // audio sliders: anything that isn't a real 0..1 number (missing on a pre-slider save, or hand-edited) falls back to
  // the default, then the on-off flag is re-derived so a muted category can never show a raised slider
@@ -1011,6 +1011,9 @@ const packProduct=k=>PRODUCTS.find(p=>p.pk==k);
 // "Space Pack" / "Gold Supporter Pack" - the one-line answer to "where does this locked item come from?"
 function packLabel(k){const p=packProduct(k);return p?p.n:''}
 // which WORLDS index a pack's bonus world is (see BONUS_WORLDS, defined further down alongside the More Worlds screen)
+// "Play" on an owned world: straight to that world's tab on the level select (tab order is 4 main worlds, Rockets,
+// then each OWNED bonus world - see ownedBonusWorlds). False if the world is not owned.
+function playBonusWorld(wd){const k=ownedBonusWorlds().findIndex(b=>b.wd==wd);if(k<0)return false;go('levels',{tab:5+k});return true}
 function bwWorldOf(p){const f=bonusFlagOf(p),b=BONUS_WORLDS.find(x=>x.flag==f);return b?b.wd:1}
 // "1 world · 8 levels" / "4 skins · 1 hat · 1 trail" / perks - what a pack card says under its name, counted from the
 // product itself so it can never fall out of step with what the product actually grants.
@@ -1124,11 +1127,9 @@ const WHEEL=[{n:'25 coins',k:'c',v:25,w:22,col:'#ffc93c'},{n:'2 gems',k:'g',v:2,
 // What a Mystery Item turns into once you own every free-wheel cosmetic: [coins, gems]. Deliberately bigger than the
 // 250-coin wedge - clearing the pool has to leave the rarest wedge the best one, not the worst. See awardWheel.
 const WHEEL_CLEAR=[400,6];
-// What the collect button on the prize card says. It used to be "Awesome!" every single time, on every prize, for
-// ever. Deliberately flat and confident rather than excited: the prize is the exciting part, the button is the thing
-// you press to put it away. No exclamation marks, nothing saccharine, nothing that sounds like it is congratulating
-// you on your own luck. pickWord() never returns the index it was given, so the same word never lands twice running.
-const COLLECT_WORDS=['Collect','Got it','Take it','Claimed','Nice','Add to bag','In the bag','Yours'];
+// What the button on the prize card says: CLAIM, and only CLAIM. The owner's call - a rotating word ("Take it",
+// "Collect", "In the bag"...) read as a different button every spin. The prize is paid when it is pressed (holdPrize).
+const COLLECT_WORDS=['CLAIM'];
 function pickWord(arr,prev){if(arr.length<2)return 0;let i;do i=Math.floor(Math.random()*arr.length);while(i===prev);return i}
 // Premium Wheel: PWHEEL_COST gems a spin. Every prize is exclusive to this wheel - no plain currency outcomes.
 // Same rule: w = share of the circumference, totals 100. Odds are shown in-game (App Store requirement).
@@ -1204,7 +1205,27 @@ function grantSetOrRefund(items,label,extraGems){const p={};
  items.forEach(it=>S.own[it.id]=1);p.items=items.map(it=>it.id);
  p.txt=items.length==1?itemLabel(items[0]):label;p.sub=items.length==1?('Exclusive '+catWord(items[0].cat)+' — only from this wheel'):('Exclusive '+label+' — '+items.map(it=>it.n).join(' + '));
  return p}
-// prizes are granted the moment you spin (closing the game mid-spin never loses them); the wheel just shows it
+// THE PRIZE WAITS FOR CLAIM. Where the wheel lands is still worked out when the spin starts (see startSpin), and the
+// prize is still written to the save right then - but held to one side as S.wpend, not added to the balances. The
+// owner's note: a ticket prize showed up in the ticket count the instant the wheel began to turn, which gave the
+// result away. holdPrize runs the award as before, records what it changed, puts the balances back, and CLAIM
+// (claimPrize) moves the difference in. Closing the game mid-spin still cannot lose a prize: the menu and the wheel
+// both pay out a held one on entry.
+const PEND_NUM=['coins','bank','earned','tix'];
+function holdPrize(award,i){claimPrize();
+ const b={own:Object.assign({},S.own),cards:Object.assign({},S.cards),chaos:S.chaos};PEND_NUM.forEach(k=>b[k]=S[k]);
+ const p=award(i),d={n:{},own:[],cards:{},chaos:0};
+ PEND_NUM.forEach(k=>{const v=S[k]-b[k];if(v)d.n[k]=v;S[k]=b[k]});
+ for(const k in S.own)if(S.own[k]&&!b.own[k])d.own.push(k);S.own=b.own;
+ for(const k in S.cards){const v=(S.cards[k]||0)-(b.cards[k]||0);if(v)d.cards[k]=v}S.cards=b.cards;
+ if(S.chaos&&!b.chaos)d.chaos=1;S.chaos=b.chaos;
+ S.wpend=d;save();return p}
+function claimPrize(){const d=S.wpend;if(!d)return false;delete S.wpend;
+ if(isObj(d.n))PEND_NUM.forEach(k=>{const v=+d.n[k];if(isFinite(v)&&v)S[k]=Math.max(0,(S[k]||0)+v)});
+ if(Array.isArray(d.own))d.own.forEach(k=>{if(ITEMS.some(it=>it.id==k))S.own[k]=1});
+ if(isObj(d.cards))for(const k in d.cards){const v=+d.cards[k];if(isFinite(v)&&v&&k in S.cards)S.cards[k]=clamp((S.cards[k]||0)+v,0,CARD_MAX)}
+ if(d.chaos)S.chaos=1;
+ save();return true}
 function awardWheel(i){const s=WHEEL[i],p={seg:i,k:s.k,txt:s.n,sub:''};
  if(s.k=='c'){S.coins+=s.v}else if(s.k=='g'){S.bank+=s.v;S.earned+=s.v}else if(s.k=='t'){S.tix+=s.v;p.txt='+'+s.v+' ticket'+(s.v>1?'s':'');p.sub=s.v>1?'That is '+s.v+' more spins':'Spin again!'}
  // one Power Card of whichever regular type you have least of (ties random), so the free route fills gaps rather than
@@ -5949,7 +5970,7 @@ function drawHUD(){const L=G.L,md=G.mode;
 const UI={list:[],prev:[],selId:null};
 function inR(m,b){return m.x>=b.x&&m.x<=b.x+b.w&&m.y>=b.y&&m.y<=b.y+b.h}
 // the first real option (never "< Back") starts selected on a fresh screen
-function button(id,x,y,w,h,label,o){o=o||{};UI.list.push({id,x,y,w,h,o});if(UI.selId==null&&id!='back')UI.selId=id;const sel=UI.selId==id;
+function button(id,x,y,w,h,label,o){o=o||{};UI.list.push({id,x,y,w,h,o,label});if(UI.selId==null&&id!='back')UI.selId=id;const sel=UI.selId==id;
  // sliders never breathe: a 5% pulse under a dragging finger makes the knob drift away from where it was grabbed
  ctx.save();ctx.translate(x+w/2,y+h/2);const sc=(sel&&!o.sld)?1.05+Math.sin(gtime*6)*0.01:1;ctx.scale(sc,sc);
  // PLATE. Was one flat rounded fill, which is what made a screenful of buttons read as a stack of identical stickers.
@@ -6167,7 +6188,7 @@ function remDraw(){if(!REM.cur||!remOn())return;const r=REM.cur,a=remA(),g=remRe
 
 // ================= SCREENS =================
 let SCR=null,fadeA=1,gtime=0;
-function go(name,arg){if(SCREENS[name]!==SCR)tReset();tapBlock=performance.now()+220;SCR=SCREENS[name];UI.selId=null;UI.clickId=null;UI.kb=false;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;MBG.n++;SLD.id=null;if(SCR.enter)SCR.enter(arg)}
+function go(name,arg){if(SCREENS[name]!==SCR)tReset();if(SCR&&SCR===SCREENS.wheel&&SCREENS[name]!==SCR&&S.wpend)claimPrize();tapBlock=performance.now()+220;SCR=SCREENS[name];UI.selId=null;UI.clickId=null;UI.kb=false;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;MBG.n++;SLD.id=null;if(SCR.enter)SCR.enter(arg)}
 function backBtn(){button('back',20,18,110,42,'< Back',{fs:18})}
 // ---- MENU BACKDROPS -------------------------------------------------------------------------------------------
 // The menu backdrop varies between visits instead of every screen owning one fixed world for ever ("click shop, then
@@ -6411,7 +6432,7 @@ function drawMiniWheel(bw,bh,sel){const r=MWR,TAU=Math.PI*2,sp=S.dev||S.tix>0,cx
   tixIcon(cx-r+12,cy-r+17,7);txt(t,cx-r+24,cy-r+18,14,'#ffd45e','left',false)}
  ctx.restore()}
 SCREENS.menu={enter(){musicPlay(0);TILT.nx=null;if(!this.b)this.b={x:480,y:VH-28,vx:0,vy:0,a:0,va:0,g:false,ox:0,oy:0,sq:0,idle:1.5};
-  this.bt=2.2;this.bl=null;this.bi=0;dailyTix();clubDaily();flushSaveMsgs()},
+  this.bt=2.2;this.bl=null;this.bi=0;claimPrize();dailyTix();clubDaily();flushSaveMsgs()},
  // toyGrab runs BEFORE uiNav on purpose - it is what decides who owns this frame's press. dt is CLAMPED AT BOTH ENDS:
  // two rAF callbacks can arrive with the same timestamp (it happens when the tab is refocused), which made dt exactly
  // 0 - and the drag branch divides by dt, so 0/0 turned the square's velocity into NaN and it vanished for the rest of
@@ -6629,8 +6650,8 @@ SCREENS.worlds={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;mus
    wrapText(main?bwIncludes(b,main):lv+' bonus levels',cw-26,13).slice(0,3).forEach((l,k)=>txt(l,x+cw/2,y+198+k*17,13,'#d8d5ea',undefined,false));
    const AY=y+262,BY=y+CH-12,slot=(BY-AY)/maxP;
    if(own||S.dev){const my=(AY+BY)/2;
-    txt(own?'OWNED':'DEV UNLOCK',x+cw/2,my-28,own?20:15,'#7bdc3b');
-    button('wp_'+b.wd,x+18,my-8,cw-36,42,'Play',{fs:20,bg:'#7bdc3b'})}
+    if(!own)txt('DEV UNLOCK',x+cw/2,my-28,15,'#7bdc3b');
+    button('wp_'+b.wd,x+18,own?my-21:my-8,cw-36,42,'Play',{fs:20,bg:'#7bdc3b'})}
    else{const k0=(maxP-ps.length)/2;
     ps.forEach((p,q)=>{const i=PRODUCTS.indexOf(p),sy=AY+(k0+q)*slot;
      button('wb_'+i,x+13,sy+4,cw-26,Math.min(42,slot-8),'',{bg:'#ffd45e',col:'#ffe9a8',draw:(w2,h2)=>{
@@ -6639,8 +6660,8 @@ SCREENS.worlds={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;mus
       txt(pr,w2/2-12,-1,15,'#7a3c00','right',false)}})})}});
   if(this.mt>0)textPlate(this.msg,VW/2,VH-108,15,'#ffd45e')},
  onBtn(id){if(id=='back')return go(this.from||'menu'); // 'levels', 'shop' (the Packs tab door) or the menu
-  if(id.startsWith('wp_')){const wd=+id.slice(3),k=ownedBonusWorlds().findIndex(b=>b.wd==wd);if(k>=0)return go('levels',{tab:5+k});return}
-  if(id.startsWith('wb_')){const p=PRODUCTS[+id.slice(3)];if(!p)return;if(prodOwned(p)){this.msg='You already own this';this.mt=1.5;return}
+  if(id.startsWith('wp_')){playBonusWorld(+id.slice(3));return}
+  if(id.startsWith('wb_')){const p=PRODUCTS[+id.slice(3)];if(!p)return;if(prodOwned(p)){if(!(p.pk&&playBonusWorld(bwWorldOf(p)))){this.msg='You already own this';this.mt=1.5}return}
    if(!buyProduct(p.id))noNativeBuy()}}};
 SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
   // THE TUTORIAL GATE, second half. This screen is the ONLY door into a story level, so guarding it here closes every
@@ -7390,8 +7411,8 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
     txt(th.n,0,-bh/2+114,13,'#6d6982','center',false);
     // what is actually in it, counted by kind - the one line a player needs before opening the detail panel
     packBlurb(p).forEach((l,i)=>txt(l,0,-bh/2+138+i*18,13,'#3f3b52','center',false));
-    ctx.fillStyle=own?'#9a98aa':'#27b865';rr(-52,bh/2-40,104,28,14);ctx.fill();
-    txt(own?'Owned':priceTxt(p),0,bh/2-26,16,'#fff','center',false)}})});
+    ctx.fillStyle='#27b865';rr(-52,bh/2-40,104,28,14);ctx.fill();
+    txt(own?'Play':priceTxt(p),0,bh/2-26,16,'#fff','center',false)}})});
   const s=UI.selId||'',p=this.panelProduct();
   if(!p){txt('PACKS',740,150,30,'#fff');
    wrapText('One bonus world plus its cosmetics. Buy once, keep forever.',330,16).forEach((l,i)=>txt(l,740,190+i*22,16,'#d8d5ea',undefined,false));
@@ -7477,7 +7498,8 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
     if(g){ctx.strokeStyle='#7bdc3b';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+cw2/2-13,y-16);ctx.lineTo(x+cw2/2-9,y-12);ctx.lineTo(x+cw2/2-2,y-21);ctx.stroke()}});
    {const b=packBlurb(p);txt(b[b.length>1?1:0],740,240,14,'#ffd45e',undefined,false)}
    const ln=wrapText(p.d,330,14);ln.slice(0,5).forEach((l,i)=>txt(l,740,264+i*19,14,'#d8d5ea',undefined,false));
-   txt(own?'Owned':priceTxt(p),740,366,26,own?'#b9b6c6':'#7bdc3b')}
+   if(own)button('playw_'+bwWorldOf(p),660,344,160,44,'Play',{fs:22,bg:'#7bdc3b',col:'#b6ff7a'});
+   else txt(priceTxt(p),740,366,26,'#7bdc3b')}
   else{gemShape(740,214,34,'#5ff4ff');
    const ln=wrapText(p.d,320,17);ln.forEach((l,i)=>txt(l,740,286+i*24,17,'#fff',undefined,false));
    txt(priceTxt(p),740,356,26,'#7bdc3b')}},
@@ -7531,7 +7553,9 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
   if(id=='restore'){if(!restorePurchases())noNativeBuy();return}
   if(id=='buytix'){if(buyTix()){sfx('buy');this.msg='+1 spin ticket';this.mt=1.5}else{sfx('no');this.msg='Not enough coins';this.mt=1.5}return}
   if(id=='devclub'){setClub(!clubOn());this.msg=clubOn()?'DEV: Club active':'DEV: Club off';this.mt=1.5;return}if(id=='terms')return openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');if(id=='manage'){try{if(window.HopNative&&HopNative.manageSubscriptions)return HopNative.manageSubscriptions()}catch(e){}return openURL('https://apps.apple.com/account/subscriptions')}if(id=='privacy')return openURL('https://l3dprints26.github.io/hopscraper/privacy.html');
-  if(id.startsWith('pr_')){const p=PRODUCTS[+id.slice(3)];if(prodOwned(p)){this.msg=p.type=='sub'?'You are already a member':'You already own this';this.mt=1.5;return}
+  if(id.startsWith('playw_')){playBonusWorld(+id.slice(6));return}
+  if(id.startsWith('pr_')){const p=PRODUCTS[+id.slice(3)];if(prodOwned(p)){if(p.pk&&UI.wasSel&&playBonusWorld(bwWorldOf(p)))return;
+    if(!p.pk){this.msg=p.type=='sub'?'You are already a member':'You already own this';this.mt=1.5}return}
    if(!cardPackRoom(p)){this.msg='Card stock full (max '+CARD_BUY_MAX+' each). Use some first';this.mt=2.5;sfx('no');return}
    return this.ask({p})}
   const it=ITEMS.find(i=>'it_'+i.id==id);if(!it)return;if(S.own[it.id]){S.eq[it.cat]=it.id;save();this.msg='Equipped!';this.mt=1.2;return}
@@ -7731,7 +7755,7 @@ function wheelIdle(dt){const W=SCREENS.wheel;if(!W||W.spin||W.rev||RM())return;
  const TAU=Math.PI*2,d=dt*(TAU/38);
  W.rot.r=(W.rot.r+d)%TAU;W.rot.p=(W.rot.p-d)%TAU} // the premium wheel turns the other way, as it always has
 SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
- enter(a){if(typeof a=='string')a={from:a};a=a||{};this.from=a.from||'menu';if(a.prem!=null)this.prem=!!a.prem;if(!pwOn())this.prem=false;this.spin=null;this.rev=null;this.modal=null;this.pa=0;this.pv=0;FX.length=0;musicPlay(0);UI.selId='spin'},
+ enter(a){if(typeof a=='string')a={from:a};a=a||{};this.from=a.from||'menu';if(a.prem!=null)this.prem=!!a.prem;if(!pwOn())this.prem=false;this.spin=null;this.rev=null;this.modal=null;this.pa=0;this.pv=0;FX.length=0;musicPlay(0);UI.selId='spin';claimPrize()},
  segs(){return this.prem?PWHEEL:WHEEL},
  update(dt){updParts(FX,dt);const m=this.prem?'p':'r',segs=this.segs(),sp=this.spin;
   const st=Math.min(dt,0.05);this.pv+=(-110*this.pa-10*this.pv)*st;this.pa+=this.pv*st;
@@ -7750,9 +7774,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   uiNav(this);
   if(pressed.ESC){if(this.modal){this.modal=null;UI.selId='spin'}else if(this.rev)this.onBtn('collect');else this.onBtn('back')}},
  finish(sp){const p=sp.prize,m=sp.prem?'p':'r';this.landed=this.landed||{};this.landed[m]=1;p.landed=wSegAt(this.rot[m],sp.prem?PWHEEL:WHEEL);
-  // the collect button said "Awesome!" on every prize you have ever won. One word per spin out of COLLECT_WORDS,
-  // never the same one twice running, so the tenth spin does not read like a recording of the first.
-  this.cwi=pickWord(COLLECT_WORDS,this.cwi);
+  this.cwi=0; // the button only ever says CLAIM (see COLLECT_WORDS)
   this.rev={t:-0.65,p,prem:sp.prem};this.last[m]=p;UI.selId='collect'; // negative t = a beat to watch the wheel land before the prize card covers it
   sfx('win');confetti(sp.prem?110:70);
   if(p.jack){sfx('ach');for(let j=0;j<3;j++)firework(rnd(160,VW-160),rnd(90,220))}else if(p.k=='L'&&!p.conv)firework(VW/2,150)},
@@ -7760,8 +7782,8 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
  // where it came to rest last time (it is never reset to a start angle), it decelerates, and the segment under the
  // pointer at the end IS the prize - read off the wheel by wSegAt, the same function the drawing uses.
  // The final angle is worked out up front only because the deceleration curve is deterministic: r1 is already decided
- // the moment the spin begins, so the outcome is still a consequence of the spin, and granting it immediately keeps
- // the old guarantee that closing the game mid-spin can never lose a prize.
+ // the moment the spin begins, so the outcome is still a consequence of the spin. It is saved straight away but HELD
+ // (holdPrize) until CLAIM, so the balances do not give the result away and closing the game mid-spin loses nothing.
  // rnd(0,TAU) on top of the whole turns makes the resting angle uniform around the circle, so each segment's real
  // chance is exactly its share of the circumference - which is exactly what is drawn and exactly what Odds claims.
  // award(i) is awardWheel or awardPremium: it takes the LANDED index, it never chooses one.
@@ -7772,7 +7794,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   // number - two spins in a row never run for the same length of time, which is half of why it reads as a real spin
   const d=(prem?5.6:5)+(dist/TAU)*0.33;
   this.rev=null;this.modal=null;this.tkSeg=wSegAt(r0,segs);
-  this.spin={t:0,d,r0,r1,prize:award(i),prem,seg:i};this.rot[m]=r0;sfx('click');sfx('air')},
+  this.spin={t:0,d,r0,r1,prize:holdPrize(award,i),prem,seg:i};this.rot[m]=r0;sfx('click');sfx('air')},
  // "Not now" is the default on the nogems popup - the Store must never be the pre-selected answer to "you are short on gems"
  openModal(k){this.modal={k,t0:gtime};UI.selId=k=='confirm'?'m_yes':'m_no';sfx(k=='nogems'?'no':'click')},
  spinPremium(){if(clubFreeSpin()){S.clubSpinWeek=weekKey();save();this.startSpin(true,awardPremium);return}
@@ -7881,7 +7903,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    nt.forEach((l,i)=>txt(l,VW/2,y+h-78-(nt.length-1)*19+i*19,14,'#b9b6c6',undefined,false));
    button('m_no',VW/2-80,y+h-60,160,44,'Close',{fs:20})}},
  onBtn(id){if(id=='back'){if(this.modal){this.modal=null;return}return go(this.from=='shop'?'shop':'menu')}
-  if(id=='collect'){this.rev=null;this.modal=null;UI.selId='spin';return}
+  if(id=='collect'){if(claimPrize())sfx('buy');this.rev=null;this.modal=null;UI.selId='spin';return}
   if(id=='mode_r'){this.prem=false;this.modal=null;UI.selId='spin';return}
   if(id=='mode_p'||id=='gopremium'){this.prem=true;this.modal=null;UI.selId='spin';return}
   if(id=='odds')return this.openModal('odds');
