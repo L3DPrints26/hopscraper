@@ -62,7 +62,7 @@ const CHANGELOG=[
  {v:'1.2',date:'November 2026',items:[
   'World 1 got a whole new look: brand new art, made in Blender.',
   'Every world has stuff in the air now: leaves, sparks, embers and ash, fireflies and more.',
-  'Unlocked a door and then died? It stays open when you respawn now.',
+  'Locked doors got fixed up: grab the key and the door slides into the wall, and it stays open even if you die.',
   'Daily Rewards! Build a 7-day streak for a big chest on Day 7. (They replace the daily ticket.)',
   'A brand new 3D logo on the title screen, the menu and the credits.',
   'The dev square in the credits got a lot bigger.',
@@ -5931,21 +5931,24 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
     ctx.globalAlpha=hot?0.85:0.5;ctx.strokeStyle=col;ctx.lineWidth=2.2;ctx.setLineDash([5,4]);rpath(px+2,py+2,TS-4,TS-4,6,6,6,6);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1}
    break}
   case'X':drawCrumble(L,ti,x,y,px,py);break;
-  // LOCKED DOOR. Two baked sprites per tile-role: v=0 is the LEAF (the door itself), v=1 is the JAMB it hangs in.
-  // Locked = the jamb is hidden behind a full-width leaf. Unlocked = the jamb stays and the leaf SWINGS: compressed
-  // horizontally about its own hinge edge and darkened as its face turns away from the light, ending as a thin
-  // edge-on sliver folded back against the frame - so the door visibly STANDS OPEN instead of blinking out of
-  // existence (the old open state was four dashed lines). Both sprites come out of tileSpr's cache and the swing is
-  // one drawImage under a transform, so nothing here allocates per frame.
+  // LOCKED DOOR. Locked = the leaf (v=0) fills the doorway. UNLOCKED = the leaf SLIDES AWAY INTO THE WALL and the
+  // doorway is left EMPTY (owner, after the swing version: "the door that requires the lock is still weird" - the swung
+  // leaf left a thin frame and a sliver standing in the gap, and a floor hatch kept a pale panel, so an open door still
+  // looked like something in the way). A tall door rises into the ceiling; a wide one (a floor/ceiling hatch) parts in
+  // the middle and each half slides into the wall beside it. Both are clipped to the doorway, so the leaf vanishes INTO
+  // the wall instead of over it, and once it's done nothing at all is drawn there. Collision never looked at this: the
+  // gap is open the moment the key is picked up (G.keyGot), the slide is only the picture catching up.
+  // Reduce Flashing & Motion: no slide, the doorway is simply already empty - the end state is identical either way.
   case'D':{const dm=doorMask(L,x,y);
    if(!G.keyGot){doorPart(ti,dm,0,px,py);break}
-   doorPart(ti,dm,1,px,py);
-   // Reduce Flashing & Motion: no swing, the door is simply already open - the end state is identical either way.
-   const k=RM()?1:clamp((G.t-(G.doorT||0))/0.5,0,1),e=1-(1-k)*(1-k)*(1-k),s=1-0.885*e,hx=(dm&4)?px+TS:px;if(k>=1)break; // fully open: just the frame - the leaf has swung out of the way
-
-   ctx.save();ctx.translate(hx,0);ctx.scale(s,1);ctx.translate(-hx,0);
-   doorPart(ti,dm,0,px,py);
-   ctx.globalAlpha=0.5*e;ctx.fillStyle='#0b0812';ctx.fillRect(px,py,TS,TS);ctx.globalAlpha=1;ctx.restore();break}
+   const k=RM()?1:clamp((G.t-(G.doorT||0))/0.45,0,1);if(k>=1)break;   // fully open: an empty doorway
+   const e=k*k*(3-2*k);
+   let a=0,b=0,l=0,r=0;while(tAt(L,x,y-1-a)=='D')a++;while(tAt(L,x,y+1+b)=='D')b++;while(tAt(L,x-1-l,y)=='D')l++;while(tAt(L,x+1+r,y)=='D')r++;
+   ctx.save();ctx.beginPath();
+   if(l+r>0&&a+b==0){const X0=(x-l)*TS,W=(l+r+1)*TS,lft=px+TS/2<=X0+W/2;   // a hatch: two halves into the side walls
+    ctx.rect(lft?X0:X0+W/2,py-6,W/2,TS+12);ctx.clip();ctx.translate((lft?-1:1)*e*W/2,0)}
+   else{const Y0=(y-a)*TS,H=(a+b+1)*TS;ctx.rect(px-6,Y0,TS+12,H);ctx.clip();ctx.translate(0,-e*H)}   // a door: up into the ceiling
+   doorPart(ti,dm,0,px,py);ctx.restore();break}
   case'~':{if(window.ART&&ART.lavaTop(th,px,py,t))break; // art pack: the Blender crest (the melt under it is in the chunk)
    const gld=th.deco==7; // Gilded Vale runs the same lava system, poured as molten GOLD (art only, see tileSpr's '~')
    // white-hot crest into a deep orange body: the Vale's tiles are yellow-gold, so the melt has to sit clearly HOTTER
@@ -8748,13 +8751,14 @@ SCREENS.credits={enter(){this.t=0;FX.length=0;musicPlay(7)},
  draw(){drawBG(WORLDS[4],gtime*18,0,gtime);drawParts(FX);backBtn();
   if(!(window.ART&&ART.logo(gtime,112,400,true)))txt('HOPSCRAPER',VW/2,74,52,'#ffd45e');
   uiPanel(VW/2-330,116,660,322,{r:22,rim:'#ffd45e'});
-  txt('DEVELOPER',VW/2,156,17,'#b9b6c6');txt('GamerCrafter',VW/2,192,40,'#ffffff');
-  txt('Design, level design, direction, testing',VW/2,224,15,'#d8d5ea',undefined,false);
-  ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(VW/2-260,248);ctx.lineTo(VW/2+260,248);ctx.stroke();
-  txt('BUILT WITH',VW/2,274,15,'#b9b6c6');txt('Claude  (Anthropic)',VW/2,302,24,'#8dd3ff');
-  txt('Code assistance under the developer’s direction',VW/2,330,14,'#d8d5ea',undefined,false);
+  txt('DEVELOPER',VW/2,150,17,'#b9b6c6');txt('GamerCrafter',VW/2,184,40,'#ffffff');
+  txt('Design, level design, direction, testing',VW/2,214,15,'#d8d5ea',undefined,false);
+  ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(VW/2-260,236);ctx.lineTo(VW/2+260,236);ctx.stroke();
+  txt('BUILT WITH',VW/2,260,15,'#b9b6c6');txt('Claude  (Anthropic)',VW/2,287,24,'#8dd3ff');
+  txt('Code assistance under the developer’s direction',VW/2,313,14,'#d8d5ea',undefined,false);
   const st=[LEVELS.length+' hand-built levels  ·  '+COURSES.length+' speed courses  ·  endless mode','Custom physics, sound effects and art','Music instruments: FluidR3 GM by Frank Wen (CC BY 3.0)','Built September 2026'];
-  st.forEach((l,i)=>txt(l,VW/2,362+i*21,14,'#9d9ab4',undefined,false));
+  // (tightened for the UI kit's panel: its rim sits ~8px inside the edge, and the old 362+i*21 put the last line on it)
+  st.forEach((l,i)=>txt(l,VW/2,342+i*20,14,'#9d9ab4',undefined,false));
   // THE DEV SQUARE (owner: 'noticeable, and centered, not off set, but it cant cover the text'). Big and dead centre
   // in the strip under the panel: the panel ends at y=438 and his crown tops out at ~445 even at the top of his hop,
   // so he never touches a line of text. A soft gold spotlight and a shadow make him the star of the screen; the Menu
