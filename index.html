@@ -3371,7 +3371,17 @@ function drawIris(){if(!G||!G.won||RM()||!(G.L.exit.y>0))return;const u=clamp((G
  const L=G.L,cx=L.exit.x*TS+12-G.cam.x,cy=L.exit.y*TS+6-G.cam.y,R=Math.hypot(Math.max(cx,VW-cx),Math.max(cy,VH-cy))+8,
   r=u<0.72?lerp(R,30,ease(u/0.72)):30*(1-ease((u-0.72)/0.28));
  ctx.fillStyle='rgb(14,11,28)';ctx.beginPath();ctx.rect(0,0,VW,VH);if(r>0.5)ctx.arc(cx,cy,r,0,PI2);ctx.fill('evenodd');
- if(r>0.5){ctx.strokeStyle=themeOf().acc;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(cx,cy,r,0,PI2);ctx.stroke()}}
+ if(r>0.5){ctx.strokeStyle=themeOf().acc;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(cx,cy,r,0,PI2);ctx.stroke()}
+ if(u>=1)G.irisShut=1}
+// the results boards after a win (clear / cdone / chaosdone). If the iris closed on the door, the board stays on that
+// same navy: the owner on the level popping back in behind the results - "the background goes back when the results
+// pop up". It is lit faintly from the middle in the world's accent so it isn't a flat sheet. Without the iris
+// (Reduce Motion, no door) it is the dimmed level as before, with dark = that dim.
+function winBack(dark){if(G&&G.irisShut){ctx.fillStyle='rgb(14,11,28)';ctx.fillRect(0,0,VW,VH);
+  const n=parseInt(themeOf().acc.slice(1),16),c=((n>>16)&255)+','+((n>>8)&255)+','+(n&255);
+  const g=ctx.createRadialGradient(VW/2,VH*0.42,20,VW/2,VH*0.42,VW*0.62);g.addColorStop(0,'rgba('+c+',.16)');g.addColorStop(1,'rgba('+c+',0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);return}
+ drawWorld();ctx.fillStyle='rgba(12,10,26,'+dark+')';ctx.fillRect(0,0,VW,VH)}
 
 // ================= ROCKETS + PORTALS =================
 const PCOL=['#35e0ff','#ff4fd8','#8cff4d','#ffb13b'];
@@ -7922,7 +7932,7 @@ SCREENS.courses={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('m
 
 SCREENS.cdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);if(r.best)confetti(70)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
- draw(){drawWorld();ctx.fillStyle='rgba(12,10,26,.5)';ctx.fillRect(0,0,VW,VH);uiPanel(VW/2-320,34,640,350,{r:24,rim:'#ffd45e'});drawParts(FX);const r=this.r,c=COURSES[r.i],rec=S.course[r.i]||{};
+ draw(){winBack(.5);uiPanel(VW/2-320,34,640,350,{r:24,rim:'#ffd45e'});drawParts(FX);const r=this.r,c=COURSES[r.i],rec=S.course[r.i]||{};
   txt('COURSE COMPLETE',VW/2,80,34,'#ffd45e');txt(c.n,VW/2,118,20,'#d8d5ea',undefined,false);
   txt(fmtT(r.t),VW/2,196,80,'#fff');
   if(r.best)txt('NEW PERSONAL BEST!',VW/2,258,26,'#7bdc3b');else txt('Your best: '+fmtT(rec.t),VW/2,258,20,'#b9b6c6');
@@ -7949,7 +7959,7 @@ SCREENS.chaosPick={enter(a){this.i=a.i;UI.selId=null;musicPlay(0)},
 
 SCREENS.chaosdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(50)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
- draw(){drawWorld();ctx.fillStyle='rgba(12,10,26,.5)';ctx.fillRect(0,0,VW,VH);uiPanel(VW/2-300,34,600,342,{r:24,rim:'#20b8c9'});drawParts(FX);const r=this.r;
+ draw(){winBack(.5);uiPanel(VW/2-300,34,600,342,{r:24,rim:'#20b8c9'});drawParts(FX);const r=this.r;
   txt('CHAOS CLEAR!',VW/2,80,34,'#20b8c9');txt(lvTitle(r.i),VW/2,118,20,'#d8d5ea',undefined,false);
   if(r.mod)txt(MODN[r.mod],VW/2,160,22,'#ff5c6c');
   txt(fmtT(r.time),VW/2,220,64,'#fff');
@@ -7971,7 +7981,7 @@ SCREENS.clear={enter(r){this.r=r;this.t=0;this.pl=[0,0,0];FX.length=0;if(r.first
  update(dt){this.t+=dt;const r=this.r;
   if(r.mode=='story')for(let k=0;k<3;k++)if(!this.pl[k]&&this.t>0.55+k*0.38){this.pl[k]=1;if(r.stars[k]){sfx('star',k);const x=VW/2+(k-1)*100,y=196;for(let i=0;i<(r.newStars[k]?36:14);i++){const a=Math.random()*7,sp=rnd(60,260);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l:0.8,ml:0.8,c:r.newStars[k]?'#ffd45e':'#ffffff',s:rnd(2,5),g:200,sh:'sq'})}}}
   updParts(FX,dt);if(this.t>0.3)uiNav(this);if(pressed.RST)this.onBtn('retry');else if(pressed.ESC)this.onBtn('levels')},
- draw(){drawWorld();const r=this.r,t=this.t;ctx.fillStyle='rgba(12,10,26,.6)';ctx.fillRect(0,0,VW,VH);
+ draw(){winBack(.6);const r=this.r,t=this.t;
   // (second pass) the panel drops in and settles with one overshoot; each star STAMPS down (see clearStar); each stat
   // row slides in from the left. Reduce Motion: the old ease, the old pop, rows simply appear.
   const rmc=RM(),k=rmc?ease(t/0.35):eob(t/0.42);ctx.save();ctx.translate(0,(1-k)*-60);ctx.globalAlpha=clamp(rmc?k:t/0.2,0,1);
