@@ -103,11 +103,14 @@ window.ART = (() => {
     if (QUAL && th.deco == 7) drawGoldRays(cx, t);
     (WP[ti].layers || LAYERS).forEach(([n, d, lift]) => {
       const img = im[n], h = img.naturalHeight * VH / 1080;
+      // 1px overlap: at a fractional x both tiles' edges went soft and the sky showed through as a thin light line where
+      // the picture repeats. The overlap alone hides it, so x stays fractional - rounding it made the slow home-screen
+      // scroll visibly step a pixel at a time
       let ox = -((cx * d) % VW); if (ox > 0) ox -= VW;
       const oy = lift - Math.max(-60, Math.min(60, pcy * d * .25));   // (the layers sit up behind the level)
       for (let x = ox; x < VW; x += VW) {
-        ctx.drawImage(img, x, oy + VH - h, VW, h);
-        if (oy < 0) ctx.drawImage(img, 0, img.naturalHeight - 2, img.naturalWidth, 2, x, oy + VH - 1, VW, 1 - oy);   // (its bottom edge carried on down to the floor)
+        ctx.drawImage(img, x, oy + VH - h, VW + 1, h);
+        if (oy < 0) ctx.drawImage(img, 0, img.naturalHeight - 2, img.naturalWidth, 2, x, oy + VH - 1, VW + 1, 1 - oy);   // (its bottom edge carried on down to the floor)
       }
     });
     if (QUAL) bgFx(th.deco, cx, cy, t);   // the world's own sky life (birds, sawdust, embers...) still drifts over it
