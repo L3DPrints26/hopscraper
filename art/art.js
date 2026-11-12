@@ -47,7 +47,9 @@ window.ART = (() => {
   const DOOR = [];   // the locked door, one picture per tile of it: dl_ leaf / dj_ jamb, column S/L/R, row S/T/M/B
   ['dl_', 'dj_'].forEach(k => ['S', 'L', 'R'].forEach(c => ['S', 'T', 'M', 'B'].forEach(r => DOOR.push(k + c + r))));
   const HZ = ['saw', 'lz_beam_p', 'lz_beam_c', 'lz_cap', 'key', 'lock', 'strap', 'strike', 'lava_body', 'lava_crest', 'gold_body', 'gold_crest',
-    'rk_box_s', 'rk_box_h', 'rk_tube', 'rk_yoke', 'rk_shot', 'rk_seek', 'vent', 'well'].concat(DOOR);
+    'rk_box_s', 'rk_box_h', 'rk_tube', 'rk_yoke', 'rk_shot', 'rk_seek', 'vent', 'well', 'bp_base', 'bp_cap'].concat(DOOR);
+  const BPC = [3, 4, 5, 6, 7, 8, 9];   // the bounce pad's spring, rendered at each of these lengths (game px)
+  BPC.forEach(n => HZ.push('bp_coil' + n));
 
   // ---- lazy packs ----
   // PK[key] = { im, left, done, t }. key is a world folder ('w3') or 'hz'. A pack is asked for on every draw that
@@ -88,6 +90,23 @@ window.ART = (() => {
   // ---- background: sky, then three layers sliding at different speeds ----
   // Never touches globalAlpha: climb mode cross-fades two skies by running this through a proxy ctx whose alpha it
   // owns (drawBGFade). Each layer is trimmed to the rows that have art in them and drawn bottom-aligned.
+  // Under each layer, down to the floor: its own bottom row's colour (averaged once), easing a little darker with depth
+  // like ground falling into shade. The art settles into that single colour on its last rows (art/bg5.js), so this
+  // carries on without a join; stretching the last rows instead smeared whatever stood on them into vertical streaks.
+  // [colour, colour 130 px further down], or null when the canvas won't hand pixels back (a file:// page).
+  const foot = img => {
+    if (img._foot === undefined) {
+      img._foot = null;
+      try {
+        const w = img.naturalWidth, c = document.createElement('canvas'); c.width = w; c.height = 1; const g = c.getContext('2d');
+        g.drawImage(img, 0, img.naturalHeight - 1, w, 1, 0, 0, w, 1); const d = g.getImageData(0, 0, w, 1).data; let r = 0, gr = 0, b = 0;
+        for (let i = 0; i < d.length; i += 4) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; }
+        const c3 = k => 'rgb(' + Math.round(r / w * k) + ',' + Math.round(gr / w * k) + ',' + Math.round(b / w * k) + ')';
+        img._foot = [c3(1), c3(.86)];
+      } catch (e) { }
+    }
+    return img._foot;
+  };
   A.bg = (th, cx, cy, t, hy) => {
     const ti = WORLDS.indexOf(th), p = world(ti); if (!p) return false;
     const im = p.im; if (!BG.every(n => ok(im[n]))) return false;
@@ -108,9 +127,11 @@ window.ART = (() => {
       // scroll visibly step a pixel at a time
       let ox = -((cx * d) % VW); if (ox > 0) ox -= VW;
       const oy = lift - Math.max(-60, Math.min(60, pcy * d * .25));   // (the layers sit up behind the level)
-      for (let x = ox; x < VW; x += VW) {
-        ctx.drawImage(img, x, oy + VH - h, VW + 1, h);
-        if (oy < 0) ctx.drawImage(img, 0, img.naturalHeight - 2, img.naturalWidth, 2, x, oy + VH - 1, VW + 1, 1 - oy);   // (its bottom edge carried on down to the floor)
+      for (let x = ox; x < VW; x += VW) ctx.drawImage(img, x, oy + VH - h, VW + 1, h);
+      if (oy < 0) {   // (carried on down to the floor)
+        const f = foot(img);
+        if (f) { const y0 = oy + VH - 1, g = ctx.createLinearGradient(0, y0, 0, y0 + 130); g.addColorStop(0, f[0]); g.addColorStop(1, f[1]); ctx.fillStyle = g; ctx.fillRect(0, y0, VW, 1 - oy); }
+        else for (let x = ox; x < VW; x += VW) ctx.drawImage(img, 0, img.naturalHeight - 1, img.naturalWidth, 1, x, oy + VH - 1, VW + 1, 1 - oy);
       }
     });
     if (QUAL) bgFx(th.deco, cx, cy, t);   // the world's own sky life (birds, sawdust, embers...) still drifts over it
@@ -259,6 +280,20 @@ window.ART = (() => {
   A.well = t => {
     const im = hzImg('well'); if (!im) return false;
     ctx.save(); if (QUAL && !RM()) ctx.rotate(t * .6); ctx.drawImage(im, -16, -16, 32, 32); ctx.restore();
+    return true;
+  };
+  // BOUNCE PAD, the tile at (px, py): the footing on the floor, the spring, the pink cap. drawWorld works the twang and
+  // hands it over: c = how far the cap is pushed down from rest (game px; below 0 = up past rest), wb = its rock
+  // (radians), sq = its squash (x scale). The spring is the rendered length nearest the gap it has to fill, stretched the
+  // last bit, so a slammed pad shows its coils bunched up. Cap top at rest is y 10.5 of the tile; the footing ends on y 24.
+  A.pad = (px, py, c, wb, sq) => {
+    const p = hz(); if (!p) return false; const im = p.im;
+    const L = 7 - c; let n = BPC[0]; for (const k of BPC) if (Math.abs(k - L) < Math.abs(n - L)) n = k;
+    const co = im['bp_coil' + n]; if (!ok(co) || !ok(im.bp_base) || !ok(im.bp_cap)) return false;
+    const s = L / n; ctx.drawImage(co, px + 4, py + 22 - 10.5 * s, 16, 12 * s);   // (bottom end tucked behind the footing)
+    ctx.drawImage(im.bp_base, px - 4, py + 18, 32, 8);
+    ctx.save(); ctx.translate(px + 12, py + 13 + c); if (wb) ctx.rotate(wb); if (sq !== 1) ctx.scale(sq, 1);
+    ctx.drawImage(im.bp_cap, -16, -5, 32, 10); ctx.restore();
     return true;
   };
   // MONSTERS (Monster Woods: zombie, ogre, ghost). Cut-out parts the game's own drawZombie / drawOgreStuff / drawGhosts

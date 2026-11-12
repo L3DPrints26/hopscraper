@@ -2401,8 +2401,10 @@ function chunkOf(L,ti,cx,cy){const key=ti+':'+cx+','+cy;/* theme in the key: End
  cv2=document.createElement('canvas');const CR=Math.max(1,Math.min(3,Math.round(KS||1)));cv2.width=CHP*CR;cv2.height=CHP*CR;const g=cv2.getContext('2d');const th=WORLDS[ti];
  withCtx(g,()=>{ctx.scale(CR,CR);ctx.translate(-cx*CHP,-cy*CHP);
   const x0=cx*CH,y0=cy*CH,x1=Math.min(L.W-1,x0+CH-1),y1=Math.min(L.H-1,y0+CH-1);
-  // things that sit ON a solid tile (belts, lava, pads) hide its grass top, so it isn't drawn as a stray strip underneath
-  const cover=(x2,y2)=>{const c2=tAt(L,x2,y2);return c2=='c'||c2=='C'||c2=='~'||c2=='B'};
+  // things that sit ON a solid tile (belts, lava) hide its grass top, so it isn't drawn as a stray strip underneath.
+  // A bounce pad keeps it: its footing stands on the floor's top like anything else, and with the top cut out the pad
+  // sat in a bare notch in the floor
+  const cover=(x2,y2)=>{const c2=tAt(L,x2,y2);return c2=='c'||c2=='C'||c2=='~'};
   const nN=(x2,y2)=>(tAt(L,x2-1,y2)=='N')+(tAt(L,x2+1,y2)=='N')+(tAt(L,x2,y2-1)=='N')+(tAt(L,x2,y2+1)=='N');
   for(let y=Math.max(0,y0);y<=y1;y++)for(let x=Math.max(0,x0);x<=x1;x++){const c=L.g[y][x],px=x*TS,py=y*TS;
    // no-jump zone continues behind spikes/pads placed inside it (drawn only; no gameplay change)
@@ -6263,15 +6265,22 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
    ctx.save();ctx.translate(px,py);ctx.fillStyle=gld?GOLDG:LAVG;ctx.beginPath();ctx.moveTo(0,TS);for(let i=0;i<=6;i++){const xx=i*4;ctx.lineTo(xx,7+Math.sin((px+xx)*0.25+t*4)*2.5)}ctx.lineTo(TS,TS);ctx.closePath();ctx.fill();
    ctx.fillStyle=gld?'rgba(255,255,235,.9)':'rgba(255,240,150,.8)';ctx.fillRect(((t*20+x*7)%20),8,3,2);ctx.restore();break}
   case'l':case'L':drawLaser(L,x,y,c,px,py);break;
-  // BOUNCE PAD (see ANIMATION). Hit: slammed down and a touch wider, then it TWANGS - springs up past its rest, back,
-  // and rings out over ~0.6s, the pad rocking as it goes. L.bt (the hit's G.t stamp) is the only clock; nothing stored.
-  // Reduce Motion: the old straight 0.25s return.
+  // BOUNCE PAD (see ANIMATION). A steel footing bolted to the floor, a coil spring, a pink rubber cap (art pack: the
+  // Blender parts, ART.pad; the code version below is the same three parts in the same places). Rest: cap top at y 10.5
+  // (the launch is at 13, step()), spring under it, footing on the floor (its bottom edge is the tile's).
+  // Hit: the cap is slammed down onto a bunched-up spring and squashes a touch wider, then it TWANGS - springs up past
+  // its rest, back, and rings out over ~0.6s, rocking as it goes. L.bt (the hit's G.t stamp) is the only clock; nothing
+  // stored. Reduce Motion: a straight 0.25s return, no overshoot, no rock.
   case'B':{const bt=L.bt[y*L.W+x],ag=bt!=null?G.t-bt:9;let c=0,wb=0;
-   if(ag<0.7){if(RM())c=ag<0.25?5*(1-ag/0.25):0;else{const e=Math.exp(-7*ag);c=5.6*e*Math.cos(28*ag);wb=0.12*e*Math.sin(21*ag)}}
-   const top=py+13+c,pw=22+Math.max(0,c)*0.6-Math.max(0,-c)*0.4;
-   ctx.fillStyle='#39364a';ctx.fillRect(px+2,py+20,20,4);ctx.strokeStyle='#bfc3d1';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px+6,py+20);ctx.lineTo(px+18,top+4+(16-top+py)*0.33);ctx.lineTo(px+6,top+4+(16-top+py)*0.66);ctx.lineTo(px+18,top+4);ctx.stroke();
-   if(wb){ctx.save();ctx.translate(px+12,top+1);ctx.rotate(wb);ctx.fillStyle='#ff5470';rr(-pw/2,-3,pw,6,3);ctx.fill();ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(-pw/2+3,-2,10,2);ctx.restore()}
-   else{ctx.fillStyle='#ff5470';rr(px+12-pw/2,top-2,pw,6,3);ctx.fill();ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(px+15-pw/2,top-1,10,2)}break}
+   if(ag<0.7){if(RM())c=ag<0.25?3.8*(1-ag/0.25):0;else{const e=Math.exp(-7*ag);c=3.8*e*Math.cos(28*ag);wb=0.12*e*Math.sin(21*ag)}}
+   const sq=1+0.015*c;if(window.ART&&ART.pad(px,py,c,wb,sq))break;
+   const ct=py+15+c;ctx.lineCap='round';ctx.lineWidth=1.5;   // spring: 2.5 turns, the far side of each turn darker
+   for(const fr of[0,1]){ctx.strokeStyle=fr?'#e4e8f0':'#7d8597';ctx.beginPath();for(let k=fr;k<5;k+=2){const ya=py+22+(ct-py-22)*k/5,yb=py+22+(ct-py-22)*(k+1)/5;ctx.moveTo(px+(k%2?17.6:6.4),ya);ctx.lineTo(px+(k%2?6.4:17.6),yb)}ctx.stroke()}
+   ctx.lineCap='butt';ctx.fillStyle='#636a7c';ctx.strokeStyle='#1b1a26';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(px+2.4,py+23.6);ctx.lineTo(px+21.6,py+23.6);ctx.lineTo(px+19.6,py+21);ctx.lineTo(px+4.4,py+21);ctx.closePath();ctx.fill();ctx.stroke();
+   ctx.fillStyle='#aeb4c6';ctx.fillRect(px+5,py+22,1.4,1.2);ctx.fillRect(px+17.6,py+22,1.4,1.2);
+   ctx.save();ctx.translate(px+12,py+13+c);if(wb)ctx.rotate(wb);ctx.scale(sq,1);
+   ctx.fillStyle='#383c4a';ctx.fillRect(-9.3,1.4,18.6,1.4);ctx.fillStyle='#ff5470';rr(-11,-2.5,22,4.5,1.5);ctx.fill();ctx.stroke();
+   ctx.fillStyle='rgba(255,220,228,.65)';ctx.fillRect(-9.5,-1.8,19,0.9);ctx.restore();break}
   }}
  // lava bubbles (see lavaBub) in a pass of their own over the crests, so the crests still go down as one run of the same
  // picture instead of being broken up by a bubble between every two of them
