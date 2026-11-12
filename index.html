@@ -2481,19 +2481,51 @@ const LAVA_MAX=3.6,LAVA_HGAIN=0.30;
 // which at RUN/TS is about 15 tiles of ground covered - assuming perfect run speed off a clean edge. 11 keeps a
 // quarter of that in reserve, so the footing guarantee never leaves the only way up parked across the shaft.
 const END_UP=7,END_REACT=4,END_BNC=14,END_SPAN=11;
+// ---- THE TOWER HAS NO TOP ----
+// It used to be one 12000-row tower generated up front, and above ~11990m it simply stopped: an empty box under a solid
+// ceiling. Now it is generated a chunk at a time, ahead of the player, and the level the game sees is a sliding WINDOW
+// of END_WIN rows of it. When the player gets within END_LOW rows of the window's top, endShift() rebuilds the window
+// higher up and moves everything in the world down by the same whole number of rows, so world coordinates never grow:
+// at 100,000m the square, the camera and the lava are at the same few thousand pixels they are at 50m.
+//  END_GB    the generator's own row frame. Its rows count DOWN from here as the tower goes up, so they stay positive
+//            (the section code's footing sentinels rely on that) for the first 10^12 metres.
+//  END_OH    the old tower's height, kept only as the reference the sky/parallax are measured from, so the background
+//            reads exactly as it always did.
+//  END_CHUNK rows per generated chunk. FIXED, so the tower is the same whoever triggers each chunk and when (Weekly).
+//  END_SEAM  rows of the previous chunk the next one re-checks: its rects can reach a few rows down into the old one,
+//            and a bounce pad's END_BNC chimney can reach up into the new one (see the fairness sweep).
+//  END_WIN / END_KEEP / END_LOW / END_AHEAD  window height; rows left under the player after a shift; shift when fewer
+//            than this many rows are left above the player; how far above the window the generator keeps ahead.
+const END_GB=2**40,END_OH=12000,END_CHUNK=128,END_SEAM=24,END_WIN=640,END_KEEP=96,END_LOW=176,END_AHEAD=512;
+// THE HOOK FOR THE "IT STARTS FREAKING OUT" PASS (owner, 2026-11-11: no top - high enough and weird things happen).
+// How weird things should be at climb h (metres): 0 up to WEIRD_START, 1 at WEIRD_FULL, then still growing slowly
+// (1+log10(h/WEIRD_FULL): 1.7 at 100km, 2.7 at 1000km) so a dev-mode video climb keeps getting stranger. Nothing
+// reads it yet - the effects come in their own pass. Pure function of height, so it is the same for every player.
+const WEIRD_START=1000,WEIRD_FULL=20000;
+function weirdLevel(h){if(!(h>WEIRD_START))return 0;if(h<WEIRD_FULL)return(h-WEIRD_START)/(WEIRD_FULL-WEIRD_START);return 1+Math.log10(h/WEIRD_FULL)}
 // H is the tower's real ceiling. It was 5200, i.e. the shaft physically ENDED at ~5180m in a sealed empty box - so
 // "max difficulty in the high thousands" was not even expressible. 12000 puts the END_RAMP cap (7500m) comfortably
 // inside the tower with room above it, and costs ~2x the generate time (measured: ~46ms -> ~105ms on desktop), paid
 // once behind the mode's fade-in.
-function genEndless(seed){const R=mulberry(seed);const W=24,H=12000;const r=[],m=[],g=[],cand=[];const ri=(a,b)=>a+Math.floor(R()*(b-a+1));
+// The generator's state, carried from chunk to chunk: the section cursor and everything the next section reads.
+// draws counts R() calls (the RNG is mulberry32, period 2^32 - see youtube/v3/ENDLESS-FACTS.md).
+function endStream(seed){const R0=mulberry(seed),R2=mulberry((seed^0x2c1b3c6d)|0),H=END_GB;
+ const st={seed,R2,gap:()=>36+Math.floor(R2()*24),H,y:H-9,last:'',calm:0,fy:H-3,fx:11,rp:0,r:[['#',1,H-3,22,2]],emit:0,tail:[],gl:H-4,need:0,draws:0,chunks:0};
+ st.R=()=>{st.draws++;return R0()};st.need=st.gap();return st}
+// One chunk: whole sections until the cursor has climbed END_CHUNK rows, then the fairness sweep and the gems for
+// them. Returns the new rects (in the order they apply), movers and gems, in END_GB rows.
+function endChunk(st,yMin){const R=st.R,W=24,H=st.H,r=st.r,m=[],g=[],cand=[];const ri=(a,b)=>a+Math.floor(R()*(b-a+1));
+ // the last section's rects stay in st.r (the next section's ledge placement reads them via rp); the rest are history
+ if(st.rp>0){r.splice(0,st.rp);st.emit-=st.rp;st.rp=0}
+ const e0=st.emit,y0=st.y;
  // fy = the highest row that currently has something standable on it. Every section has to leave footing within
  // END_UP of it (the footing guarantee at the bottom of the loop) - that is what stops an unclimbable shaft forming.
- r.push(['#',1,H-3,22,2]);let y=H-9,last='',calm=0,fy=H-3,fx=11,rp=0;
+ let y=st.y,last=st.last,calm=st.calm,fy=st.fy,fx=st.fx,rp=st.rp;const yEnd=Math.max(y-END_CHUNK,yMin==null?-Infinity:yMin); // yMin: the recorder's stop (genEndless)
  // VARIETY and INTENSITY are deliberately on different clocks. Which KINDS of section exist is gated on raw climb, so
  // the tower has shown you everything it can build within the first ~700m and stays interesting; how NASTY each one is
  // (speeds, spike-row odds, gap widths, crumble timers) rides d, which takes until 7500m to top out. Gating variety on
  // d as well would mean a player who reaches 1000m never meets a bounce shaft at all.
- while(y>14){const cl=H-9-y,d=endDiff(cl);const types=['plat','bar','saws','laser','orb','crum','plat'];if(cl>250)types.push('nz','crum');if(cl>700)types.push('saws','orb','bar');
+ while(y>yEnd){const cl=H-9-y,d=endDiff(cl);const types=['plat','bar','saws','laser','orb','crum','plat'];if(cl>250)types.push('nz','crum');if(cl>700)types.push('saws','orb','bar');
   // repeat-breaker: send a repeated section to 'crum', NOT to 'bar' - sending it to 'bar' was quietly making the
   // spike-corridor section the most common thing in the tower
   let tp=types[Math.floor(R()*types.length)];if(tp==last&&R()<0.7)tp=tp=='plat'?'crum':'plat';
@@ -2594,10 +2626,14 @@ function genEndless(seed){const R=mulberry(seed);const W=24,H=12000;const r=[],m
      for(let o=0;o<22&&!done;o++)for(const s2 of[mid-o,mid+o]){if(s2<1||s2>21)continue;if(!bl2[s2]&&!bl2[s2+1]){r.push(['=',s2,ly,2,1]);done=1;break}}}}
    if(nf>0&&nf<fy){fy=nf;fx=nx}}
   rp=r0;y-=sh}
- // occ is a flat Uint8Array of CHAR CODES, not a Map of strings. At H=12000 this map is ~150k entries and the sweep
- // below reads it millions of times; a Map of boxed string values was most of the generator's cost. 0 = empty air.
- {const occ=new Uint8Array(W*H);for(const q of r){const cc=q[0].charCodeAt(0),qx=q[1],qy=q[2],qw=q[3],qh=q[4];
-   for(let j=0;j<qh;j++){const b=(qy+j)*W+qx;for(let i=0;i<qw;i++)occ[b+i]=cc}}
+ st.y=y;st.last=last;st.calm=calm;st.fy=fy;st.fx=fx;st.rp=rp;st.chunks++;
+ const nr=r.slice(e0),clears=[];st.emit=r.length;
+ // occ: this chunk's rows plus END_SEAM rows of the one under it (st.tail holds every rect that touches those), as a
+ // flat Uint8Array of CHAR CODES over the band lo..hi. 0 = empty air (and so is everything above lo: not built yet).
+ let lo=y;for(const q of nr)if(q[2]<lo)lo=q[2];lo--;const hi=y0+END_SEAM;
+ {const BH=hi-lo+1,occ=new Uint8Array(W*BH),put=q=>{const cc=q[0].charCodeAt(0);
+   for(let j=0;j<q[4];j++){const yy=q[2]+j;if(yy<lo||yy>hi)continue;const b=(yy-lo)*W+q[1];for(let i=0;i<q[3];i++)occ[b+i]=cc}};
+  for(const q of st.tail)put(q);for(const q of nr)put(q);
   // ---- FAIRNESS SWEEP ----
   // Two things no single section can see, because they are about what ended up NEXT TO what once everything was down:
   //  1) a hazard in the body space DIRECTLY above somewhere you can land. You touch down already dead, with nothing to
@@ -2608,18 +2644,77 @@ function genEndless(seed){const R=mulberry(seed);const W=24,H=12000;const r=[],m
   // Both clear by pushing a '.' rect, which buildLevel applies in order like any other - the same trick the speed
   // courses already use to punch holes. One pass over the solid tiles, no rejection loop, so it cannot hang.
   // char codes, to match occ: 35 '#', 46 '.', 61 '=', 66 'B', 88 'X', 94 '^', 118 'v', 60 '<', 62 '>', 108 'l', 76 'L'
-  {const gt=(x,yy)=>(x<1||x>22)?35:(occ[yy*W+x]||46);
+  {const gt=(x,yy)=>(x<1||x>22)?35:(yy<lo||yy>hi)?46:(occ[(yy-lo)*W+x]||46);
    const lth=c=>c==94||c==118||c==60||c==62||c==108||c==76,std=c=>c==35||c==61||c==88||c==66;
-   const clr=(x,yy)=>{if(yy>0&&yy<H-1){occ[yy*W+x]=46;r.push(['.',x,yy,1,1])}};
-   const n0=r.length;
-   for(let k=0;k<n0;k++){const q=r[k];if(!std(q[0].charCodeAt(0)))continue;
-    for(let j=0;j<q[4];j++)for(let i=0;i<q[3];i++){const x=q[1]+i,yy=q[2]+j;if(x<1||x>22||yy<2)continue;
+   const clr=(x,yy)=>{if(yy>=lo&&yy<=hi&&yy<H-1){occ[(yy-lo)*W+x]=46;clears.push(['.',x,yy,1,1])}};
+   for(const q of st.tail.concat(nr)){if(!std(q[0].charCodeAt(0)))continue;
+    for(let j=0;j<q[4];j++)for(let i=0;i<q[3];i++){const x=q[1]+i,yy=q[2]+j;if(x<1||x>22||yy<lo||yy>hi)continue;
      const c=gt(x,yy);if(!std(c))continue;const a=gt(x,yy-1);if(lth(a)&&a!=94)clr(x,yy-1);
      if(c==66)for(let k2=1;k2<=END_BNC;k2++){const c2=gt(x,yy-k2);if(c2==35||c2==88)break;if(lth(c2))clr(x,yy-k2)}}}}
   // gems are rare up here: same candidate spots (same RNG, same tower), but only one every ~40-70m of climb, and only on an open tile
-  const R2=mulberry((seed^0x2c1b3c6d)|0),gap=()=>36+Math.floor(R2()*24);let last=H-4,need=gap();
-  for(const c of cand){const ch=occ[c[1]*W+c[0]];if(ch&&ch!=46)continue;if(last-c[1]<need)continue;g.push(c);last=c[1];need=gap()}}
- return{wd:0,n:'Endless',W,H,r,m,g,s:[11,H-4],e:[11,-1],rise:{d:3,v:0.8,endless:1},t:0}}
+  // (st.gl / st.need carry the spacing across chunks; the second RNG keeps gems off the tower's own sequence)
+  for(const c of cand){const ch=c[1]>=lo&&c[1]<=hi?occ[(c[1]-lo)*W+c[0]]:0;if(ch&&ch!=46)continue;if(st.gl-c[1]<st.need)continue;g.push(c);st.gl=c[1];st.need=st.gap()}}
+ const out=nr.concat(clears);
+ st.tail=st.tail.concat(out).filter(q=>q[2]<=st.y+END_SEAM);
+ return{r:out,m,g,lo}}
+// The whole tower up to `rows` metres as one plain level def (rows 0..rows-1, start floor at the bottom, exactly the
+// old layout), recorded off the same stream the game plays. For the headless tools (smk/endless.js, smk/climbbot.js),
+// which want one big static level; the game itself never builds this - it plays the window (endLevel).
+function genEndless(seed,rows){rows=rows||END_OH;const st=endStream(seed),off=END_GB-rows,r=[],m=[],g=[];
+ // (sections stop at row 14, where the old one-shot tower's did)
+ while(st.y>off+14){const c=endChunk(st,off+14);for(const q of c.r)r.push([q[0],q[1],q[2]-off,q[3],q[4]]);
+  for(const q of c.m){const k=q.slice();k[2]-=off;if(k[0]=='saw')k[4]-=off;if(k[2]>0)m.push(k)}
+  for(const q of c.g)if(q[1]-off>0)g.push([q[0],q[1]-off])}
+ return{wd:0,n:'Endless',W:24,H:rows,r,m,g,s:[11,rows-4],e:[11,-1],rise:{d:3,v:0.8,endless:1},t:0,draws:st.draws}}
+
+// ---- THE WINDOW ----
+// es (on L.es) is the run's tower: the stream, the window's top row (END_GB frame), every rect/mover/gem generated
+// that has not yet scrolled out below it, and the gems already picked up (by tower position, so a rebuild can't
+// bring one back). endBuildWin turns the rows top..top+END_WIN-1 into an ordinary level with buildLevel - every
+// structure the rest of the game reads (L.g, L.cr, L.lo, L.dyn, movers, gems) comes out exactly as for any level.
+function endLevel(seed){const st=endStream(seed),es={st,top:END_GB-END_WIN,rects:[],m:[],g:[],got:new Set(),start:END_GB-4,shifts:0,rise:{d:3,v:0.8,endless:1}};
+ while(st.y>es.top-END_AHEAD)endPull(es);
+ return endBuildWin(es,null,0)}
+function endPull(es){const c=endChunk(es.st);for(const q of c.r)es.rects.push(q);for(const q of c.m)es.m.push(q);for(const q of c.g)es.g.push(q)}
+function endBuildWin(es,old,S){const top=es.top,bot=top+END_WIN-1,r=[],m=[],g=[];
+ // drop what has scrolled out under the window: it is never coming back (the lava is under it)
+ es.rects=es.rects.filter(q=>q[2]<=bot);es.m=es.m.filter(q=>q[2]<=bot);es.g=es.g.filter(q=>q[1]<=bot);
+ for(const q of es.got){const gy=+q.split(',')[1];if(gy>bot)es.got.delete(q)}
+ for(const q of es.rects)if(q[2]+q[4]-1>=top)r.push([q[0],q[1],q[2]-top,q[3],q[4]]);
+ for(const q of es.m)if(q[2]>=top){const k=q.slice();k[2]-=top;if(k[0]=='saw')k[4]-=top;m.push(k)}
+ for(const q of es.g)if(q[1]>=top&&!es.got.has(q[0]+','+q[1]))g.push([q[0],q[1]-top]);
+ // buildLevel opens the start tile, so once the start floor has scrolled out the def points it at the border corner
+ const sy=es.start-top,inWin=sy>0&&sy<END_WIN-1;
+ const L=buildLevel({wd:0,n:'Endless',W:24,H:END_WIN,r,m,g,s:inWin?[11,sy]:[0,0],e:[11,-1],rise:es.rise,t:0},{skipBlocked:true});
+ // the height formula (step) and the sky are both measured off these, so they carry on through a shift unchanged
+ L.es=es;L.start={x:11,y:sy};L.vy0=(top-END_GB+END_OH)*TS;
+ if(old){
+  // crumbling blocks mid-crumble keep their state, one tower row = S window rows lower
+  for(const c of old.crl)if(c.s){const n=L.cr[(c.y+S)*L.W+c.x];if(n){n.s=c.s;n.t=c.t}}
+  // ...and so do the movers' animation states (a saw's smear and turn sparks live on its object as _-fields)
+  {const D=S*TS,key=m=>m.t=='orb'?'o'+m.cx+':'+m.cy+':'+m.r:m.t+m.ax+':'+m.ay+':'+m.bx+':'+m.sp,mp=new Map();
+   for(const m of old.movers){const k=m.t=='orb'?'o'+m.cx+':'+(m.cy+D)+':'+m.r:m.t+m.ax+':'+(m.ay+D)+':'+m.bx+':'+m.sp;mp.set(k,m)}
+   for(const m of L.movers){const o=mp.get(key(m));if(o)for(const k in o)if(k[0]=='_')m[k]=k=='_py'&&o[k]!=null?o[k]+D:o[k]}}
+  // the tile canvases already drawn around the player are still right: same tiles, S rows (S/CH whole chunks) lower.
+  // Only the window's edge chunks are redrawn (its top and bottom rows are walls in one window and tower in the next).
+  if(S%CH==0){const dc=S/CH,nc=END_WIN/CH;for(const [k,cv] of old.chunks){const a=k.indexOf(':'),b=k.indexOf(',');const ti=k.slice(0,a),cx=k.slice(a+1,b),cy=+k.slice(b+1);
+   if(cy>=1&&cy+dc>=1&&cy+dc<=nc-2&&cy<=nc-2)L.chunks.set(ti+':'+cx+','+(cy+dc),cv)}}}
+ return L}
+// once per physics step (top of step()): keep the stream ahead, and shift the window when the player nears its top
+function endFeed(){const L=G.L,es=L.es,p=G.player;if(!p)return;
+ // one chunk per step at most, so generating the tower costs a millisecond here and there instead of a stall
+ if(es.st.y>es.top-END_AHEAD)endPull(es);
+ if(p.y<END_LOW*TS)endShift()}
+// Move the window up S rows: rebuild it there, then move everything that lives in world coordinates down by S rows.
+// S is a whole number of tile chunks (CH), so the tile canvases carry over (see endBuildWin).
+function endShift(){const L=G.L,es=L.es,p=G.player;
+ const S=Math.ceil((END_WIN-END_KEEP-Math.floor(p.y/TS))/CH)*CH,D=S*TS;if(S<=0)return;
+ for(const gm of L.gems)if(gm.got)es.got.add(Math.round((gm.x-12)/TS)+','+(Math.round((gm.y-12)/TS)+es.top));
+ es.top-=S;while(es.st.y>es.top-32)endPull(es); // a god-mode flight can outrun the trickle above: never build past the stream
+ const L2=endBuildWin(es,L,S);G.L=L2;es.shifts++;updMovers(L2,G.t*G.spd); // movers are a pure function of time: place them now, not a step later
+ p.y+=D;if(p.py!=null)p.py+=D;G.cam.y+=D;G.lavaY+=D;if(G.spawnY!=null)G.spawnY+=D;if(G.popY!=null)G.popY+=D;
+ if(G.checkpoint)G.checkpoint.y+=S;for(const q of G.parts)q.y+=D;
+ if(G.an){G.an.ap+=D;for(const f of G.an.fly)f.y+=D}}
 
 // ================= SPEED COURSES =================
 const COURSES=[
@@ -2825,7 +2920,7 @@ const TUT={wd:0,n:'Tutorial',W:112,H:22,t:60,s:[3,18],e:[108,18],k:[[33,18]],key
   [55,61,'Saws hurt. Wait for it to move, then go.',null],[62,66,'Bounce pads launch you way up. Try it!',null],[67,79,'Lava = instant ouch. Cracked blocks fall after you step on them.',null],
   [80,91,'Grab the key to open the gold door.',null],[92,99,'Lasers blink. Go when they turn off.',null],[100,105,'Arrow floors push you along.',null],[106,111,"That's it! Touch the door to finish.",null]]};
 function startTutorial(){const L=buildLevel(TUT);G=newG({mode:'tut',idx:-1,L,intro:0,tipT:0});spawn();updCam(0,true);enterPlay(0)}
-function startEndless(daily){TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?climbWeek()*7919+20261:(Math.random()*1e9|0);const def=genEndless(seed);const L=buildLevel(def,{skipBlocked:true});
+function startEndless(daily){TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?climbWeek()*7919+20261:(Math.random()*1e9|0);const L=endLevel(seed);
  G=newG({mode:daily?'daily':'endless',idx:-1,L,lavaY:(L.start.y+7)*TS,tipT:6,dailyDay:daily?weekStr():''});
  spawn();updCam(0,true);enterPlay(SONG_CLIMB)}
 // HARD MODE: one air jump instead of two, plus a stack of modifiers per level
@@ -4233,7 +4328,7 @@ function updChests(L,dt){if(!L.chests||!L.chests.length)return;let done=false;co
     if(ch.pay<=0&&ch.gpay<=0&&!ch.fly.length)done=true}}}
  if(done)save()}                                              // one save per finished stream, not one per coin
 
-function step(dt){const L=G.L,p=G.player;G.t+=dt;traceTick(dt);
+function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(dt);
  updMovers(L,G.t*G.spd);updRockets(L,dt);updRovers(L,dt);updAsteroids(L,dt);updOgres(L);updGhosts(L,dt);updPlats(L,G.t*G.spd);updCrumble(L,dt);updLava(dt);updChests(L,dt);
  if(L.exit.y>0&&Math.random()<9*dt)G.parts.push({x:L.exit.x*TS+rnd(5,19),y:L.exit.y*TS+20,vx:0,vy:rnd(-50,-20),l:0.8,ml:0.8,c:'#ffffff',s:2,g:0,sh:'sq'}); // exit sparkles (~9/s)
  p.px=p.x;p.py=p.y; // previous position for render interpolation
@@ -4723,6 +4818,8 @@ function uiFontsIn(){try{dropBakes();
 function rr(x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
 // sh (default on): small type gets a soft drop shadow; display type (28px+) gets the wordmark's treatment instead - a
 // thick ink outline and a little extruded edge under it - which is what keeps a white or gold title legible on every sky.
+// the biggest font size (at most `size`, at least 10) at which s fits in w px - for numbers with no upper limit (Endless)
+function fitPx(s,size,w){ctx.font=fontOf(size);const m=ctx.measureText(s).width;return m<=w?size:Math.max(10,Math.floor(size*w/m))}
 function txt(s,x,y,size,col,align,sh){ctx.font=fontOf(size);ctx.textAlign=align||'center';ctx.textBaseline='middle';
  if(sh!==false){if(size>=DISPLAY_PX){inkText(s,x,y,size);}else{ctx.fillStyle='rgba(20,14,40,.42)';ctx.fillText(s,x+1,y+2.5)}}
  ctx.fillStyle=col||'#fff';ctx.fillText(s,x,y)}
@@ -6176,7 +6273,7 @@ function fxBake(k){const key='fx_'+k;let c=SPR.get(key);if(c)return c;c=document
  SPR.set(key,c);return c}
 function fxImg(n,fb){const a=window.ART&&ART.IM&&ART.IM[n];return a&&a.complete&&a.naturalWidth?a:fxBake(fb)}
 function drawFX(near,th){if(!QUAL||RM()||!th)return;const set=FXK[th.deco];if(!set)return;
- const cx=G.cam.x,cy=G.cam.y,t=gtime,M=40,W=VW+2*M,H=VH+2*M;let j=near?30:0;
+ const cx=G.cam.x,cy=G.cam.y+(G.L.vy0||0),t=gtime,M=40,W=VW+2*M,H=VH+2*M;let j=near?30:0; // vy0: see drawWorld
  ctx.save();
  for(const [k,nf,nn] of set){const n=near?nn:nf;
   for(let i=0;i<n;i++,j++){const b=FXS[j%48],z=near?1.25+b.d*.75:.35+b.d*.5,par=near?.55:.04+b.d*.08;
@@ -6197,8 +6294,9 @@ function drawFX(near,th){if(!QUAL||RM()||!th)return;const set=FXK[th.deco];if(!s
  ctx.restore()}
 
 function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf(th));
- {const cl=G.mode=='endless'||G.mode=='daily',hy=cl?G.cam.y-(L.H*TS-VH):undefined;
-  if(cl)drawBGFade(climbSky(),G.cam.x,G.cam.y,gtime,hy);else drawBG(th,G.cam.x,G.cam.y,gtime,hy);drawFX(0,th);}
+ // vcy: the camera in the old tower's coordinates (L.vy0, see endBuildWin), so a window shift moves nothing back here
+ {const cl=G.mode=='endless'||G.mode=='daily',vcy=G.cam.y+(L.vy0||0),hy=cl?vcy-((L.vy0!=null?END_OH:L.H)*TS-VH):undefined;
+  if(cl)drawBGFade(climbSky(),G.cam.x,vcy,gtime,hy);else drawBG(th,G.cam.x,G.cam.y,gtime,hy);drawFX(0,th);}
  ctx.save();let sx=0,sy=0;if(G.shake>0.3){sx=rnd(-G.shake,G.shake);sy=rnd(-G.shake,G.shake)}
  ctx.translate(Math.round(-G.cam.x+sx),Math.round(-G.cam.y+sy));
  const x0=Math.max(0,Math.floor(G.cam.x/TS)-1),x1=Math.min(L.W-1,Math.floor((G.cam.x+VW)/TS)+1),y0=Math.max(0,Math.floor(G.cam.y/TS)-1),y1=Math.min(L.H-1,Math.floor((G.cam.y+VH)/TS)+1);
@@ -6910,7 +7008,9 @@ function drawHint(){const g=hintGeom();if(!g)return;ctx.save();ctx.globalAlpha=c
  chip(VW/2-g.w/2,g.y,g.w,g.h,{r:Math.min(18,g.h/2),fill:'rgba(37,31,68,.92)'});
  g.lines.forEach((l,i)=>txt(l,VW/2,g.y+18+i*22,15,'#fff','center',false));ctx.restore()}
 function drawHUD(){const L=G.L,md=G.mode;
- if(md=='endless'||md=='daily'){hudPill(HUDX,10,230,40);txt(G.height+'m',HUDX+18,31,26,'#fff','left');txt(md=='daily'?'WEEKLY':'BEST '+S.endBest+'m',HUDX+116,31,15,'#ffd45e','left');
+ if(md=='endless'||md=='daily'){hudPill(HUDX,10,230,40);
+  // the tower has no top, so neither do these numbers: past ~5 digits they shrink to fit their half of the pill
+  {const hs=G.height+'m',bs=md=='daily'?'WEEKLY':'BEST '+S.endBest+'m';txt(hs,HUDX+18,31,fitPx(hs,26,92),'#fff','left');txt(bs,HUDX+116,31,fitPx(bs,15,106),'#ffd45e','left')}
   {const A=G.an,b=A?A.gb[0]||0:0;hudPill(VW-140,10,128,40);ctx.save();ctx.translate(VW-116,30);if(b>0)ctx.scale(1+0.5*b,1+0.5*b);gemShape(0,0,9,'#5ff4ff');ctx.restore();
    txt('x '+(G.gemsRun-(A?A.gf:0)),VW-98,31,20,'#fff','left')}
   const dist=Math.max(0,Math.floor((G.lavaY-(G.player.y+16))/TS));hudPill(VW/2-90,12,180,30);txt('LAVA '+dist+'m below',VW/2,27,15,dist<5?'#ff6b4a':'#ffd2b0')}
@@ -6948,7 +7048,7 @@ function drawHUD(){const L=G.L,md=G.mode;
   if(L.coins.length){const cb=A?A.cb:0;hudPill(VW-432,12,108,30);
    ctx.save();ctx.translate(VW-412,27);if(cb>0)ctx.scale(1+0.4*cb,1+0.4*cb);coinIcon(0,0,9,cb*6);ctx.restore();
    ctx.save();ctx.translate(VW-396,28);if(cb>0)ctx.scale(1+0.15*cb,1+0.15*cb);txt((G.coinsRun-(A?A.cf:0))+' / '+L.coins.length,0,0,16,cb>0.3?'#ffe9a0':'#fff','left');ctx.restore()}}
- if(md=='endless'||md=='daily'){hudPill(VW-262,10,112,40);coinIcon(VW-238,30,10,0);txt('+'+Math.floor(G.height/5),VW-220,31,20,'#fff','left')}
+ if(md=='endless'||md=='daily'){hudPill(VW-262,10,112,40);coinIcon(VW-238,30,10,0);{const cs='+'+Math.floor(G.height/5);txt(cs,VW-220,31,fitPx(cs,20,66),'#fff','left')}}
  if(!S.set.music)txt('music off (M)',touchOn()?VW-130:VW-60,md=='story'||md=='hard'||md=='speed'||md=='hspeed'?132:58,14,'rgba(255,255,255,.55)');
  drawHint();
  drawNoteCard();
