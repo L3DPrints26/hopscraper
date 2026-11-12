@@ -61,6 +61,7 @@ const APP_VER='1.2';
 const CHANGELOG=[
  {v:'1.2',date:'November 2026',items:[
   'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten. The Rival matches your pace.',
+  'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
   'World 1 got a whole new look: brand new art, made in Blender.',
   'Every world has stuff in the air now: leaves, sparks, embers and ash, fireflies and more.',
@@ -510,8 +511,8 @@ function vnum(k,d){const v=S.set[k];return (typeof v=='number'&&isFinite(v))?cla
 // sits ABOVE the effects bus and the effects themselves were pulled down individually on top of that (see SFX).
 const VMUS=0.52,VSFX=0.42,VUI=0.34;
 function applyVol(){if(!AC)return;const m=vnum('vmas',1);
- musGain.gain.value=(S.set.music?1:0)*vnum('vmus',0.8)*m*VMUS;
- sfxGain.gain.value=(S.set.sfx?1:0)*vnum('vsfx',0.8)*m*VSFX;
+ musGain.gain.value=(S.set.music?1:0)*vnum('vmus',0.8)*m*VMUS*WZ.a.mus; // WZ.a: THE WEIRD STUFF's night / silence (1 everywhere else)
+ sfxGain.gain.value=(S.set.sfx?1:0)*vnum('vsfx',0.8)*m*VSFX*WZ.a.sfx;
  if(uiGain)uiGain.gain.value=(S.set.ui?1:0)*vnum('vui',0.8)*m*VUI}
 function tone(f,d,type,v,slide,delay,dest,det){if(!AC)return;const t=AC.currentTime+(delay||0),vol=v||0.2;
  const o=AC.createOscillator(),g=AC.createGain();o.type=type||'triangle';if(det)o.detune.value=det;
@@ -2716,6 +2717,322 @@ function endShift(){const L=G.L,es=L.es,p=G.player;
  if(G.checkpoint)G.checkpoint.y+=S;for(const q of G.parts)q.y+=D;
  if(G.an){G.an.ap+=D;for(const f of G.an.fly)f.y+=D}}
 
+// ================= THE WEIRD STUFF =================
+// Owner (2026-11-11): "there shouldn't BE a top, it should just get so high on endless that it just starts freaking
+// out, weird things start happening." The tower streams forever (THE WINDOW, above), so instead of an ending there is a
+// ladder of STOPS. Each one eases in over WZ_RAMP metres (never a snap), hits hardest right after you reach it (the
+// burst, wzB: ~3.5 s) and then settles, and they stack: from 15 km everything is on at once and keeps escalating with
+// weirdLevel() (wzE). Endless and the Weekly Climb both get it (they share the generator); nothing else does.
+//     250 m  NIGHT        the sky darkens, stars come out, the music drops
+//     500 m  CLOUDS       a cloud layer below you, and wind gusts telegraphed by streaks           (gameplay: wind)
+//     750 m  GOLD         every metre from here pays double coins (endCoins); a gold tint and glints
+//    1000 m  GLITCH       blocks flash another world's tiles for a frame or two, the counter misreads then corrects
+//    1500 m  LOW GRAVITY  floatier, higher jumps; bounce pads keep their exact height              (gameplay)
+//    2000 m  SPACE        black sky, stars, the Earth far below and sinking. The lava keeps coming.
+//    3000 m  DRAIN        everything grey but the square; anything that kills you is tinted red
+//    5000 m  BREAKS       hitbox outlines, wireframe blocks in places, the game's own source behind you
+//    7500 m  SILENCE      the music cuts, a faint whine, everything that drifted stops drifting
+//   10000 m  VOID         white, and a copycat square that follows where you were a moment ago
+//   15000 m+ EVERYTHING   controls flip and gravity flips (both telegraphed), colours invert (a slow wipe), the counter
+//                         shows garbage, the screen tears; more often, and more copycats, the higher you go  (gameplay)
+// SAFETY. No flashing faster than 3 a second anywhere: every abrupt change goes through wzFlash(), which allows one per
+// 0.45 s. Reduce Motion gets calm versions (no tear, no invert, a glitch fades instead of flickering); Low graphics
+// (QUAL 0) skips the full-screen blends. The DATA never changes: G.height, saves, scores and coins are exact, and the
+// glitches only change what is drawn. The gameplay effects (wzPhys) are pure functions of G.height and G.t plus four
+// numbers on G (wzc/wzcN/wzg/wzgN), so they are the same for everyone on a Weekly and smk/climbbot.js's snapshots carry
+// them; each one is fair by construction (see its constants) and checked with `node smk/climbbot.js weird`.
+// Everything else is cosmetic state in WZ, advanced once a frame in wzUpdate and only READ while drawing, so the same
+// frame drawn twice is the same picture (smk/endstream.js's shift-seam check relies on it).
+const WZ_STOPS=[250,500,750,1000,1500,2000,3000,5000,7500,10000,15000],WZ_RAMP=[30,30,20,25,30,40,40,40,30,50,50],WZ_GOLD=750;
+// WIND: one gust every WZ_WIND_P s, its streaks starting WZ_WIND_TELL s before it blows, at most WZ_WIND_V px/s (a run is
+// 250). It only pushes while you are in the air (standing still is always safe), it does NOT push while you hold the
+// other way (so steering against it you move exactly as you would without it: it can only add to where you can get,
+// never take a spot away - random play found a drop through a laser curtain a gust made a pixel too late), and never
+// INTO a hazard: a push that would touch one is cancelled for that step (step()).
+const WZ_WIND_P=7.5,WZ_WIND_TELL=1.1,WZ_WIND_V=42;
+// LOW GRAVITY: only the pull on the way UP while you hold jump is lighter (x0.8), so a held jump floats 25% higher
+// (3.6 -> 4.5 tiles, all three jumps 9.6 -> 12.0) and every ledge the generator guarantees stays in reach. Everything
+// else is exactly as it was: the same take-off speeds, the same fall (a first version slowed the fall too, and in
+// random play that made a square already dropping through a laser curtain arrive after it switched back on), and bounce
+// pads untouched, so a launch still peaks where the END_BNC chimney check expects. Let go of jump and it's normal.
+const WZ_LOWG=0.2;
+// CONTROL FLIP (15 km+): left and right swap. Warned 1.4 s ahead (two arrows swapping over the square), lasts 2.6 s,
+// and it only ever STARTS and ENDS while you are standing - it can never reverse a jump you are already in.
+const WZ_CF_TELL=1.4,WZ_CF_LEN=2.6;
+// GRAVITY FLIP (15 km+): warned 1.3 s ahead (chevrons rising under the square), then for up to 1.2 s you float UP at no
+// more than WZ_GF_VMAX px/s - and only into space checked clear of every hazard, bounce pad, saw path and orb ring 6
+// tiles up. If anything like that comes within 2.5 tiles above, it ends at once (normal gravity stops 140 px/s in 7 px).
+const WZ_GF_TELL=1.3,WZ_GF_LEN=1.2,WZ_GF_NEG=0.4,WZ_GF_VMAX=140;
+const wzSm=u=>{u=u<0?0:u>1?1:u;return u*u*(3-2*u)};
+// how far into stop i height h is: 0 below it, easing to 1 over its WZ_RAMP metres
+function wzK(h,i){const a=WZ_STOPS[i],r=WZ_RAMP[i];if(!(h>a))return 0;if(h>=a+r)return 1;return wzSm((h-a)/r)}
+function wzOn(){return!!G&&(G.mode=='endless'||G.mode=='daily')&&!!G.L&&!!G.L.rise&&!!G.L.rise.endless}
+// escalation past 15 km: 1 there, then weirdLevel's own curve (1.36 at 25 km, 1.66 at 50 km, 1.96 at 100 km...)
+const WZ_E0=weirdLevel(15000);
+function wzE(h){return 1+Math.max(0,weirdLevel(h)-WZ_E0)}
+function wzPer(base,e){return Math.max(base*0.45,base/e)}
+function wzHash(n,s){let x=Math.imul(n|0,374761393)^Math.imul(s|0,668265263);x=Math.imul(x^(x>>>13),1274126177);x^=x>>>16;return(x>>>0)/4294967296}
+// One event per `per` seconds of clock t: a window `len` long at a hashed spot inside its period, warned `tell` ahead.
+// a = seconds since the window opened (negative before it), on = inside it, tl = 0..1 through the warning.
+// (Returns one shared object: read it before the next call.)
+const WZW={n:0,a:0,on:false,tl:0};
+function wzWin(t,per,salt,tell,len){const n=Math.floor(t/per),st=n*per+tell+wzHash(n,salt)*Math.max(0,per-tell-len-0.5),a=t-st;
+ WZW.n=n;WZW.a=a;WZW.on=a>=0&&a<len;WZW.tl=a<0&&a>=-tell?1+a/tell:0;return WZW}
+// the gust: w = signed push 0..1 (in over 0.35 s, 0.9 s full, out over 0.5 s), tl = its streaks' warning, d = direction
+const WZG={w:0,tl:0,d:1};
+function wzGust(t){const w=wzWin(t,WZ_WIND_P,7,WZ_WIND_TELL,1.75),a=w.a,d=wzHash(w.n,5)<0.5?-1:1,amp=0.75+0.25*wzHash(w.n,9);
+ let v=0;if(w.on)v=a<0.35?wzSm(a/0.35):a<1.25?1:1-wzSm((a-1.25)/0.5);
+ WZG.w=d*amp*v;WZG.tl=w.tl;WZG.d=d;return WZG}
+// nothing lethal above the square: n tiles up and a tile either side - static hazards, bounce pads, and any saw path or
+// orb ring that reaches into that box (whether or not the blade is there right now)
+const WZ_HZ='^v<>~lLB';
+function wzClear(L,p,n){const x0=Math.floor((p.x-TS)/TS),x1=Math.floor((p.x+p.w+TS)/TS),y0=Math.floor((p.y-n*TS)/TS),y1=Math.floor((p.y+p.h)/TS);
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(WZ_HZ.indexOf(tAt(L,x,y))>=0)return false;
+ const bx0=p.x-TS-12,bx1=p.x+p.w+TS+12,by0=p.y-n*TS-12,by1=p.y+p.h+12;
+ for(const m of L.movers){if(m.t=='orb'){if(m.cx+m.r>bx0&&m.cx-m.r<bx1&&m.cy+m.r>by0&&m.cy-m.r<by1)return false}
+  else if(m.ax!=null&&Math.max(m.ax,m.bx)>bx0&&Math.min(m.ax,m.bx)<bx1&&Math.max(m.ay,m.by)>by0&&Math.min(m.ay,m.by)<by1)return false}
+ return true}
+// counters for the fairness harness (smk/climbbot.js weird): how often each safety rule stepped in
+const WZST={veto:0,cf:0,gf:0,gfAbort:0,gfSkip:0};
+// THE GAMEPLAY EFFECTS, once per physics step (step() reads g/j/b/w/flip/gf). Nothing below 500 m touches the physics.
+const WZP={g:1,gu:1,w:0,flip:false,gf:0};
+function wzPhys(p){const h=G.height,o=WZP;o.g=1;o.gu=1;o.w=0;o.flip=false;o.gf=0;if(!(h>WZ_STOPS[1]))return o;
+ const kc=wzK(h,1);if(kc>0)o.w=wzGust(G.t).w*kc*WZ_WIND_V;
+ const kl=wzK(h,4);if(kl>0)o.gu=1-WZ_LOWG*kl;
+ if(wzK(h,10)>0.5&&!p.dead){const e=wzE(h);
+  let w=wzWin(G.t,wzPer(15,e),11,WZ_CF_TELL,WZ_CF_LEN);const cOn=w.on,cN=w.n,cA=w.a;
+  if(!G.wzc){if(cOn&&cN!==G.wzcN&&p.onG){G.wzc=1;G.wzcN=cN;WZST.cf++}}
+  else if(!cOn&&(p.onG||cA>WZ_CF_LEN+1.5))G.wzc=0;
+  o.flip=!!G.wzc;
+  w=wzWin(G.t,wzPer(19,e),23,WZ_GF_TELL,WZ_GF_LEN);
+  if(!G.wzg){if(w.on&&w.n!==G.wzgN&&w.a<0.25){G.wzgN=w.n;if(!p.bnc&&wzClear(G.L,p,6)){G.wzg=1;WZST.gf++}else WZST.gfSkip++}}
+  else if(!w.on||p.bnc||!wzClear(G.L,p,2.5)){if(w.on)WZST.gfAbort++;G.wzg=0}
+  if(G.wzg){const s=Math.min(1,w.a/0.2)*Math.min(1,(WZ_GF_LEN-w.a)/0.3);o.gf=s;o.g*=1-(1+WZ_GF_NEG)*s}}
+ else if(G.wzc||G.wzg){G.wzc=0;G.wzg=0}
+ return o}
+// THE GOLD ZONE: every metre above WZ_GOLD pays double. The HUD, the results and the bank all read this one function.
+function endCoins(h){h=Math.max(0,Math.floor(h));return Math.floor(h/5)+(h>WZ_GOLD?Math.floor((h-WZ_GOLD)/5):0)}
+
+// ---- the cosmetic side: state, once a frame ----
+const WZ={t:0,dc:0,h:0,ent:-1,entT:WZ_STOPS.map(()=>-99),fl:-9,gl:null,glN:3,hud:null,hudN:4,tear:null,tearN:5,
+ eb:{t:new Float64Array(720),x:new Float64Array(720),y:new Float64Array(720),i:0,n:0},code:null,a:{mus:1,sfx:1,dn:null}};
+// h: the height to start from. Stops already below it count as reached, with no sting and no burst (a dev jump).
+function wzReset(h){WZ.t=0;WZ.dc=0;WZ.h=h||0;WZ.ent=-1;while(WZ.ent+1<WZ_STOPS.length&&WZ.h>=WZ_STOPS[WZ.ent+1])WZ.ent++;
+ WZ.entT.fill(-99);WZ.fl=-9;WZ.gl=null;WZ.glN=3;WZ.hud=null;WZ.hudN=4;WZ.tear=null;WZ.tearN=5;WZ.eb.n=0}
+// one abrupt change (a glitch frame, a misread counter, a tear) per 0.45 s at most: always under 3 flashes a second
+function wzFlash(){if(WZ.t-WZ.fl<0.45)return false;WZ.fl=WZ.t;return true}
+function wzB(i){return WZ.ent>=i?Math.exp(-(WZ.t-WZ.entT[i])/3.5):0}
+// stop i's strength now: eased in by height, highest just after you got there, settling to `st` of that
+function wzS(i,st){const k=wzK(WZ.h,i);return k>0?k*(st+(1-st)*wzB(i)):0}
+function wzUpdate(dt){const tg=G.height;WZ.t+=dt;WZ.h=Math.abs(tg-WZ.h)>150?tg:WZ.h+(tg-WZ.h)*Math.min(1,dt*2.5);
+ let i=WZ.ent;while(i+1<WZ_STOPS.length&&WZ.h>=WZ_STOPS[i+1])i++;if(i>WZ.ent){WZ.ent=i;WZ.entT[i]=WZ.t;wzSting(i)}
+ const h=WZ.h,rm=RM(),p=G.player,k15=wzK(h,10),e=wzE(h);
+ // the drift clock: whatever floats (stars, motes, clouds, the code) stops in the silence and starts again at 15 km
+ WZ.dc+=dt*(1-wzK(h,8)*(1-k15));
+ if(WZ.gl&&WZ.t>WZ.gl.t0+WZ.gl.d)WZ.gl=null;if(WZ.hud&&WZ.t>WZ.hud.t0+WZ.hud.d)WZ.hud=null;if(WZ.tear&&WZ.t>WZ.tear.t0+WZ.tear.d)WZ.tear=null;
+ // 1 km+: now and then a block shows the wrong world's tiles, or the counter misreads (a burst of them on arrival).
+ // Not in the silence (7.5 - 10 km): even the glitches go quiet there, which is the point
+ if(h>WZ_STOPS[3]&&WZ.t>=WZ.glN&&wzK(h,8)*(1-wzK(h,9))>0.5)WZ.glN=WZ.t+1;
+ if(h>WZ_STOPS[3]&&WZ.t>=WZ.glN){const busy=wzB(3)>0.3;WZ.glN=WZ.t+(busy?0.6+Math.random()*0.7:(4.5+Math.random()*4.5)/(k15>0?e*1.7:1));
+  if(wzFlash()){if(Math.random()<0.62)wzGlitchTiles(rm);else wzHudGlitch(k15>0.5&&Math.random()<0.5?'gar':'num',rm)}}
+ // 15 km+: garbage in the counter on its own clock too, and the screen tears (never with Reduce Motion / Low graphics)
+ if(k15>0.5){if(WZ.t>=WZ.hudN){WZ.hudN=WZ.t+(3+Math.random()*4)/e;if(!WZ.hud&&wzFlash())wzHudGlitch('gar',rm)}
+  if(!rm&&QUAL&&WZ.t>=WZ.tearN){WZ.tearN=WZ.t+(3.5+Math.random()*4)/e;if(wzFlash())wzTear(e)}}
+ // 10 km: where the square has been, in tower coordinates (a window shift must not move the copycat)
+ if(h>WZ_STOPS[9]-60&&p){const E=WZ.eb,j=E.i;E.t[j]=WZ.t;E.x[j]=p.x;E.y[j]=p.y+(G.L.vy0||0);E.i=(j+1)%720;if(E.n<720)E.n++}else WZ.eb.n=0;
+ if(h>WZ_STOPS[7]-60&&!WZ.code)WZ.code=wzCodeBake()}
+function wzGlitchTiles(rm){const L=G.L,cx=Math.floor(G.cam.x/TS),cy=Math.floor(G.cam.y/TS),vy=(L.vy0||0)/TS,ti=WORLDS.indexOf(themeOf());
+ for(let k=0;k<14;k++){const x=cx+1+Math.floor(Math.random()*(VW/TS-2)),y=cy+2+Math.floor(Math.random()*(VH/TS-4));if(x<1||x>=L.W-1||tAt(L,x,y)!='#')continue;
+  WZ.gl={t0:WZ.t,d:rm?1.1:(Math.random()<0.5?0.034:0.05),x0:x-1-Math.floor(Math.random()*3),y0:y-1-Math.floor(Math.random()*2)+vy,w:3+Math.floor(Math.random()*5),h:2+Math.floor(Math.random()*3),
+   ti:(Math.max(0,ti)+1+Math.floor(Math.random()*4))%5,dx:rm?0:Math.random()<0.4?(Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*5)):0,rm};return}}
+function wzHudGlitch(kind,rm){const h=G.height,hs=String(h);let s='';
+ if(kind=='gar'){const C='#%&?*$@§¤Ø';for(let i=Math.max(3,hs.length);i>0;i--)s+=C[Math.floor(Math.random()*C.length)]}
+ else{const v=Math.random()<0.55?h+(Math.random()<0.5?-1:1)*Math.pow(10,Math.floor(Math.random()*Math.max(1,hs.length-1)))*(1+Math.floor(Math.random()*8)):+hs.split('').reverse().join('');
+  s=String(Math.max(0,Math.floor(v)));if(s==hs)s=String(h+7)}
+ WZ.hud={t0:WZ.t,d:rm?0.7:kind=='gar'?0.4:0.32,s}}
+// what the HUD shows for the height: the real number, unless a glitch is being drawn over it right now
+function wzHudTxt(h){return WZ.hud&&wzOn()&&SCR===SCREENS.play?WZ.hud.s:String(h)}
+function wzTear(e){const n=2+Math.floor(Math.random()*Math.min(4,1+e*1.5)),b=[];
+ for(let i=0;i<n;i++){const h=6+Math.random()*40;b.push(Math.random()*(VH-h),h,(Math.random()<0.5?-1:1)*(4+Math.random()*16*e))}
+ WZ.tear={t0:WZ.t,d:0.05,b}}
+// THE REAL SOURCE: lines of the game's own physics, baked once into a strip. Function text, not the whole file, so
+// nothing private (the dev PIN, the feedback address) can ever scroll past - and anything that looks like one is dropped.
+function wzCodeBake(){const src=[step,hurt,colY,updLava,endShift,endFeed,endChunk,wzPhys,weirdLevel].map(f=>String(f)).join('\n').split('\n')
+  .map(l=>l.trim()).filter(l=>l.length>8&&!/\d{4}|@|http|pin|dev|mail/i.test(l)).map(l=>l.length>86?l.slice(0,86):l).slice(0,140);
+ const LH=13,c=document.createElement('canvas');c.width=600;c.height=Math.max(LH,src.length*LH+40);const g=c.getContext('2d');
+ g.font='11px Menlo,Consolas,"Courier New",monospace';g.textBaseline='top';g.fillStyle='#7dffb0';src.forEach((l,i)=>g.fillText(l,0,i*LH));return c}
+function wzNightSpr(){let s=SPR.get('wzN');if(s)return s;s=document.createElement('canvas');s.width=240;s.height=135;const g=s.getContext('2d'),gr=g.createLinearGradient(0,0,0,135);
+ gr.addColorStop(0,'#02031a');gr.addColorStop(0.62,'#0a1036');gr.addColorStop(1,'#1c2250');g.fillStyle=gr;g.fillRect(0,0,240,135);SPR.set('wzN',s);return s}
+function wzGoldSpr(){let s=SPR.get('wzG');if(s)return s;s=document.createElement('canvas');s.width=240;s.height=135;const g=s.getContext('2d'),gr=g.createRadialGradient(120,68,40,120,68,150);
+ gr.addColorStop(0,'rgba(255,200,70,0)');gr.addColorStop(1,'rgba(255,190,60,1)');g.fillStyle=gr;g.fillRect(0,0,240,135);SPR.set('wzG',s);return s}
+// the Earth's limb: a 1500 px sphere whose top edge shows along the bottom of the screen, with its atmosphere
+function wzEarthSpr(){let s=SPR.get('wzE');if(s)return s;const W=VW,H=300,R=1500,cx=W/2,cy=R+46,Rn=mulberry(4242);s=document.createElement('canvas');s.width=W;s.height=H;const g=s.getContext('2d');
+ const ag=g.createRadialGradient(cx,cy,R-6,cx,cy,R+46);ag.addColorStop(0,'rgba(120,190,255,.6)');ag.addColorStop(1,'rgba(60,120,255,0)');g.fillStyle=ag;g.fillRect(0,0,W,H);
+ g.save();g.beginPath();g.arc(cx,cy,R,0,7);g.clip();
+ const og=g.createLinearGradient(0,46,0,H);og.addColorStop(0,'#3f8de6');og.addColorStop(0.35,'#1d58b2');og.addColorStop(1,'#0a2456');g.fillStyle=og;g.fillRect(0,0,W,H);
+ g.fillStyle='rgba(92,158,84,.85)';for(let i=0;i<9;i++){g.beginPath();g.ellipse(Rn()*W,70+Rn()*200,40+Rn()*120,10+Rn()*30,Rn()*0.4-0.2,0,7);g.fill()}
+ g.fillStyle='rgba(205,186,130,.6)';for(let i=0;i<4;i++){g.beginPath();g.ellipse(Rn()*W,90+Rn()*180,20+Rn()*50,6+Rn()*14,0,0,7);g.fill()}
+ g.fillStyle='rgba(255,255,255,.55)';for(let i=0;i<16;i++){g.beginPath();g.ellipse(Rn()*W,56+Rn()*230,30+Rn()*110,3+Rn()*7,Rn()*0.2-0.1,0,7);g.fill()}
+ const lg=g.createRadialGradient(cx,cy,R-150,cx,cy,R);lg.addColorStop(0,'rgba(10,20,50,0)');lg.addColorStop(0.85,'rgba(150,200,255,.16)');lg.addColorStop(1,'rgba(200,230,255,.6)');g.fillStyle=lg;g.fillRect(0,0,W,H);
+ g.restore();SPR.set('wzE',s);return s}
+// space and the void cover the whole sky: the world's own sky isn't drawn under them at all
+function wzSkyCovers(){return wzK(WZ.h,5)>=1||wzK(WZ.h,9)>=1}
+// BEHIND THE WORLD (screen space, after the world's sky): night, space, the Earth, the clouds, the void, the code
+function wzSky(){const h=WZ.h;if(!(h>WZ_STOPS[0]))return;const L=G.L,cx=G.cam.x,vcy=G.cam.y+(L.vy0||0),kn=wzS(0,0.82),kc=wzK(h,1),ks=wzK(h,5),kv=wzK(h,9),kb=wzK(h,7),dc=WZ.dc;
+ if(kn>0&&ks<1){ctx.globalAlpha=kn*0.8*(1-ks);ctx.drawImage(wzNightSpr(),0,0,VW,VH)}
+ if(ks>0){ctx.globalAlpha=ks;ctx.fillStyle='#02030a';ctx.fillRect(0,0,VW,VH)}
+ const sa=Math.max(kn*(1-ks)*0.85,ks*(1+0.6*wzB(5)))*(1-kv);
+ if(sa>0.01&&QUAL){const st=starTile(),sw=st.width,sh=st.height,sx0=-((((cx*0.03)%sw)+sw)%sw),sy0=-((((vcy*0.02)%sh)+sh)%sh);ctx.globalAlpha=Math.min(1,sa);
+  for(let x=sx0;x<VW;x+=sw)for(let y=sy0;y<VH;y+=sh)ctx.drawImage(st,x,y);
+  ctx.fillStyle='#fff';for(let i=0;i<14;i++){const k=Math.sin(dc*1.7+i*2.1);if(k<0.6)continue;ctx.globalAlpha=Math.min(1,sa)*(k-0.6)*2.5;ctx.fillRect((((i*211.7-cx*0.03)%VW)+VW)%VW,(((i*131.3-vcy*0.02)%VH)+VH)%VH,2,2)}}
+ if(ks>0&&kv<1){const es=wzEarthSpr(),dp=wzSm((h-WZ_STOPS[5])/4000);ctx.globalAlpha=ks*(1-kv);ctx.drawImage(es,0,VH-es.height*0.62+dp*es.height*0.45)}
+ // (on arrival the bank is still up round you and sinks away underneath as you climb out of it)
+ if(kc>0&&ks<1){const s=cloudSpr(WORLDS[0],0,1),w=s.width,ox=-((((cx*0.06+dc*14)%w)+w)%w),s2=cloudSpr(WORLDS[0],0,0),w2=s2.width,ox2=-((((cx*0.03+dc*6)%w2)+w2)%w2),up=230*wzB(1);
+  ctx.globalAlpha=kc*0.6*(1-ks);for(let x=ox2;x<VW;x+=w2)ctx.drawImage(s2,x,VH-s.height*0.75-s2.height*0.45-up*1.3);
+  ctx.globalAlpha=kc*0.95*(1-ks);for(let x=ox;x<VW;x+=w)ctx.drawImage(s,x,VH-s.height*0.75-up)}
+ // from 9 km the black starts going grey - the void is coming - and at 10 km it is white
+ const pre=wzSm((h-9000)/1000)*(1-kv);if(pre>0){ctx.globalAlpha=pre*0.3;ctx.fillStyle='#b8b8c2';ctx.fillRect(0,0,VW,VH)}
+ if(kv>0){ctx.globalAlpha=kv;ctx.fillStyle='#f4f4f6';ctx.fillRect(0,0,VW,VH)}
+ if(kb>0&&WZ.code){const C=WZ.code,y=-((((vcy*0.25+dc*9)%C.height)+C.height)%C.height);ctx.globalAlpha=Math.min(0.4,wzS(7,0.55)*0.17*(1+0.6*wzK(h,10)));
+  ctx.globalCompositeOperation='difference';for(let yy=y;yy<VH;yy+=C.height)ctx.drawImage(C,28,yy);ctx.globalCompositeOperation='source-over'}
+ ctx.globalAlpha=1}
+// OVER THE BLOCKS (world space, right after the tile layer): a glitch's wrong-world tiles, and the wireframes
+function wzTiles(L,x0,x1,y0,y1){const vy=(L.vy0||0)/TS,g=WZ.gl;
+ if(g&&SCR===SCREENS.play){const a=g.rm?Math.sin(Math.PI*clamp((WZ.t-g.t0)/g.d,0,1))*0.55:1,gy=Math.round(g.y0-vy);
+  if(a>0.01){ctx.save();ctx.globalAlpha=a;ctx.beginPath();ctx.rect(g.x0*TS,gy*TS,g.w*TS,g.h*TS);ctx.clip();if(g.dx)ctx.translate(g.dx,0);
+   for(let y=gy;y<gy+g.h;y++)for(let x=g.x0;x<g.x0+g.w;x++){if(tAt(L,x,y)!='#')continue;const px=x*TS,py=y*TS,mask=(SOL(L,x,y-1)?1:0)|(SOL(L,x,y+1)?2:0)|(SOL(L,x-1,y)?4:0)|(SOL(L,x+1,y)?8:0);
+    (window.ART&&ART.solid(g.ti,mask,x,y,px,py))||ctx.drawImage(tileSpr(g.ti,'#',mask,((x*37+y*101)%4+4)%4),px-4,py-4)}
+   ctx.restore()}}
+ // 5 km: blocks in 4x4 patches turn to wireframe. Each 7 s a new set fades in and out again - never a flicker (on the
+ // drift clock, so in the silence the same ones just stay)
+ const kb=wzK(WZ.h,7);if(!(kb>0))return;const E=7,ep=Math.floor(WZ.dc/E),u=(WZ.dc-ep*E)/E,a=kb*wzSm(Math.min(u,1-u)*7),
+  thr=0.82-0.14*wzB(7)-0.07*(wzE(WZ.h)-1)*wzK(WZ.h,10);if(a<0.02)return;
+ const W=WZW_T;W.length=0;
+ for(let y=y0;y<=y1;y++){const cy=Math.floor((y+vy)/4);for(let x=x0;x<=x1;x++)if(tAt(L,x,y)=='#'&&wzHash((x>>2)*7919+cy,ep*3+1)>thr)W.push(x,y)}
+ if(!W.length)return;ctx.save();ctx.globalAlpha=a*0.92;ctx.fillStyle='#070b14';ctx.beginPath();for(let k=0;k<W.length;k+=2)ctx.rect(W[k]*TS,W[k+1]*TS,TS,TS);ctx.fill();
+ ctx.globalAlpha=a;ctx.strokeStyle='#5dffa6';ctx.lineWidth=1;ctx.beginPath();
+ for(let k=0;k<W.length;k+=2){const px=W[k]*TS+0.5,py=W[k+1]*TS+0.5;ctx.rect(px,py,TS-1,TS-1);ctx.moveTo(px,py+TS-1);ctx.lineTo(px+TS-1,py)}ctx.stroke();ctx.restore()}
+const WZW_T=[];
+// a path round everything that can kill you on screen, grown by gr px (hitbox outlines use 0, the red tint 2)
+function wzHazPath(L,x0,x1,y0,y1,gr){ctx.beginPath();
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const c=tAt(L,x,y);if(WZ_HZ.indexOf(c)<0||c=='B')continue;const px=x*TS,py=y*TS;let r=null;
+  switch(c){case'^':r=[px+3,py+12,18,12];break;case'v':r=[px+3,py,18,12];break;case'>':r=[px,py+3,12,18];break;case'<':r=[px+12,py+3,12,18];break;
+   case'~':r=tAt(L,x,y-1)=='~'?[px,py,24,24]:[px,py+8,24,16];break;
+   default:if(laserOn(c,L)){const o=L.lo[y*L.W+x];r=o=='v'?[px+8,py,8,24]:o=='h'?[px,py+8,24,8]:[px+6,py+6,12,12]}}
+  if(r)ctx.rect(r[0]-gr,r[1]-gr,r[2]+2*gr,r[3]+2*gr)}
+ const c0=G.cam.y-30,c1=G.cam.y+VH+30,R=10.5+gr;
+ for(const m of L.movers){if(m.t=='saw'){if(m.y>c0&&m.y<c1){ctx.moveTo(m.x+R,m.y);ctx.arc(m.x,m.y,R,0,7)}}
+  else if(m.pts)for(let k=0;k<m.pts.length;k+=2){const X=m.pts[k],Y=m.pts[k+1];if(Y>c0&&Y<c1){ctx.moveTo(X+R,Y);ctx.arc(X,Y,R,0,7)}}}
+ if(L.rise&&G.lavaY<c1){const ly=G.lavaY-gr;ctx.rect(G.cam.x-10,ly,VW+20,Math.max(0,c1-ly))}}
+// UNDER THE SQUARE (after particles, before the player): motes, gold, the night, the drain, the void, the red
+// hazards, hitboxes, the copycat and the wind's streaks. The square is drawn after all of it, so it keeps its colour.
+function wzMid(L,x0,x1,y0,y1){const h=WZ.h;if(!(h>WZ_STOPS[0]))return;const kn=wzS(0,0.82),kg=wzK(h,2),kl=wzK(h,4),kd=wzK(h,6),kb=wzK(h,7),kv=wzK(h,9),rm=RM(),dc=WZ.dc,vcy=G.cam.y+(L.vy0||0);
+ ctx.save();ctx.setTransform(KS,0,0,KS,0,0);
+ if(kl>0&&QUAL){ctx.fillStyle='#e8f0ff';const bl=1+1.5*wzB(4);for(let i=0;i<12;i++){const b=BGS[i+3],x=(((b.x*0.7-G.cam.x*0.08+Math.sin(dc*0.4+i)*14)%VW)+VW)%VW,y=(((b.y-dc*(6+b.d*14)-vcy*0.08)%VH)+VH)%VH,s=1.5+b.d*2;
+  ctx.globalAlpha=Math.min(1,kl*(0.12+b.d*0.35)*bl);ctx.fillRect(x,y,s,s)}}
+ if(kn>0){ctx.globalAlpha=kn*0.2*(1-kv);ctx.fillStyle='#070a26';ctx.fillRect(0,0,VW,VH)}
+ // gold: a warm cast over everything, gold at the edges, gold dust rising, glints (a shower of them on arrival)
+ // (the cast mostly lifts in space, where a brown wash over the black would just look dirty; the zone itself stays)
+ if(kg>0){const gb=wzB(2),sp=1-0.75*wzK(h,5);ctx.globalAlpha=kg*(0.07+0.07*gb)*sp;ctx.fillStyle='#ffb22e';ctx.fillRect(0,0,VW,VH);ctx.globalAlpha=kg*(0.26+0.3*gb)*(0.5+0.5*sp);ctx.drawImage(wzGoldSpr(),0,0,VW,VH);
+  if(QUAL){ctx.globalCompositeOperation='lighter';ctx.fillStyle='#ffd877';
+   for(let i=0;i<24;i++){const b=BGS[i+8],x=(((b.x-G.cam.x*0.07+Math.sin(dc*0.5+i)*16)%VW)+VW)%VW,y=(((b.y-dc*(10+b.d*22)-vcy*0.1)%VH)+VH)%VH,s=2+b.d*3;
+    ctx.globalAlpha=Math.min(1,kg*(0.25+b.d*0.55)*(1+gb));ctx.fillRect(x,y,s,s)}ctx.globalCompositeOperation='source-over';
+   const n=rm?3:8+Math.round(22*gb);for(let i=0;i<n;i++){const o=wzHash(i,53)*7,P=1.3+wzHash(i,51)*1.2,ep=Math.floor((WZ.t+o)/P),u=(WZ.t+o-ep*P)/P;if(u>0.3)continue;
+    const s=Math.sin(u/0.3*Math.PI);twinkle(wzHash(i*31+ep,57)*VW,wzHash(i*17+ep,59)*VH,5+10*s,s*kg,u*3)}}}
+ if(kd>0){const a=wzS(6,0.93);if(QUAL){ctx.globalCompositeOperation='saturation';ctx.globalAlpha=a;ctx.fillStyle='#808080';ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over'}
+  else{ctx.globalAlpha=a*0.4;ctx.fillStyle='#8a8a90';ctx.fillRect(0,0,VW,VH)}}
+ if(kv>0){ctx.globalAlpha=kv*0.5;ctx.fillStyle='#ffffff';ctx.fillRect(0,0,VW,VH)}
+ ctx.restore();ctx.globalAlpha=1;
+ if(kd>0&&QUAL){ctx.save();wzHazPath(L,x0,x1,y0,y1,2);ctx.fillStyle='#ff2b2b';
+  if(kv<1){ctx.globalCompositeOperation='color';ctx.globalAlpha=0.95*kd*(1-kv);ctx.fill()}
+  if(kv>0){ctx.globalCompositeOperation='multiply';ctx.globalAlpha=0.9*kv;ctx.fillStyle='#ff4a4a';ctx.fill()}ctx.restore()}
+ if(kb>0){const a=Math.min(1,wzS(7,0.55)*0.8);if(a>0.02){ctx.save();ctx.lineWidth=1;ctx.globalAlpha=a;wzHazPath(L,x0,x1,y0,y1,0);ctx.strokeStyle='#ff4d5e';ctx.stroke();
+  const p=G.player;if(p&&!p.dead){const ia=clamp(G.acc/DT,0,1),ix=p.px!=null?lerp(p.px,p.x,ia):p.x,iy=p.py!=null?lerp(p.py,p.y,ia):p.y;ctx.strokeStyle='#5dff8f';ctx.strokeRect(ix+2.5,iy+2.5,p.w-5,p.h-5)}ctx.restore()}}
+ if(kv>0)wzEcho(L,kv);
+ const kc=wzK(h,1);if(kc>0)wzStreaks(kc,kv)}
+// the copycat(s): a dark square where you were 0.8 s ago (and, higher up, 1.35 s, 1.9 s...). Drawn only; it touches nothing.
+function wzEcho(L,kv){const E=WZ.eb;if(E.n<2)return;const vy=L.vy0||0,n=Math.min(4,1+Math.floor(Math.max(0,wzE(WZ.h)-1)*2.6*wzK(WZ.h,10)));
+ for(let k=n-1;k>=0;k--){const tt=WZ.t-(0.8+0.55*k);let j=-1;for(let q=0;q<E.n;q++){const ix=(E.i-1-q+720)%720;if(E.t[ix]<=tt){j=ix;break}}if(j<0)continue;
+  const x=E.x[j],y=E.y[j]-vy;if(y<G.cam.y-40||y>G.cam.y+VH+40)continue;ctx.globalAlpha=kv*(0.9-0.17*k);
+  ctx.fillStyle='#111116';rpath(x,y,16,16,4,4,4,4);ctx.fill();ctx.fillStyle='#ffffff';ctx.fillRect(x+4,y+5,2.5,3.5);ctx.fillRect(x+9.5,y+5,2.5,3.5)}
+ ctx.globalAlpha=1}
+// the wind's streaks: they start WZ_WIND_TELL s before a gust and stream the way it will push (pure function of G.t)
+function wzStreaks(kc,kv){const g=wzGust(G.t),a=Math.max(g.tl*0.6,Math.abs(g.w)*0.85)*kc;if(a<0.02)return;const d=g.d,sp=RM()?170:520,t=G.t;
+ ctx.save();ctx.setTransform(KS,0,0,KS,0,0);ctx.lineCap='round';ctx.strokeStyle=kv>0.5?'#2c2c3c':'#ffffff';ctx.lineWidth=1.6;ctx.globalAlpha=a*0.55;ctx.beginPath();
+ for(let i=0;i<16;i++){const h1=wzHash(i,41),h2=wzHash(i,43),len=40+h2*70,W=VW+len*2,x=(((h1*W+t*sp*(0.7+0.6*h2)*d)%W)+W)%W-len,y=20+h1*(VH-40)+Math.sin(t*2+i)*4;ctx.moveTo(x,y);ctx.lineTo(x-d*len,y)}
+ ctx.stroke();ctx.restore()}
+function wzArrow(x,y,d,s){ctx.beginPath();ctx.moveTo(x+d*s,y);ctx.lineTo(x-d*s*0.6,y-s*0.8);ctx.lineTo(x-d*s*0.6,y+s*0.8);ctx.closePath();ctx.lineWidth=3;ctx.strokeStyle='#141020';ctx.stroke();ctx.fillStyle='#ffffff';ctx.fill()}
+function wzChev(x,y,s){ctx.beginPath();ctx.moveTo(x-s,y+s*0.6);ctx.lineTo(x,y-s*0.4);ctx.lineTo(x+s,y+s*0.6);ctx.lineWidth=4.5;ctx.strokeStyle='#141020';ctx.stroke();ctx.lineWidth=2;ctx.strokeStyle='#ffffff';ctx.stroke()}
+// THE WARNINGS for the two flips, over the square (world space, after it is drawn): read off the same windows wzPhys uses
+function wzTells(){const h=G.height,p=G.player;if(wzK(h,10)<=0.5||!p||p.dead)return;const e=wzE(h),rm=RM(),ia=clamp(G.acc/DT,0,1),x=(p.px!=null?lerp(p.px,p.x,ia):p.x)+8,y=(p.py!=null?lerp(p.py,p.y,ia):p.y)+8;
+ let w=wzWin(G.t,wzPer(15,e),11,WZ_CF_TELL,WZ_CF_LEN);const ctl=w.tl;
+ if(ctl>0||G.wzc){ctx.save();const s=G.wzc?1:wzSm(ctl),a=G.wzc?0.75:Math.min(1,ctl*2.5);ctx.globalAlpha=a;ctx.translate(x,y-30);if(!rm)ctx.rotate(Math.PI*s);
+  wzArrow(-12,0,rm&&s>0.5?1:-1,6);wzArrow(12,0,rm&&s>0.5?-1:1,6);ctx.restore()}
+ w=wzWin(G.t,wzPer(19,e),23,WZ_GF_TELL,WZ_GF_LEN);
+ if(w.tl>0||G.wzg){ctx.save();ctx.globalAlpha=G.wzg?0.7:Math.min(1,w.tl*2.5);const u=rm?0:(G.t*1.6)%1;for(let k=0;k<3;k++)wzChev(x,y+26-((k+u)/3)*22,6);ctx.restore()}}
+// OVER EVERYTHING (screen space, end of drawWorld; the HUD stays clean): the colour inversion and the tears
+function wzPost(){if(!QUAL||RM()||SCR!==SCREENS.play)return;const h=WZ.h,k=wzK(h,10);if(!(k>0))return;const e=wzE(h);
+ // a slow round wipe out from the square and, a few seconds later, back in to it: never a flash, never all-grey
+ const T=1.6,H=3.2+1.2*e,w=wzWin(WZ.t,wzPer(24,e),31,0,2*T+H);
+ if(w.on){const a=w.a,r=a<T?wzSm(a/T):a<T+H?1:1-wzSm((a-T-H)/T),R=r*1250*k;
+  if(R>2){const p=G.player,sx=p.x+8-G.cam.x,sy=p.y+8-G.cam.y;ctx.save();ctx.globalCompositeOperation='difference';
+   if(R>=1240)ctx.fillStyle='#ffffff';else{const gr=ctx.createRadialGradient(sx,sy,Math.max(0,R-80),sx,sy,R);gr.addColorStop(0,'#ffffff');gr.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=gr}
+   ctx.fillRect(0,0,VW,VH);ctx.restore()}}
+ const T2=WZ.tear;if(T2){const b=T2.b,s=KS;ctx.save();ctx.setTransform(1,0,0,1,0,0);
+  for(let i=0;i<b.length;i+=3){const y=Math.round(b[i]*s),hh=Math.max(1,Math.round(b[i+1]*s));ctx.drawImage(cv,0,y,cv.width,hh,Math.round(b[i+2]*s),y,cv.width,hh)}ctx.restore()}}
+// ---- sound ----
+// A short sting on reaching each stop (sound effects bus, so the SFX switch and slider govern it).
+const WZ_STING=[
+ ()=>{bell(392,1.3,0.035);bell(311,1.6,0.03,0.14)},                                                  // night: two low bells, falling
+ ()=>{puff({fc:500,fc2:2600,len:1.1,v:0.05,q:0.5});puff({fc:2600,fc2:700,len:0.9,v:0.03,q:0.5,d:0.5})}, // clouds: a gust going past
+ ()=>{[1319,1568,2093,2637].forEach((f,i)=>bell(f,0.55,0.026,i*0.07))},                                 // gold: a quick sparkle run
+ ()=>{voice({f:880,len:0.05,v:0.045,w:'square',fc:3200});voice({f:233,len:0.07,v:0.05,w:'square',fc:2000,d:0.08});voice({f:1661,len:0.04,v:0.035,w:'square',fc:3600,d:0.17})}, // glitch: three wrong blips
+ ()=>{voice({f:196,f2:587,len:1.3,v:0.05,w:'sine',pt:1.2,fc:1600,a:0.15})},                            // low gravity: a slow glide up
+ ()=>{voice({f:49,f2:73,len:2.6,v:0.08,w:'sine',a:0.7,pt:2.4});voice({f:98,len:2.4,v:0.025,w:'triangle',a:0.9,fc:500})}, // space: a deep swell
+ ()=>{voice({f:523,f2:247,len:1.6,v:0.04,w:'triangle',pt:1.5,fc:1400});voice({f:527,f2:241,len:1.6,v:0.03,w:'sine',pt:1.5})}, // drain: a detuned fall
+ ()=>{noise(0.22,0.05,0,2400);voice({f:110,len:0.09,v:0.05,w:'square',fc:900,d:0.05});noise(0.08,0.04,0.3,4000)}, // breaks: static
+ ()=>{voice({f:72,f2:40,len:0.6,v:0.07,w:'sine',pt:0.5})},                                              // silence: one dull thud, then nothing
+ ()=>{voice({f:1760,len:2.8,v:0.02,w:'sine',a:1.0});voice({f:1767,len:2.8,v:0.012,w:'sine',a:1.2})},  // void: a thin pure tone
+ ()=>{voice({f:110,f2:880,len:1.3,v:0.04,w:'sawtooth',pt:1.2,fc:500,fc2:3200,a:0.6});voice({f:1661,len:0.05,v:0.04,w:'square',fc:3600,d:1.25});voice({f:262,len:0.06,v:0.04,w:'square',fc:2400,d:1.33})}]; // everything
+function wzSting(i){if(!AC||!S.set.sfx||!WZ_STING[i])return;try{WZ_STING[i]()}catch(e){}}
+// music and effects levels, the warped music past 15 km and the silence's drone. Once a frame from frame(); on any
+// other screen everything goes back to normal.
+function wzAudio(){if(!AC||!musGain)return;try{const A=WZ.a,on=SCR===SCREENS.play&&wzOn(),h=WZ.h,kn=on?wzS(0,0.8):0,kq=on?wzK(h,8):0,ke=on?wzK(h,10):0;
+ const mv=(1-0.38*kn)*(1-kq)+0.4*ke,sv=1-0.3*kq*(1-ke),rt=ke>0?1-0.15*ke+0.02*ke*Math.sin(WZ.t*0.55):1,now=AC.currentTime;
+ if(Math.abs(mv-A.mus)>0.02||Math.abs(sv-A.sfx)>0.02||(mv!==A.mus&&(mv==1||mv==0))||(sv!==A.sfx&&sv==1)){A.mus=mv;A.sfx=sv;const m=vnum('vmas',1);
+  musGain.gain.setTargetAtTime((S.set.music?1:0)*vnum('vmus',0.8)*m*VMUS*mv,now,0.35);sfxGain.gain.setTargetAtTime((S.set.sfx?1:0)*vnum('vsfx',0.8)*m*VSFX*sv,now,0.35)}
+ const src=mus.src;if(src&&src.playbackRate&&Math.abs(src.playbackRate.value-rt)>0.003)src.playbackRate.value=rt;
+ wzDrone(on?kq*(1-0.6*ke):0)}catch(e){}}
+function wzDrone(lv){const A=WZ.a;
+ if(lv>0.01&&!A.dn&&S.set.sfx){const g=AC.createGain();g.gain.value=0.0001;g.connect(sfxGain);
+  const o=[57,57.6,1870].map((f,i)=>{const n=AC.createOscillator();n.type='sine';n.frequency.value=f;if(i<2)n.connect(g);else{const g2=AC.createGain();g2.gain.value=0.16;n.connect(g2);g2.connect(g)}n.start();return n});
+  A.dn={g,o,lv:-1,off:0}}
+ const D=A.dn;if(!D)return;
+ if(Math.abs(lv-D.lv)>0.02||(lv==0&&D.lv!=0)){D.lv=lv;D.g.gain.setTargetAtTime(Math.max(0.0001,lv*0.05),AC.currentTime,0.6)}
+ if(lv<=0.01){if(!D.off)D.off=AC.currentTime;else if(AC.currentTime-D.off>3){for(const n of D.o)try{n.stop()}catch(e){}try{D.g.disconnect()}catch(e){}A.dn=null}}else D.off=0}
+
+// ---- DEV: for recording the video ----
+// God mode (nothing kills you, the lava stays 4 tiles under your feet) and jump-to-height, for Endless and the Weekly,
+// from the pause menu. Only with DEV_OK and dev mode on (see the PIN screen) - a shipped build has DEV_OK false, so no
+// player can ever see them. A run that used either is G.devRun and saves NOTHING: no best, no coins, no gems, no score.
+const DEVW={god:false},DEV_HTS=[250,500,750,1000,1500,2000,3000,5000,7500,10000,15000,25000,50000];
+function devOn(){return DEV_OK&&!!S.dev}
+// Builds the real tower up to metre m (the same stream, chunk by chunk), opens the window there and stands the square on
+// a ledge a few metres under m, so the stop is climbed into on camera.
+function devJump(m){if(!devOn()||!G||!G.L||!G.L.es)return;const daily=G.mode=='daily';
+ if(m<=G.height+20){startEndless(daily);G.intro=0;G.tipT=0}
+ const es=G.L.es;G.devRun=true;G.god=DEVW.god;
+ // (a target already inside the window keeps the window where it is: rows under it are gone for good)
+ const R=es.start-Math.max(3,m-5),top=Math.min(es.top,R-(END_WIN-END_KEEP-80));
+ es.top=top;let n=0;while(es.st.y>es.top-END_AHEAD){endPull(es);if(++n%32==0){const bot=es.top+END_WIN-1;es.rects=es.rects.filter(q=>q[2]<=bot);es.m=es.m.filter(q=>q[2]<=bot);es.g=es.g.filter(q=>q[1]<=bot)}}
+ const L=endBuildWin(es,null,0);G.L=L;es.shifts++;updMovers(L,G.t*G.spd);
+ const r0=R-es.top,p=G.player,open=c=>c=='.'||c=='N',st=(x,y)=>open(tAt(L,x,y))&&open(tAt(L,x,y-1))&&WZ_HZ.indexOf(tAt(L,x,y-2))<0&&isSolid(L,x,y+1)&&tAt(L,x,y+1)!='X'&&tAt(L,x,y+1)!='B';
+ let spot=null;for(let d=0;d<40&&!spot;d++)for(const y of[r0+d,r0-d])if(y>2&&y<END_WIN-2&&!spot)for(let x=2;x<L.W-2;x++)if(st(x,y)&&wzClear(L,{x:x*TS+4,y:y*TS+TS-16,w:16,h:16},2)){spot=[x,y];break}
+ if(!spot)spot=[11,r0];
+ p.x=spot[0]*TS+4;p.y=spot[1]*TS+TS-16;p.px=p.x;p.py=p.y;p.vx=p.vy=0;p.dead=false;p.bnc=false;p.aj=AIRJ;
+ G.height=Math.floor((L.start.y*TS+TS-16-p.y)/TS);G.lavaY=p.y+16+12*TS;G.parts.length=0;G.wzc=G.wzg=0;G.bgJ=null;
+ updCam(0,true);wzReset(G.height)}
+
 // ================= SPEED COURSES =================
 const COURSES=[
  {n:'Sunny Sprint',sub:'Long run. Time the laser gates.',seed:9101,diff:0,W:230,wd:0,med:[35,44,55]},
@@ -2922,7 +3239,8 @@ const TUT={wd:0,n:'Tutorial',W:112,H:22,t:60,s:[3,18],e:[108,18],k:[[33,18]],key
 function startTutorial(){const L=buildLevel(TUT);G=newG({mode:'tut',idx:-1,L,intro:0,tipT:0});spawn();updCam(0,true);enterPlay(0)}
 function startEndless(daily){TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?climbWeek()*7919+20261:(Math.random()*1e9|0);const L=endLevel(seed);
  G=newG({mode:daily?'daily':'endless',idx:-1,L,lavaY:(L.start.y+7)*TS,tipT:6,dailyDay:daily?weekStr():''});
- spawn();updCam(0,true);enterPlay(SONG_CLIMB)}
+ if(devOn()&&DEVW.god){G.god=true;G.devRun=true} // DEV god mode carries over to the next run (see devJump)
+ wzReset(0);spawn();updCam(0,true);enterPlay(SONG_CLIMB)}
 // HARD MODE: one air jump instead of two, plus a stack of modifiers per level
 const MODN={mirror:'MIRRORED',inv:'INVERTED',moon:'MOON GRAVITY',heavy:'HEAVY WORLD',ice:'BLACK ICE',
  nojump:'NO AIR JUMP',lasers:'LASER STORM',saws:'SAW STORM',chaos:'CHAOS GRAVITY',flip:'UPSIDE DOWN',walljump:'WALLS ONLY'};
@@ -3006,7 +3324,7 @@ function medalCol(m){return m==2?'#ffd45e':m==1?'#d8dbe6':m==0?'#d08b4e':'#8a87a
 // instant player/camera/particle snap underneath is completely hidden, then let the normal fadeA decay (~dt*3.5/s) reveal it.
 function restartLevel(){let r;
  if(G.mode=='tut')r=startTutorial();
- else if(G.mode=='endless'||G.mode=='daily'){const s=saveEndless();if(s.h>0)toast('Run saved',s.h+'m'+(s.best?' - new best!':''),'info');r=startEndless(G.mode=='daily')}
+ else if(G.mode=='endless'||G.mode=='daily'){const s=saveEndless();if(s.h>0&&!s.dev)toast('Run saved',s.h+'m'+(s.best?' - new best!':''),'info');r=startEndless(G.mode=='daily')}
  else if(G.mode=='course')r=startCourse(G.idx);
  else if(G.mode=='chaos')r=startChaosReplay(G.idx,[...(G.mods||[])][0]);
  else if(G.mode=='speed'||G.mode=='hspeed'){SPD.total+=G.time;SPD.deaths+=G.deaths;r=startLevel(G.idx,G.mode)}
@@ -3093,7 +3411,7 @@ function updLava(dt){const L=G.L,p=G.player;if(!L.rise||G.won||!G.moved)return;G
  // endless: time on the clock ramps it as before, PLUS the height term (same d curve as every other hazard), both
  // under the one hard cap. See LAVA_MAX/LAVA_HGAIN.
  let v=L.rise.v*G.riseMul;if(L.rise.endless)v=Math.min(LAVA_MAX,L.rise.v+(G.riseT-L.rise.d)*0.013+endDiff(G.height)*LAVA_HGAIN);G.lavaY-=v*TS*dt;
- if(L.rise.endless&&p&&!p.dead){const cap=p.y+18*TS;if(G.lavaY>cap)G.lavaY=cap}}
+ if(L.rise.endless&&p&&!p.dead){const cap=p.y+18*TS;if(G.lavaY>cap)G.lavaY=cap;if(G.god&&G.lavaY<p.y+16+4*TS)G.lavaY=p.y+16+4*TS}} // (DEV god mode: never closer than 4 tiles)
 
 function colX(L,p){const y0=Math.floor(p.y/TS),y1=Math.floor((p.y+p.h-0.01)/TS);
  if(p.vx>0){const tx=Math.floor((p.x+p.w-0.01)/TS);for(let ty=y0;ty<=y1;ty++)if(isSolid(L,tx,ty)){p.x=tx*TS-p.w;p.vx=0;break}}
@@ -4352,13 +4670,15 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
  if(L.def.grav!=null){gmul*=L.def.grav;jmul*=(L.def.jmul!=null?L.def.jmul:1)}
  if(has('nojump')||has('walljump'))ajn=0;
  if(has('chaos'))gmul*=1+0.7*Math.sin(G.t*0.8);
- const left=keys.L,right=keys.R,down=keys.D,jh=keys.J||keys.U;
- let dir=(right?1:0)-(left?1:0);if(has('inv'))dir=-dir;
+ // THE WEIRD STUFF (Endless / Weekly only): wind, low gravity, and past 15 km the control and gravity flips - see wzPhys
+ const wz=L.rise&&L.rise.endless?wzPhys(p):null;if(wz)gmul*=wz.g;
+ const left=keys.L,right=keys.R,down=keys.D,jh=keys.J||keys.U,inv=has('inv')!==!!(wz&&wz.flip);
+ let dir=(right?1:0)-(left?1:0);if(inv)dir=-dir;
  // INVERTED swaps which key sends you which way, so the wall-cling test below has to read the SWAPPED key too: it used
  // the raw left/right, so on an 'inv' level you pressed right, slid into the left wall, and never got a wall grab -
  // wall jumping (and with it wall climbing) was dead on every INVERTED level. Kept separate from dir, which p.lock
  // overwrites on the frames just after a wall jump.
- const iL=has('inv')?right:left,iR=has('inv')?left:right;
+ const iL=inv?right:left,iR=inv?left:right;
  if(p.lock>0){p.lock-=dt;dir=p.lockDir}
  // precision creep (see PREC_V): armed by a NEW press made on the ground from rest, dropped the moment you leave the
  // ground or have held it PREC_T. Between PREC_V and RUN it neither speeds you up nor slows you down.
@@ -4382,7 +4702,8 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
  // variable jump height: releasing jump cuts the rise, but only after a minimum jump time (a quick/buffered tap isn't a 14px hop)
  if(p.jt>0)p.jt-=dt;else if(!jh&&p.vy*gs<-200&&!p.bnc)p.vy=-200*gs;
  if(p.vy*gs>=0)p.bnc=false;
- p.vy+=gs*((p.vy*gs<0&&(jh||p.bnc||p.jt>0))?GRAVU:GRAVD)*gmul*dt;if(p.vy*gs>MAXF)p.vy=MAXF*gs;
+ p.vy+=gs*((p.vy*gs<0&&(jh||p.bnc||p.jt>0))?GRAVU*(wz&&!p.bnc?wz.gu:1):GRAVD)*gmul*dt;if(p.vy*gs>MAXF)p.vy=MAXF*gs; // (wz.gu: LOW GRAVITY, the held rise only)
+ if(wz&&wz.gf>0&&p.vy<-WZ_GF_VMAX)p.vy=-WZ_GF_VMAX; // a gravity flip floats you up, slowly - it never throws you
  if(p.wall&&p.vy*gs>SLIDE){p.vy=SLIDE*gs;if(Math.random()<0.18)G.parts.push({x:p.x+(p.wall>0?16:0),y:p.y+12,vx:-p.wall*20,vy:-20,l:0.3,ml:0.3,c:'rgba(255,255,255,.8)',s:3,g:0,sh:'ci'})}
  if((L.vents&&L.vents.length)||(L.wells&&L.wells.length))w6Forces(L,p,dt); // World 6 vents / gravity wells (position-only)
  // MOVING PLATFORMS. A rider is carried by the platform's exact displacement this step - never by adding to vx - with
@@ -4404,6 +4725,9 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
  // arrow floors: the tile you are STANDING ON is below you normally, above you under UPSIDE DOWN (same gs test the
  // crumble-block check below already uses) - otherwise a belt does nothing at all while gravity is inverted.
  if(p.onG&&!p.plat){const fy=gs>0?Math.floor((p.y+p.h+1)/TS):Math.floor((p.y-1)/TS);for(let tx=Math.floor(p.x/TS);tx<=Math.floor((p.x+p.w-0.01)/TS);tx++){const cc=tAt(L,tx,fy);if(cc=='c'||cc=='C'){const bv=cc=='C'?115:-115,ov=p.vx;p.x+=bv*dt;p.vx=bv;colX(L,p);p.vx=ov;break}}}
+ // WIND (see WZ_WIND_V): moved like a belt moves you, in the air only, not while you steer against it, and never into
+ // anything that hurts
+ if(wz&&wz.w&&!p.onG&&!(dir&&(dir>0)!==(wz.w>0))){const ox=p.x,ov=p.vx;p.x+=wz.w*dt;p.vx=wz.w;colX(L,p);p.vx=ov;if(hurt(L,p)){p.x=ox;WZST.veto++}}
  // haptic: only a real drop (>500 = about 4 tiles of fall). A full jump back to the same floor lands at ~477, so
  // ordinary hopping never buzzes.
  if(p.onG&&!was&&fall*gs>150){p.sx=1.35;p.sy=0.7;if(fall*gs>300)sfx('land');if(fall*gs>500)haptic('light');for(let i=0;i<5;i++)G.parts.push({x:p.x+8+rnd(-8,8),y:gs>0?p.y+16:p.y,vx:rnd(-60,60),vy:rnd(-40,-5)*gs,l:0.3,ml:0.3,c:'rgba(255,255,255,.85)',s:rnd(2,4),g:0,sh:'ci'})}
@@ -4416,6 +4740,7 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
   if(G.shieldGrace>0){}
   else if(G.mode=='story'&&G.cardActive=='shield'&&G.cardT>0){G.cardActive=null;G.cardT=0;G.shieldGrace=1;G.shieldFxT=0.35;sfx('bounce');burst(p.x+8,p.y+8,'#5ff4ff',10,'puff');
    p.vy=-260*gs;p.bnc=false;p.onG=false}
+  else if(G.god){} // DEV god mode (devJump / the pause menu): nothing kills you
   else return die()}
  if(G.shieldFxT>0)G.shieldFxT-=dt;if(G.shieldGrace>0)G.shieldGrace-=dt;
  const pcx=p.x+8,pcy=p.y+8;
@@ -4449,7 +4774,7 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
  L.checks.forEach((c,ci)=>{if(!c.on&&ci>(G.checkIdx==null?-1:G.checkIdx)&&Math.abs(c.x*TS+12-pcx)<14&&pcy>c.y*TS-22&&pcy<c.y*TS+TS+6){L.checks.forEach(o=>o.on=false);c.on=true;G.checkIdx=ci;G.checkpoint={x:c.x,y:c.y};bankPickups();sfx('check');burst(c.x*TS+14,c.y*TS,themeOf().acc,18)}});
  // exit trigger covers the drawn door (it extends above the exit tile)
  if(L.exit.y>0&&Math.abs(L.exit.x*TS+12-pcx)<14&&pcy>L.exit.y*TS-20&&pcy<L.exit.y*TS+28)return win();
- if(p.y>L.H*TS+40||p.y<-80)return die();
+ if((p.y>L.H*TS+40||p.y<-80)&&!G.god)return die();
  if(G.mode=='endless'||G.mode=='daily')G.height=Math.max(G.height,Math.floor((L.start.y*TS+TS-16-p.y)/TS));
  trailFx(p,dt)}
 
@@ -4764,9 +5089,11 @@ function endEndless(){go('over',saveEndless())}
 // paid for today: S.daily.gp is the high-water mark of gems banked off this day's tower (gems are collected bottom-up,
 // so a deeper run is a superset of a shallower one). Replaying for practice or for a better height stays free.
 function saveEndless(){if(G.endSaved)return G.endSaved;const dly=G.mode=='daily',dd=dly?(G.dailyDay||weekStr()):'';
+ // a DEV run (god mode or a jump to height, see devJump) shows its height and touches nothing at all
+ if(G.devRun)return G.endSaved={h:G.height,gems:0,gemsRaw:G.gemsRun,daily:dly,best:false,coins:0,bestV:dly?(S.daily.d==dd?S.daily.h:0):S.endBest,dev:1};
  if(dly&&S.daily.d!=dd)S.daily={d:dd,h:0,gp:0};
  const raw=G.gemsRun,pay=dly?Math.max(0,raw-(S.daily.gp||0)):raw;
- const r=G.endSaved={h:G.height,gems:pay,gemsRaw:raw,daily:dly,best:false};S.bank+=pay;S.earned+=pay;r.coins=addCoins(Math.floor(r.h/5));
+ const r=G.endSaved={h:G.height,gems:pay,gemsRaw:raw,daily:dly,best:false};S.bank+=pay;S.earned+=pay;r.coins=addCoins(endCoins(r.h)); // the gold zone pays double: endCoins
  if(r.daily){const d=dd;S.daily.gp=Math.max(S.daily.gp||0,raw);r.rollover=d!=weekStr();if(r.h>S.daily.h){S.daily.h=r.h;r.best=true}r.bestV=S.daily.h;{const wn=+String(d).slice(1)||0;if(wn>(S.wtix|0)){S.wtix=wn;S.tix+=WEEK_TIX;r.tix=WEEK_TIX}}submitScore('daily',S.daily.h)}
  else{if(r.h>S.endBest){S.endBest=r.h;r.best=true}r.bestV=S.endBest;submitScore('endless',S.endBest)}
  if(r.h>=100)grant('climb');if(r.h>=250)grant('mountain');checkAch();save();return r}
@@ -6295,14 +6622,17 @@ function drawFX(near,th){if(!QUAL||RM()||!th)return;const set=FXK[th.deco];if(!s
 
 function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf(th));
  // vcy: the camera in the old tower's coordinates (L.vy0, see endBuildWin), so a window shift moves nothing back here
+ // wzo / wzsp: THE WEIRD STUFF is on (Endless, the Weekly), and we are in space or past it (no leaves drifting by)
+ const wzo=wzOn(),wzsp=wzo&&wzK(WZ.h,5)>0.5;
  {const cl=G.mode=='endless'||G.mode=='daily',vcy=G.cam.y+(L.vy0||0),hy=cl?vcy-((L.vy0!=null?END_OH:L.H)*TS-VH):undefined;
-  if(cl)drawBGFade(climbSky(),G.cam.x,vcy,gtime,hy);else drawBG(th,G.cam.x,G.cam.y,gtime,hy);drawFX(0,th);}
+  if(cl){const f=climbSky();if(!(wzo&&wzSkyCovers()))drawBGFade(f,G.cam.x,vcy,gtime,hy);if(wzo)wzSky()}else drawBG(th,G.cam.x,G.cam.y,gtime,hy);if(!wzsp)drawFX(0,th);}
  ctx.save();let sx=0,sy=0;if(G.shake>0.3){sx=rnd(-G.shake,G.shake);sy=rnd(-G.shake,G.shake)}
  ctx.translate(Math.round(-G.cam.x+sx),Math.round(-G.cam.y+sy));
  const x0=Math.max(0,Math.floor(G.cam.x/TS)-1),x1=Math.min(L.W-1,Math.floor((G.cam.x+VW)/TS)+1),y0=Math.max(0,Math.floor(G.cam.y/TS)-1),y1=Math.min(L.H-1,Math.floor((G.cam.y+VH)/TS)+1);
  const clm=G.mode=='endless'||G.mode=='daily',fd=clm&&G.bgI!=null?{a:G.bgI,b:G.bgJ,k:ease(G.bgK)}:null;
  const layer=(t2,al)=>{ctx.globalAlpha=al;for(let cy=Math.floor(y0/CH);cy<=Math.floor(y1/CH);cy++)for(let cx=Math.floor(x0/CH);cx<=Math.floor(x1/CH);cx++)ctx.drawImage(chunkOf(L,t2,cx,cy),cx*CHP,cy*CHP,CHP,CHP);ctx.globalAlpha=1};
  if(fd&&fd.k<0.998&&fd.a!==fd.b){layer(fd.a,1);if(fd.k>0.002)layer(fd.b,fd.k)}else layer(fd?fd.b:ti,1);
+ if(wzo&&WZ.h>WZ_STOPS[3])wzTiles(L,x0,x1,y0,y1); // a glitch's wrong-world blocks, the wireframes
  drawCraterRims(L,th);
  if(th.deco==6){drawW6Field(L,t);if(QUAL)drawMoonDust(t)} // World 6: vent plumes + well swirls + levitating regolith
  if(QUAL&&th.deco==7){drawGoldGlints(L,t,x0,x1,y0,y1);drawGoldMotes(t)}
@@ -6456,6 +6786,7 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
   ctx.fillStyle='rgba(255,230,140,.7)';for(let i=0;i<6;i++){const bx=G.cam.x+((i*173+t*40)%VW),by=ly+20+((i*37+t*30)%60);ctx.beginPath();ctx.arc(bx,by,3+i%3,0,7);ctx.fill()}}}
  if(G.rc||G.cg)rgLayer(); // RACE: ghost racers and the Speed Course best-run ghost, under the player (see RACE MODE)
  drawParts(G.parts,[G.cam.x-20,G.cam.y-20,G.cam.x+VW+20,G.cam.y+VH+20]);
+ if(wzo)wzMid(L,x0,x1,y0,y1); // night, gold, the drain, the void, red hazards, hitboxes, the copycat, the wind (under the square)
  const p0=G.player;if(p0&&!p0.dead){
   // render interpolation: draw between the last two physics steps so high-refresh screens don't judder
   const ia=clamp(G.acc/DT,0,1),p=Object.create(p0);if(p0.px!=null){p.x=lerp(p0.px,p0.x,ia);p.y=lerp(p0.py,p0.y,ia)}
@@ -6483,7 +6814,8 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
   else if(sp){ctx.save();ctx.translate(p.x+8+ox,p.y+16+oy-mid);ctx.rotate(sp);drawSq(0,mid,s,gtime,opt);ctx.restore()}
   else drawSq(p.x+8+ox,p.y+16+oy,s,gtime,opt)}
  else if(p0&&G.popT>0)drawPop(); // the X-eyed hit before the square bursts (DEATH POP)
- ctx.restore();drawFX(1,th);if(QUAL)drawVignette()}
+ if(wzo)wzTells(); // the control / gravity flip warnings, over the square
+ ctx.restore();if(!wzsp)drawFX(1,th);if(QUAL)drawVignette();if(wzo)wzPost()}
 // CHECKPOINT FLAG (see ANIMATION). Not reached: a grey pennant at half-mast, barely stirring. Reached: it snaps up the
 // pole in the world's colour (0.26s, white at the start of the raise, a ring off the top from animUpd) and flies,
 // the wave running down the cloth to the tip, with a soft glow behind it (not on Low graphics). The trigger area in
@@ -7010,7 +7342,8 @@ function drawHint(){const g=hintGeom();if(!g)return;ctx.save();ctx.globalAlpha=c
 function drawHUD(){const L=G.L,md=G.mode;
  if(md=='endless'||md=='daily'){hudPill(HUDX,10,230,40);
   // the tower has no top, so neither do these numbers: past ~5 digits they shrink to fit their half of the pill
-  {const hs=G.height+'m',bs=md=='daily'?'WEEKLY':'BEST '+S.endBest+'m';txt(hs,HUDX+18,31,fitPx(hs,26,92),'#fff','left');txt(bs,HUDX+116,31,fitPx(bs,15,106),'#ffd45e','left')}
+  // (wzHudTxt: past 1 km the number now and then misreads for a moment - drawn only, G.height itself is never touched)
+  {const hs=wzHudTxt(G.height)+'m',bs=md=='daily'?'WEEKLY':'BEST '+S.endBest+'m';txt(hs,HUDX+18,31,fitPx(hs,26,92),'#fff','left');txt(bs,HUDX+116,31,fitPx(bs,15,106),'#ffd45e','left')}
   {const A=G.an,b=A?A.gb[0]||0:0;hudPill(VW-140,10,128,40);ctx.save();ctx.translate(VW-116,30);if(b>0)ctx.scale(1+0.5*b,1+0.5*b);gemShape(0,0,9,'#5ff4ff');ctx.restore();
    txt('x '+(G.gemsRun-(A?A.gf:0)),VW-98,31,20,'#fff','left')}
   const dist=Math.max(0,Math.floor((G.lavaY-(G.player.y+16))/TS));hudPill(VW/2-90,12,180,30);txt('LAVA '+dist+'m below',VW/2,27,15,dist<5?'#ff6b4a':'#ffd2b0')}
@@ -7048,7 +7381,11 @@ function drawHUD(){const L=G.L,md=G.mode;
   if(L.coins.length){const cb=A?A.cb:0;hudPill(VW-432,12,108,30);
    ctx.save();ctx.translate(VW-412,27);if(cb>0)ctx.scale(1+0.4*cb,1+0.4*cb);coinIcon(0,0,9,cb*6);ctx.restore();
    ctx.save();ctx.translate(VW-396,28);if(cb>0)ctx.scale(1+0.15*cb,1+0.15*cb);txt((G.coinsRun-(A?A.cf:0))+' / '+L.coins.length,0,0,16,cb>0.3?'#ffe9a0':'#fff','left');ctx.restore()}}
- if(md=='endless'||md=='daily'){hudPill(VW-262,10,112,40);coinIcon(VW-238,30,10,0);{const cs='+'+Math.floor(G.height/5);txt(cs,VW-220,31,fitPx(cs,20,66),'#fff','left')}}
+ // the coins this run will pay (endCoins). In the gold zone (WZ_GOLD up) every metre pays double: the chip turns gold,
+ // a second coin sits behind the first, and it glints now and then
+ if(md=='endless'||md=='daily'){const gz=G.height>WZ_GOLD;if(gz)chip(VW-262,10,112,40,{fill:'rgba(124,88,14,.9)'});else hudPill(VW-262,10,112,40);
+  if(gz)coinIcon(VW-232,25,10,0);coinIcon(VW-238,30,10,0);{const cs='+'+endCoins(G.height);txt(cs,VW-220,31,fitPx(cs,20,66),gz?'#ffe9a0':'#fff','left')}
+  if(gz&&QUAL&&!RM()){const u=(gtime*0.55)%1;if(u<0.22){const s=Math.sin(u/0.22*Math.PI);twinkle(VW-228,20,3+5*s,s,u*3)}}}
  if(!S.set.music)txt('music off (M)',touchOn()?VW-130:VW-60,md=='story'||md=='hard'||md=='speed'||md=='hspeed'?132:58,14,'rgba(255,255,255,.55)');
  drawHint();
  drawNoteCard();
@@ -7946,7 +8283,7 @@ SCREENS.play={enter(){},
   const p=G.player;if(p&&!p.dead&&(pressed.J||pressed.U))p.buf=0.13;
   // hm = the death slow-mo (1 the rest of the time, see DEATH POP): it slows the world and its particles together
   const hm=hitMul(dt);G.acc+=dt*cardTimeMul()*hm;let n=0;while(G.acc>=DT&&n<12){step(DT);G.acc-=DT;n++;if(SCR!==SCREENS.play)return}
-  feelUpd(dt);ambient(dt);updParts(G.parts,dt*hm);if(G.player)updCam(dt);if(G.intro>0)G.intro-=dt;if(G.tipT>0&&G.intro<=0)G.tipT-=dt;G.shake*=Math.pow(0.0005,dt);
+  feelUpd(dt);ambient(dt);updParts(G.parts,dt*hm);if(G.player)updCam(dt);if(wzOn())wzUpdate(dt);if(G.intro>0)G.intro-=dt;if(G.tipT>0&&G.intro<=0)G.tipT-=dt;G.shake*=Math.pow(0.0005,dt);
   if(G.won){G.winT+=dt;if(G.winT>1.0&&!G.winDone){G.winDone=1;onWinDone();return}}
   if(Math.floor(G.t)!=Math.floor(G.t-dt))checkAch()},
  draw(){drawWorld();drawHUD();drawFliers();drawIris()}}; // fliers + iris: see ANIMATION
@@ -7984,8 +8321,14 @@ SCREENS.pause={enter(){if(mus.want!==SONG_PAUSE){this.mw=mus.want;this.ms=mus.st
   // the stack centres itself between the header and the controls line, however many rows this mode has
   const bh=B.length>4?48:50,gap=B.length>4?8:12,y0=Math.round(316-(B.length*bh+(B.length-1)*gap)/2);
   B.forEach((b,k)=>button(b[0],VW/2-140,y0+k*(bh+gap),280,bh,b[1],b[2]));
+  // DEV (recording): god mode and jump-to-height, right of the stack. Dev mode only - never in a shipped build (devOn)
+  if(en&&devOn()){const X=VW-224,Y=92;txt('DEV',X+102,Y-12,14,'#7bdc3b',undefined,false);
+   button('dvgod',X,Y,204,36,'God mode: '+(G.god?'ON':'OFF'),{fs:15,bg:G.god?'#c8f5cf':'#ffffff'});
+   DEV_HTS.forEach((m,k)=>button('dvj'+k,X+(k%3)*70,Y+46+Math.floor(k/3)*40,64,34,m>=1000?(m/1000)+'k':String(m),{fs:14}))}
   txt(touchOn()?'Drag left to move  ·  Tap right to jump  ·  Hold down to drop':'Arrows/WASD  ·  SPACE to jump  ·  Hold Down to drop  ·  M for music',VW/2,500,15,'#fff',undefined,false)},
  onBtn(id){if(id=='resume'){SCR=SCREENS.play;pauseMusicBack();return}if(id=='cards')return go('cards',{from:'pause'});if(id=='restart')return restartLevel();
+  if(id=='dvgod'){if(devOn()){DEVW.god=!DEVW.god;G.god=DEVW.god;if(G.god)G.devRun=true}return}
+  if(id.slice(0,3)=='dvj'){if(devOn()){devJump(DEV_HTS[+id.slice(3)]);if(SCR===SCREENS.pause){SCR=SCREENS.play;pauseMusicBack()}}return}
   if(id=='lbd')return openBoard(modeBoard(),'pause');
   if(G.mode=='tut')return go('menu');if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:tabOf(G.idx,G.mode=='hard')})}};
 
@@ -10361,6 +10704,7 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  // and it only clears the click when it really was inside the banner, so the menu keeps every other tap
  if(!rot&&remTap())mouse.click=false;
  if(!rot){SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);remUpd(dt);wheelIdle(dt)}
+ wzAudio(); // THE WEIRD STUFF's music / effects levels (back to normal on every other screen)
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(SCR!==SCREENS.play&&(STK||tp.size))tReset(); // (not on the win beat, so held fingers carry into the next Marathon level)
  UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();
