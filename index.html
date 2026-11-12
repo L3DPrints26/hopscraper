@@ -60,7 +60,7 @@ const APP_VER='1.2';
 //==CHANGELOG-BEGIN==
 const CHANGELOG=[
  {v:'1.2',date:'November 2026',items:[
-  'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten. The Rival matches your pace.',
+  'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten. The Rival matches your pace, or slide the bots from Easy all the way to Perfect.',
   'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
   'Every world got a whole new look: new art, and calmer backgrounds that stay out of your way.',
@@ -7622,11 +7622,11 @@ const SLD={id:null,lv:-1,kh:0},SLD_STEP=0.05;
 // absolute track geometry of a slider row (o.tx is the track's inset from the row's left edge, o.tw its width)
 function sldTrack(b){return{x:b.x+b.o.tx,w:b.o.tw}}
 function sldSet(b,v){const t=Math.round(clamp(v,0,1)/SLD_STEP)*SLD_STEP;if(Math.abs(t-b.o.get())<1e-9)return;b.o.set(t);if(t!==SLD.lv){SLD.lv=t;sfx('tick')}}
-function slider(id,x,y,w,h,label,get,set){
+function slider(id,x,y,w,h,label,get,set,fmt){
  const v=clamp(get(),0,1),tx=18,tw=w-36;
  button(id,x,y,w,h,'',{sld:1,get,set,tx,tw,bg:'#f6f3ff',col:'#fff0bd',draw:(bw,bh,sel)=>{
   txt(label,-bw/2+18,-bh/2+15,15,'#1d1a2e','left',false);
-  txt(v<=0?'OFF':Math.round(v*100)+'%',bw/2-18,-bh/2+15,15,v<=0?'#b3384c':'#3b3752','right',false);
+  txt(fmt?fmt(v):v<=0?'OFF':Math.round(v*100)+'%',bw/2-18,-bh/2+15,15,!fmt&&v<=0?'#b3384c':'#3b3752','right',false);
   const gx=-bw/2+tx,gy=8;
   ctx.fillStyle='#d6d1e6';rr(gx,gy-6,tw,12,6);ctx.fill();
   // quarter ticks: a slider with no landmarks is impossible to set to "about half" on a phone
@@ -10365,8 +10365,13 @@ function rgKeep(key,fin,data){if(!(fin>0)||!data||data.length>RG_MAXLEN)return f
  if(ks.length>=RG_KEEP){ks.sort((a,b)=>((Array.isArray(H[a])&&H[a][2])||0)-((Array.isArray(H[b])&&H[b][2])||0));for(const k of ks.slice(0,ks.length-RG_KEEP+1))delete H[k]}
  return true}
 // the lineup: the Rival first, then your best run (if you have one), then bots either side of the Rival's pace
+// The bot slider (S.rdif, 0..1, middle = the old behaviour): the far left is the slowest bot,
+// right moves it toward the fastest bot (the perfect run) at the far end.
+function raceDif(){return typeof S.rdif=='number'&&S.rdif>=0&&S.rdif<=1?S.rdif:0.5}
+function raceDifName(d){return d<0.2?'Easy':d<0.4?'Relaxed':d<0.6?'Normal':d<0.8?'Hard':d<0.97?'Expert':'Perfect'}
 function raceLineup(key){const B=raceBots(key);if(!B)return null;const T=B.b,n=T.length,pace=racePace(key);
- let ri=Math.floor((n-1)/2);if(pace!=null){const tg=pace*0.97;let bd=1e9;T.forEach((b,i)=>{const d=Math.abs(b[0]-tg);if(d<bd){bd=d;ri=i}})}
+ let ri=Math.floor((n-1)/2);const dif=raceDif(),base=pace!=null?pace*0.97:T[ri][0];
+ {const tg=dif<=0.5?lerp(Math.max(T[n-1][0],base),base,dif/0.5):lerp(base,T[0][0],(dif-0.5)/0.5);let bd=1e9;T.forEach((b,i)=>{const d=Math.abs(b[0]-tg);if(d<bd){bd=d;ri=i}})}
  const rs=[{id:'rival',name:RACE_RIVAL[0],c:RACE_RIVAL[1],h:RACE_RIVAL[2],col:RACE_RIVAL[3],tier:ri,fin:T[ri][0],sub:pace!=null?'Matches your pace':'Medium pace for now',a:0.62}];
  const g=rgGet(key);if(g)rs.push({id:'best',name:'You (best)',c:S.eq.c,h:S.eq.h,col:'#ffffff',fin:g[0],sub:'Your fastest run',a:0.5});
  for(let k=1;rs.length<3&&k<n;k++)for(const i of[ri-k,ri+k])if(i>=0&&i<n&&rs.length<3){const cr=raceCrew(i,n);rs.push({id:'b'+i,name:cr[0],c:cr[1],h:cr[2],col:cr[3],tier:i,fin:T[i][0],sub:i<ri?'Quicker than the Rival':'Steadier than the Rival',a:0.6})}
@@ -10508,15 +10513,15 @@ SCREENS.race={enter(a){this.T=raceTracks();if(!this.sel||this.T.indexOf(this.sel
   txt(raceName(k),px+18,132,19,'#ffffff','left',false);txt('Lineup',px+pw-18,132,13,'#9f9abb','right',false);
   ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(px+16,148,pw-32,1);
   const rows=[{name:'You',sub:'Equipped skin',c:S.eq.c,h:S.eq.h,col:'#ffd45e'}].concat(lu.rs);
-  rows.forEach((r,i)=>{const y=184+i*56;drawSq(px+40,y+14,26,gtime,{c:r.c,h:r.h,face:1,lx:0.4,a:r.id?0.85:1});
+  rows.forEach((r,i)=>{const y=180+i*48;drawSq(px+40,y+14,26,gtime,{c:r.c,h:r.h,face:1,lx:0.4,a:r.id?0.85:1});
    ctx.fillStyle=r.col;rr(px+66,y-8,4,26,2);ctx.fill();
    txt(r.name,px+80,y-1,17,'#ffffff','left',false);
-   const sub=r.id=='rival'?(lu.pace!=null?'Matches your pace ('+fmtT(lu.pace)+')':'Matches your pace after a race'):r.sub;
+   const dn=Math.abs(raceDif()-0.5)<0.1,sub=r.id=='rival'?(!dn?raceDifName(raceDif())+' bot':lu.pace!=null?'Matches your pace ('+fmtT(lu.pace)+')':'Matches your pace after a race'):r.sub;
    txt(sub,px+80,y+18,12,'#aaa5c4','left',false);if(r.fin)txt(fmtT(r.fin),px+pw-18,y+4,15,'#e9e6f4','right',false)});
-  txt(lu.pace!=null?'Rival is set by your last '+Math.min(5,raceRuns(k))+' race'+(raceRuns(k)==1?'':'s')+' here.':'Race once and the Rival takes your pace.',px+pw/2,424,12,'#9f9abb','center',false);
+  slider('rdif',px+16,374,pw-32,50,'Bots',raceDif,v=>{S.rdif=Math.round(v*100)/100;this.lu=null},raceDifName);
   button('go',px,452,pw,52,'Start Race',{bg:UIC.green,col:UIC.green,ic:'play',r:12})},
  onBtn(id,b){if(id=='back')return go('modes');if(id=='pp'){this.pg--;return}if(id=='pn'){this.pg++;return}
-  if(id=='go'){if(this.sel)startRace(this.sel,this.lu&&this.lu.key==this.sel?this.lu:null);return}
+  if(id=='go'){save();if(this.sel)startRace(this.sel,this.lu&&this.lu.key==this.sel?this.lu:null);return}
   if(id[0]=='t'){const k=id.slice(1);if(this.sel===k&&UI.wasSel)return startRace(k,this.lu&&this.lu.key==k?this.lu:null);this.sel=k;this.lu=null}}};
 
 // ---- RESULTS ---------------------------------------------------------------------------------------------------------
