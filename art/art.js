@@ -20,7 +20,7 @@ window.ART = (() => {
 
   // ---- the pieces every world shares: small, so they load straight away ----
   const FXN = ['leaf0', 'leaf1', 'leaf2', 'leaf3', 'petal', 'chip0', 'chip1'];
-  const SHARED = ['coin', 'note', 'hero', 'spikes', 'gem0', 'gem1', 'gem2', 'gem3', 'gem4', 'gem5', 'gem6', 'gem7'];
+  const SHARED = ['coin', 'note', 'hero', 'spikes', 'spikes_v', 'spikes_l', 'spikes_r', 'gem0', 'gem1', 'gem2', 'gem3', 'gem4', 'gem5', 'gem6', 'gem7'];
   const IM = {}; let left = SHARED.length;
   FXN.forEach(n => { const i = new Image(); i.src = BASE + 'fx/' + n + '.png'; IM[n] = i; });   // (FX checks each one is loaded before using it)
   const A = { ready: false, on: true, IM };
@@ -47,7 +47,7 @@ window.ART = (() => {
   const DOOR = [];   // the locked door, one picture per tile of it: dl_ leaf / dj_ jamb, column S/L/R, row S/T/M/B
   ['dl_', 'dj_'].forEach(k => ['S', 'L', 'R'].forEach(c => ['S', 'T', 'M', 'B'].forEach(r => DOOR.push(k + c + r))));
   const HZ = ['saw', 'lz_beam_p', 'lz_beam_c', 'lz_cap', 'key', 'lock', 'strap', 'strike', 'lava_body', 'lava_crest', 'gold_body', 'gold_crest',
-    'rk_box_s', 'rk_box_h', 'rk_tube', 'rk_yoke', 'rk_shot', 'rk_seek', 'vent', 'well', 'bp_base', 'bp_cap'].concat(DOOR);
+    'rk_box_s', 'rk_box_h', 'rk_tube', 'rk_yoke', 'rk_shot', 'rk_seek', 'vent', 'well', 'bp_base', 'bp_cap', 'flag_pole', 'cv_l', 'cv_m', 'cv_r', 'cv_s'].concat(DOOR);
   const BPC = [3, 4, 5, 6, 7, 8, 9];   // the bounce pad's spring, rendered at each of these lengths (game px)
   BPC.forEach(n => HZ.push('bp_coil' + n));
 
@@ -139,9 +139,15 @@ window.ART = (() => {
   };
 
   // ---- solid blocks: a body that runs on seamlessly, the world's top on any block open to the sky, dark edges where it ends ----
+  // Variants 0 and 2 share one brick bond and join each other seamlessly, 1 and 3 the other (art/worlds.py courses()), and
+  // any variant sits on any other. So a row keeps its bond (rows still alternate 0/3/2/1 as before) and picks between that
+  // bond's two pictures tile by tile: a thick wall is no longer the same brick every 24 px.
+  // mask: 1 up, 2 down, 4 left, 8 right are solid; 16 / 32 the tile up-left / up-right is solid (a wall rising beside this
+  // floor): the top then stops at that wall's face instead of poking a tab out over it.
+  const mix = (x, y) => { let h = Math.imul(x, 0x9E3779B1) ^ Math.imul(y + 977, 0x85EBCA77); h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D); return (h >>> 13) & 1; };
   A.solid = (ti, mask, x, y, px, py) => {
     const p = world(ti); if (!p) return false;
-    const w = WP[ti], im = p.im, st = im[w.blk + (((y * 7) % 4) + 4) % 4];   // one variant per row: neighbours in a row always match
+    const w = WP[ti], im = p.im, st = im[w.blk + (((((y * 7) % 4) + 4) % 4 & 1) + 2 * mix(x, y))];
     if (!ok(st)) return false;
     ctx.drawImage(st, 16, 16, 96, 96, px, py, TS, TS);
     const up = mask & 1, dn = mask & 2, lf = mask & 4, rt = mask & 8;
@@ -150,15 +156,22 @@ window.ART = (() => {
     if (!rt) ctx.fillRect(px + TS - 1.5, py, 1.5, TS);
     if (!dn) { const g = ctx.createLinearGradient(0, py + TS - 6, 0, py + TS); g.addColorStop(0, 'rgba(' + w.edge + ',0)'); g.addColorStop(1, 'rgba(' + w.edge + ',.55)'); ctx.fillStyle = g; ctx.fillRect(px, py + TS - 6, TS, 6); }
     if (!up) {
-      const L = im[w.cap + 'left'], R = im[w.cap + 'right'];
+      const L = im[w.cap + 'left'], R = im[w.cap + 'right'], wl = mask & 16, wr = mask & 32;
+      if (wl || wr) { ctx.save(); ctx.beginPath(); ctx.rect(wl ? px : px - 4, py - 4, (wr ? px + TS : px + 28) - (wl ? px : px - 4), 32); ctx.clip(); }
       if (!lf && !rt && ok(L) && ok(R)) { ctx.save(); ctx.beginPath(); ctx.rect(px - 4, py - 4, 16, 32); ctx.clip(); ctx.drawImage(L, px - 4, py - 4, 32, 32); ctx.restore();
         ctx.save(); ctx.beginPath(); ctx.rect(px + 12, py - 4, 16, 32); ctx.clip(); ctx.drawImage(R, px - 4, py - 4, 32, 32); ctx.restore(); }
       else { const c = im[w.cap + (!lf ? 'left' : !rt ? 'right' : 'mid')]; if (ok(c)) ctx.drawImage(c, px - 4, py - 4, 32, 32); }
+      if (wl || wr) ctx.restore();
     }
     return true;
   };
+  // ceiling and wall spikes have pictures of their own (art.py spikes_turned: the same pieces turned in the scene, so
+  // they keep the top-left light); turning the floor picture, the fallback, turned its light round with it
+  const SPK = { 'v': 'spikes_v', '<': 'spikes_l', '>': 'spikes_r' };
   A.spike = (ti, c, px, py) => {
     if (!(A.on && ok(IM.spikes))) return false;
+    const own = SPK[c] && IM[SPK[c]];
+    if (ok(own)) { ctx.drawImage(own, px - 4, py - 4, 32, 32); return true; }
     const r = { '^': 0, '>': Math.PI / 2, 'v': Math.PI, '<': -Math.PI / 2 }[c];
     ctx.save(); ctx.translate(px + 12, py + 12); ctx.rotate(r); ctx.drawImage(IM.spikes, -16, -16, 32, 32); ctx.restore();
     return true;
@@ -230,35 +243,136 @@ window.ART = (() => {
   // which is exactly where the hurt box starts. The crest (A.lavaTop) is drawn over it every frame and slides along, the
   // code's travelling wave; held still on Low graphics and under Reduce Motion. The Gilded Vale pours molten gold.
   const melt = (th, part) => { const p = hz(), im = p && p.im[(th && th.deco == 7 ? 'gold' : 'lava') + part]; return ok(im) ? im : null; };
-  A.lava = (ti, top, px, py) => {
-    const im = melt(WORLDS[ti], '_body'); if (!im) return false;
-    // the melt repeats every 2 tiles each way, so each tile takes its own quarter of the picture
-    const k = im.naturalWidth / (2 * TS), sx = (((px / TS) % 2 + 2) % 2) * TS * k, sy = (((py / TS) % 2 + 2) % 2) * TS * k, d = top ? 8 : 0;
-    ctx.drawImage(im, sx, sy + d * k, TS * k, (TS - d) * k, px, py + d, TS, TS - d);
+  const isGold = th => !!(th && th.deco == 7);
+  // Where a pool or a fall is open to the air (e bits from the game's lavaEdge: 4 left, 8 right, 16 below) the melt keeps
+  // a skin: a dark crust line, a hot bright line just inside it and a little shade, like the crest's own bright line, and
+  // the bottom of a fall hangs in rounded drips instead of ending square. All inside the tile, so the picture never
+  // reaches past what can hurt you (the corners it rounds off are a few px of the hurt box at most).
+  const RIM = { lava: ['rgba(58,8,4,.9)', 'rgba(255,214,120,.8)', 'rgba(120,18,0,.3)'], gold: ['rgba(84,44,0,.9)', 'rgba(255,246,190,.85)', 'rgba(150,80,0,.28)'] };
+  function meltEdge(px, py, d, e) {   // -> [outline of the melt in this tile (closed), its open edges (to stroke)]
+    const oL = e & 4, oR = e & 8, oB = e & 16, R = 6, y0 = py + d, yb = py + TS;
+    const bot = x => {   // the bottom of a fall: a few round drips of different sizes (world-anchored, so they run on across
+      // tiles), the outer corners rounded where a side is open too
+      const a = Math.max(0, Math.cos(x * 2 * Math.PI / 14 + 1.7 * Math.sin(x * .11))), dr = Math.pow(a, 1.4) * (3.0 + 1.4 * Math.sin(x * .23 + 1));
+      let y = yb - 4.4 + dr;
+      if (oL && x < px + R) y = Math.min(y, yb - 4.4 - R + Math.sqrt(Math.max(0, R * R - (px + R - x) * (px + R - x))));
+      if (oR && x > px + TS - R) y = Math.min(y, yb - 4.4 - R + Math.sqrt(Math.max(0, R * R - (x - px - TS + R) * (x - px - TS + R))));
+      return y;
+    };
+    // (the outline reaches a pixel past the tile on its closed sides, so tile meets tile without an antialiased seam)
+    const shape = new Path2D(), rim = new Path2D(), xl = oL ? px : px - 1, xr = oR ? px + TS : px + TS + 1, yt = d ? y0 : y0 - 1;
+    shape.moveTo(xl, yt); shape.lineTo(xr, yt);
+    if (oB) { shape.lineTo(xr, bot(px + TS)); for (let x = px + TS; x >= px - .01; x -= 1) shape.lineTo(x, bot(x)); shape.lineTo(xl, bot(px)); }
+    else { shape.lineTo(xr, yb + 1); shape.lineTo(xl, yb + 1); }
+    shape.closePath();
+    if (oL) { rim.moveTo(px, y0); rim.lineTo(px, oB ? bot(px) : yb); }
+    if (oB) { if (!oL) rim.moveTo(px, bot(px)); for (let x = px + 1; x <= px + TS + .01; x += 1) rim.lineTo(x, bot(x)); }
+    if (oR) { if (!oB) rim.moveTo(px + TS, yb); rim.lineTo(px + TS, y0); }
+    return [shape, rim];
+  }
+  // The melt picture repeats every 2 tiles each way, and wraps. Its mirror images join it (and each other) just as
+  // seamlessly - the edge a mirrored copy turns outward is the same edge again - so each 2x2-tile cell of a pool, a fall or
+  // the rising lava takes one of the four (as is, flipped across, up, or both) by a hash of where it is: a big body of
+  // lava stops being one blob pattern stamped every 48 px (most of all the rising lava's top, finding 6's "o'o'o'").
+  const flips = im => im._fl || (im._fl = [0, 1, 2, 3].map(f => {
+    if (!f) return im;
+    const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext('2d');
+    g.translate(f & 1 ? c.width : 0, f & 2 ? c.height : 0); g.scale(f & 1 ? -1 : 1, f & 2 ? -1 : 1); g.drawImage(im, 0, 0); return c;
+  }));
+  const cellFlip = (cx, cy) => { let h = Math.imul(cx, 0x27d4eb2d) ^ Math.imul(cy + 31, 0x165667b1); h ^= h >>> 15; return (Math.imul(h, 0x2C1B3C6D) >>> 28) & 3; };
+  A.lava = (ti, e, px, py) => {
+    const th = WORLDS[ti], im = melt(th, '_body'); if (!im) return false;
+    if (typeof e === 'boolean') e = e ? 1 : 0;   // (an older caller: only "is it a surface")
+    // each tile takes its own quarter of its cell's picture; a surface tile's melt starts 8 px down (where the hurt box
+    // starts) and the crest goes on over it live (lavaTop)
+    const k = im.naturalWidth / (2 * TS), sx = (((px / TS) % 2 + 2) % 2) * TS * k, sy = (((py / TS) % 2 + 2) % 2) * TS * k, d = e & 1 ? 8 : 0;
+    const src = flips(im)[cellFlip(Math.floor(px / (2 * TS)), Math.floor(py / (2 * TS)))], open = e & 28;
+    let sh = null, rim = null;
+    if (open) { [sh, rim] = meltEdge(px, py, d, e); ctx.save(); ctx.clip(sh); }
+    ctx.drawImage(src, sx, sy + d * k, TS * k, (TS - d) * k, px, py + d, TS, TS - d);
+    if (e & 2) {   // pouring out from under a block: in its shadow for the first few px
+      const g = ctx.createLinearGradient(0, py, 0, py + 6); g.addColorStop(0, 'rgba(40,6,0,.5)'); g.addColorStop(1, 'rgba(40,6,0,0)'); ctx.fillStyle = g; ctx.fillRect(px, py, TS, 6);
+    }
+    if (open) {
+      const c = RIM[isGold(th) ? 'gold' : 'lava'];
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.strokeStyle = c[2]; ctx.lineWidth = 9; ctx.stroke(rim);
+      ctx.strokeStyle = c[1]; ctx.lineWidth = 4.6; ctx.stroke(rim);
+      ctx.strokeStyle = c[0]; ctx.lineWidth = 2.4; ctx.stroke(rim);
+      ctx.restore();
+    }
     return true;
   };
-  A.lavaTop = (th, px, py, t) => {
+  // The crest, cut in two. Its top rows are a glow standing over the surface; drawn as it was, tile by tile, that glow
+  // was a pale box with square ends the exact width of the pool. Now it fades out over the last tile at each end of a run
+  // (e: 32 / 64 = the tile to the left / right is more surface). The rest, the bright crest line itself, comes from one
+  // long strip made once from the tile picture with its waves spaced unevenly
+  // (STRIP tiles before it repeats), so a long run, and the rising lava most of all, isn't one bump stamped every 24 px.
+  // Where the surface ends in the air (e 4 / 8) its corner is rounded off.
+  const GLOW_ROWS = 26, STRIP = 16;
+  function crestParts(th, im) {
+    const p = hz(), key = isGold(th) ? 'gold' : 'lava', c0 = p['crest_' + key];
+    if (c0 && c0.src === im) return c0;
+    const k = im.naturalWidth / TS, gh = GLOW_ROWS * k / 4, H = im.naturalHeight - gh;
+    const glow = [0, 1, 2, 3].map(v => {   // 0 plain, 1 fades out to the left, 2 to the right, 3 both
+      const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = Math.ceil(gh); const g = c.getContext('2d');
+      g.drawImage(im, 0, 0, im.naturalWidth, gh, 0, 0, c.width, gh);
+      if (v) {
+        const f = g.createLinearGradient(0, 0, c.width, 0), e = [0, .08, .2, .38, .6, .8, 1].map(u => u * u * (3 - 2 * u));
+        for (let i = 0; i <= 6; i++) { const u = i / 6, a = Math.min(v & 1 ? e[i] : 1, v & 2 ? e[6 - i] : 1); f.addColorStop(u, 'rgba(0,0,0,' + a.toFixed(3) + ')'); }
+        g.globalCompositeOperation = 'destination-in'; g.fillStyle = f; g.fillRect(0, 0, c.width, c.height);
+      }
+      return c;
+    });
+    // column by column, the waves spaced unevenly by a smooth warp that comes round to itself over the strip. (Not lifted
+    // or dropped: the crest's solid band only just covers the top of the melt under it, at y 8.)
+    const s = document.createElement('canvas'), W = STRIP * TS; s.width = W * k; s.height = Math.ceil(H); const g = s.getContext('2d');
+    for (let cx = 0; cx < s.width; cx++) {
+      const u = cx / k, a = 2 * Math.PI * u / W;
+      const wx = 3.2 * Math.sin(3 * a) + 2.1 * Math.sin(5 * a + 1.3) + 1.2 * Math.sin(11 * a + .4);
+      const sxx = ((((u + wx) % TS) + TS) % TS) * k;
+      g.drawImage(im, Math.min(im.naturalWidth - 1, Math.floor(sxx)), gh, 1, H, cx, 0, 1, H);
+    }
+    return p['crest_' + key] = { src: im, glow, strip: s, k, gh: gh / k, sh: s.height / k };
+  }
+  // the crest strip along world x from xa to xb, its top at y, slid along by o px (the travelling wave)
+  function crestRun(cp, xa, xb, y, o) {
+    const W = STRIP * TS, k = cp.k;
+    for (let x = xa; x < xb - .001;) {
+      const u = ((((x + o) % W) + W) % W), n = Math.min(W - u, xb - x);
+      ctx.drawImage(cp.strip, u * k, 0, n * k, cp.strip.height, x, y, n, cp.sh); x += n;
+    }
+  }
+  A.lavaTop = (th, px, py, t, e) => {
     const im = melt(th, '_crest'); if (!im || !melt(th, '_body')) return false;
-    const o = (QUAL && !RM()) ? (t * 14) % TS : 0, k = im.naturalWidth / TS;
-    if (o > .01) { ctx.drawImage(im, o * k, 0, (TS - o) * k, im.naturalHeight, px, py, TS - o, TS); ctx.drawImage(im, 0, 0, o * k, im.naturalHeight, px + TS - o, py, o, TS); }
-    else ctx.drawImage(im, px, py, TS, TS);
+    e = e || 0; const cp = crestParts(th, im);
+    ctx.drawImage(cp.glow[(e & 32 ? 0 : 1) | (e & 64 ? 0 : 2)], px, py, TS, cp.gh);
+    const o = (QUAL && !RM()) ? (t * 14) % (STRIP * TS) : 0, oL = e & 4, oR = e & 8;
+    if (oL || oR) {   // (a pixel past the tile on a side that carries on, so the clip's soft edge isn't a seam there)
+      const x0 = oL ? px : px - 1, w = (oR ? px + TS : px + TS + 1) - x0;
+      ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, py + 3, w, TS - 3, [oL ? 6 : 0, oR ? 6 : 0, 0, 0]) : ctx.rect(x0, py + 3, w, TS - 3); ctx.clip();
+    }
+    crestRun(cp, px, px + TS, py + cp.gh, o);
+    if (oL || oR) ctx.restore();
     return true;
   };
   // the rising lava (climbs and Endless): the same melt, put together into one 8x8-tile block once so a screenful is a
   // handful of draws, pinned to the world so it doesn't swim when the camera moves; deeper down it darkens, as before
   A.rise = (ly, x0, x1, t) => {
     const p = hz(), body = melt(null, '_body'), crest = melt(null, '_crest'); if (!body || !crest) return false;
+    // (16 x 8 tiles of it, each 2x2-tile cell one of the melt's mirror images, see flips: it repeats every 384 px, not 48)
     let blk = p.riseBlk;
-    if (!blk) { blk = p.riseBlk = document.createElement('canvas'); blk.width = blk.height = 384; const g = blk.getContext('2d'); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) g.drawImage(body, i * 96, j * 96, 96, 96); }
-    const B = 8 * TS, y1 = Math.min(ly + VH + 200, G.cam.y + VH + 30);
+    if (!blk) { blk = p.riseBlk = document.createElement('canvas'); blk.width = 768; blk.height = 384; const g = blk.getContext('2d'), F = flips(body); for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) g.drawImage(F[cellFlip(i, j)], i * 96, j * 96, 96, 96); }
+    const BW = 16 * TS, B = 8 * TS, y1 = Math.min(ly + VH + 200, G.cam.y + VH + 30);
     if (y1 > ly) {
       ctx.save(); ctx.beginPath(); ctx.rect(x0, ly, x1 - x0, y1 - ly); ctx.clip();
-      for (let y = Math.floor(ly / B) * B; y < y1; y += B) for (let x = Math.floor(x0 / B) * B; x < x1; x += B) ctx.drawImage(blk, x, y, B, B);
+      for (let y = Math.floor(ly / B) * B; y < y1; y += B) for (let x = Math.floor(x0 / BW) * BW; x < x1; x += BW) ctx.drawImage(blk, x, y, BW, B);
       const g = ctx.createLinearGradient(0, ly + 30, 0, ly + 220); g.addColorStop(0, 'rgba(90,8,16,0)'); g.addColorStop(1, 'rgba(90,8,16,.62)');
       ctx.fillStyle = g; ctx.fillRect(x0, ly + 30, x1 - x0, y1 - ly - 30); ctx.restore();
     }
-    const o = (QUAL && !RM()) ? (t * 14) % TS : 0;
-    for (let x = Math.floor(x0 / TS) * TS - o; x < x1; x += TS) ctx.drawImage(crest, x, ly - 8, TS, TS);
+    const cp = crestParts(null, crest), o = (QUAL && !RM()) ? (t * 14) % (STRIP * TS) : 0;
+    ctx.drawImage(cp.glow[0], x0, ly - 8, x1 - x0, cp.gh);
+    crestRun(cp, x0, x1, ly - 8 + cp.gh, o);
     return true;
   };
   // ROCKET YARD. Each piece takes the code version's exact footprint and leaves it every telegraph: the fuse bar in the
@@ -282,6 +396,12 @@ window.ART = (() => {
     ctx.save(); if (QUAL && !RM()) ctx.rotate(t * .6); ctx.drawImage(im, -16, -16, 32, 32); ctx.restore();
     return true;
   };
+  // CHECKPOINT: the flag's pole on its footing (worlds.py flag_pole), in the code pole's place; drawFlag still raises and
+  // flies the cloth from x 8 of the tile and does the whip when you reach it
+  A.flagPole = (px, py) => { const im = hzImg('flag_pole'); if (!im) return false; ctx.drawImage(im, px - 4, py - 14, 24, 40); return true; };
+  // CONVEYOR BELT, one tile: k 'l' / 'r' the ends of a run, 'm' the middle, 's' a belt one tile long (worlds.py belt). The
+  // game still runs the chevrons along its top
+  A.belt = (k, px, py) => { const im = hzImg('cv_' + k); if (!im) return false; ctx.drawImage(im, px - 4, py - 4, 32, 32); return true; };
   // BOUNCE PAD, the tile at (px, py): the footing on the floor, the spring, the pink cap. drawWorld works the twang and
   // hands it over: c = how far the cap is pushed down from rest (game px; below 0 = up past rest), wb = its rock
   // (radians), sq = its squash (x scale). The spring is the rendered length nearest the gap it has to fill, stretched the

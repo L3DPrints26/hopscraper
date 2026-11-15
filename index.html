@@ -2401,29 +2401,52 @@ function buildLevel(def,opt){opt=opt||{};
   if('lLTtXBDcC'.indexOf(c)>=0||(c=='~'&&(y==0||g[y-1][x]!='~')))L.dyn.push([x,y,c])}
  return L}
 const CH=16,CHP=CH*TS;
-function chunkOf(L,ti,cx,cy){const key=ti+':'+cx+','+cy;/* theme in the key: Endless changes theme as you climb */let cv2=L.chunks.get(key);if(cv2){L.chunks.delete(key);L.chunks.set(key,cv2);return cv2}
- cv2=document.createElement('canvas');const CR=Math.max(1,Math.min(3,Math.round(KS||1)));cv2.width=CHP*CR;cv2.height=CHP*CR;const g=cv2.getContext('2d');const th=WORLDS[ti];
- withCtx(g,()=>{ctx.scale(CR,CR);ctx.translate(-cx*CHP,-cy*CHP);
-  const x0=cx*CH,y0=cy*CH,x1=Math.min(L.W-1,x0+CH-1),y1=Math.min(L.H-1,y0+CH-1);
+// A chunk is baked at the screen's own scale (KS, up to 3) and drawWorld's layer() puts it down 1:1 on whole device
+// pixels, so the blocks are exactly as sharp as the live sprites over them. (It used to bake at Math.round(KS): at KS
+// 1.49 - a laptop, a tablet in split view - that was 1x stretched 1.49x, and soft.) A chunk baked at another scale
+// (the window was resized, the phone turned, Graphics changed) is simply baked again the next time it is drawn.
+// The level's edge carries on past itself: tiles outside the grid are drawn as more of its border wall, so a narrow
+// level (camera centred, lw < VW), the 6 px strips above and below a 22-row level and THE TOP's headroom show wall,
+// not the backdrop with the level cut out of it. Drawn only: tAt / isSolid, so the game itself, never see these tiles.
+function chunkOf(L,ti,cx,cy){const key=ti+':'+cx+','+cy;/* theme in the key: Endless changes theme as you climb */const k=Math.min(3,KS||1);let cv2=L.chunks.get(key);
+ if(cv2){L.chunks.delete(key);if(cv2._k===k){L.chunks.set(key,cv2);return cv2}}
+ cv2=document.createElement('canvas');cv2._k=k;cv2.width=cv2.height=Math.ceil(CHP*k)+1;const g=cv2.getContext('2d');const th=WORLDS[ti];
+ withCtx(g,()=>{ctx.scale(k,k);ctx.translate(-cx*CHP,-cy*CHP);
+  // SV: solid for the art's edges. A belt beside or under a block counts: the block's top runs on flush into the belt
+  // (no rounded end piece standing up proud of it) and no dark edge is drawn down a face the belt covers
+  const x0=cx*CH,y0=cy*CH,x1=x0+CH-1,y1=y0+CH-1,out=(x2,y2)=>x2<0||y2<0||x2>=L.W||y2>=L.H,SV=(x2,y2)=>{if(out(x2,y2))return true;const c2=L.g[y2][x2];return c2=='c'||c2=='C'||SOL(L,x2,y2)};
   // things that sit ON a solid tile (belts, lava) hide its grass top, so it isn't drawn as a stray strip underneath.
   // A bounce pad keeps it: its footing stands on the floor's top like anything else, and with the top cut out the pad
   // sat in a bare notch in the floor
   const cover=(x2,y2)=>{const c2=tAt(L,x2,y2);return c2=='c'||c2=='C'||c2=='~'};
   const nN=(x2,y2)=>(tAt(L,x2-1,y2)=='N')+(tAt(L,x2+1,y2)=='N')+(tAt(L,x2,y2-1)=='N')+(tAt(L,x2,y2+1)=='N');
-  for(let y=Math.max(0,y0);y<=y1;y++)for(let x=Math.max(0,x0);x<=x1;x++){const c=L.g[y][x],px=x*TS,py=y*TS;
+  // (one tile round the chunk as well: whatever of its neighbours' tops and spikes reaches over the chunk's edge is
+  // in it, and the canvas is covered right to its edge, so two chunks side by side meet without a seam)
+  for(let y=y0-1;y<=y1+1;y++)for(let x=x0-1;x<=x1+1;x++){const c=out(x,y)?'#':L.g[y][x],px=x*TS,py=y*TS;
    // no-jump zone continues behind spikes/pads placed inside it (drawn only; no gameplay change)
    if(c!='N'&&'^v<>B'.indexOf(c)>=0&&nN(x,y)>=2){ctx.fillStyle=getNPat();ctx.fillRect(px,py,TS,TS)}
    if(c=='N'){ctx.fillStyle=getNPat();ctx.fillRect(px,py,TS,TS)}
-   else if(c=='#'){const mask=(SOL(L,x,y-1)||cover(x,y-1)?1:0)|(SOL(L,x,y+1)?2:0)|(SOL(L,x-1,y)?4:0)|(SOL(L,x+1,y)?8:0);(window.ART&&ART.solid(ti,mask,x,y,px,py))||ctx.drawImage(tileSpr(ti,'#',mask,((x*37+y*101)%4+4)%4),px-4,py-4)}
+   // (bits 16/32 for the art pack: the tile up-left / up-right is solid, a wall rising beside this floor, so its top
+   // must stop at the wall's face instead of poking out over it; tileSpr only ever sees the four side bits)
+   else if(c=='#'){const mask=(SV(x,y-1)||cover(x,y-1)?1:0)|(SV(x,y+1)?2:0)|(SV(x-1,y)?4:0)|(SV(x+1,y)?8:0);
+    (window.ART&&ART.solid(ti,mask|(SV(x-1,y-1)?16:0)|(SV(x+1,y-1)?32:0),x,y,px,py))||ctx.drawImage(tileSpr(ti,'#',mask,((x*37+y*101)%4+4)%4),px-4,py-4);
+    // beside the level, the wall falls slowly into shade with distance, so the play area stays the brightest thing
+    if(x<0||x>=L.W){const a=dd=>Math.min(0.42,dd/(6*TS)*0.42),n=x<0?-(px+TS):px-L.W*TS,f=n+TS,g2=ctx.createLinearGradient(x<0?px+TS:px,0,x<0?px:px+TS,0);
+     g2.addColorStop(0,'rgba(8,6,16,'+a(n).toFixed(3)+')');g2.addColorStop(1,'rgba(8,6,16,'+a(f).toFixed(3)+')');ctx.fillStyle=g2;ctx.fillRect(px,py,TS,TS)}}
    // UPSIDE DOWN: bakeOneway paints the plank in the TOP 9px of its tile because you normally stand on its top face, but
    // with gravity inverted colY parks you against the tile's BOTTOM edge - drawn as-is you float 15px clear of the very
    // thing you are standing on. Mirror the 32x32 sprite about its own tile centre so the plank's face meets your feet.
    else if(c=='='){const os=tileSpr(ti,'=',(L.g[y][x-1]=='='?4:0)|(L.g[y][x+1]=='='?8:0),0);
     if(L.vf){ctx.save();ctx.translate(px+12,py+12);ctx.scale(1,-1);ctx.drawImage(os,-16,-16);ctx.restore()}else ctx.drawImage(os,px-4,py-4)}
    else if(c=='^'||c=='v'||c=='<'||c=='>'){if(!(window.ART&&ART.spike(ti,c,px,py)))ctx.drawImage(tileSpr(ti,c,0,0),px-4,py-4)}
-   else if(c=='~'){if(!(window.ART&&ART.lava(ti,y==0||L.g[y-1][x]!='~',px,py)))ctx.drawImage(tileSpr(ti,'~',0,0),px-4,py-4)}}}); // art pack: the Blender melt
+   else if(c=='~'){if(!(window.ART&&ART.lava(ti,lavaEdge(L,x,y),px,py)))ctx.drawImage(tileSpr(ti,'~',0,0),px-4,py-4)}}}); // art pack: the Blender melt
  L.chunks.set(key,cv2);if(L.chunks.size>30)L.chunks.delete(L.chunks.keys().next().value);
  return cv2}
+// What is round a lava tile, for the art (ART.lava / ART.lavaTop): 1 open above (a surface: crest, bubbles), 2 a block
+// above (a fall pouring out of a ceiling: no surface there), neither = more lava; 4 / 8 open to the left / right, 16 open
+// below (the end of a fall). "Open" = anything that doesn't hold the melt in: not lava, not a block, not a belt.
+function lavaEdge(L,x,y){const o=c=>!(c=='~'||c=='#'||c=='D'||c=='X'||c=='c'||c=='C'),u=tAt(L,x,y-1);
+ return (u=='~'?0:o(u)?1:2)|(o(tAt(L,x-1,y))?4:0)|(o(tAt(L,x+1,y))?8:0)|(o(tAt(L,x,y+1))?16:0)}
 
 // ================= ENDLESS GENERATOR =================
 // Difficulty ramp: `d` is the ONLY difficulty scalar in this generator - every hazard chance, saw speed, orb reach and
@@ -6571,14 +6594,24 @@ function drawMoonDust(t){if(!G||!G.cam)return;ctx.save();ctx.globalCompositeOper
   ctx.globalAlpha=(fl-0.7)*2.6;ctx.strokeStyle='#ffffff';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke()}
  ctx.restore()}
+// (Was a pale line sagging across the dip with a dark smudge over it: it read as a rope bridge hung over a hole.) Now
+// everything sits on the ground: a raised lip where each bank breaks off into the dip (the impact's throw-out), the
+// dip's inner corners in shade inside the notch only, and rubble lying on the dip's floor and on the lips.
 function drawCraterRims(L,th){if(!L.dips||!L.dips.length||th.deco!=6)return;
  for(const d of L.dips){const px0=d.x0*TS,px1=(d.x1+1)*TS,py=d.y*TS;if(px1<G.cam.x-40||px0>G.cam.x+VW+40)continue;
-  const w=px1-px0,cx=(px0+px1)/2;ctx.save();
-  const bwl=ctx.createRadialGradient(cx,py+4,4,cx,py+4,w*0.56);bwl.addColorStop(0,'rgba(0,0,0,.38)');bwl.addColorStop(0.7,'rgba(0,0,0,.14)');bwl.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=bwl;ctx.beginPath();ctx.ellipse(cx,py+1,w*0.54,11,0,0,7);ctx.fill();
-  ctx.strokeStyle=shade(th.top,1.35);ctx.lineWidth=3;ctx.globalAlpha=0.85;ctx.beginPath();ctx.moveTo(px0-7,py-2);ctx.quadraticCurveTo(cx,py+10,px1+7,py-2);ctx.stroke();
-  ctx.globalAlpha=1;ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(px0-4,py+2);ctx.quadraticCurveTo(cx,py+12,px1+4,py+2);ctx.stroke();
-  const R=mulberry((d.x0*191+d.y*17)|0);for(let i=0;i<6;i++){const rx=px0+6+R()*(w-12),ry=py-3+R()*7,rr=1.3+R()*1.7;ctx.fillStyle=R()<0.5?shade(th.tile,1.5):shade(th.tile,0.55);ctx.beginPath();ctx.arc(rx,ry,rr,0,7);ctx.fill()}
+  const bank=x=>{let k=0;while(k<3&&tAt(L,x,d.y-1-k)=='#')k++;return k?py-k*TS:null},lb=bank(d.x0-1),rb=bank(d.x1+1); // each bank's top, if there is one
+  const w=px1-px0,top=Math.min(lb==null?py:lb,rb==null?py:rb),ol='rgba(20,18,30,.72)';ctx.save();
+  if(top<py){ctx.save();ctx.beginPath();ctx.rect(px0,top,w,py-top);ctx.clip();
+   for(const [cx2,on] of [[px0,lb!=null],[px1,rb!=null]]){if(!on)continue;const g=ctx.createRadialGradient(cx2,py,0,cx2,py,18);g.addColorStop(0,'rgba(0,0,0,.34)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(cx2-18,py-18,36,18)}
+   const fg=ctx.createLinearGradient(0,py-8,0,py);fg.addColorStop(0,'rgba(0,0,0,0)');fg.addColorStop(1,'rgba(0,0,0,.2)');ctx.fillStyle=fg;ctx.fillRect(px0,py-8,w,8);ctx.restore()}
+  const R=mulberry((d.x0*191+d.y*17)|0),peb=(x,y,r,k)=>{ctx.fillStyle=shade(th.top,k);ctx.beginPath();ctx.ellipse(x,y-r*0.75,r*1.25,r*0.8,0,0,7);ctx.fill();ctx.strokeStyle=ol;ctx.lineWidth=0.6;ctx.stroke()};
+  for(const [ex,by,s] of [[px0,lb,-1],[px1,rb,1]]){if(by==null)continue; // s -1: the left bank, its lip on its right-hand end
+   const lip=new Path2D();lip.moveTo(ex+s*18,by+0.6);lip.quadraticCurveTo(ex+s*8,by-3.6,ex+s*1.8,by-2.8);lip.quadraticCurveTo(ex-s*1.3,by-2.3,ex-s*2.2,by+1.3);
+   const body=new Path2D(lip);body.lineTo(ex,by+3);body.lineTo(ex+s*18,by+3);body.closePath();
+   const g=ctx.createLinearGradient(0,by-4,0,by+3);g.addColorStop(0,shade(th.top,1.18));g.addColorStop(1,shade(th.top,0.72));ctx.fillStyle=g;ctx.fill(body);
+   ctx.strokeStyle=ol;ctx.lineWidth=0.9;ctx.stroke(lip);
+   peb(ex+s*(11+R()*4),by-1.4,1.1+R()*0.6,0.85+R()*0.3)}
+  for(let i=0;i<5;i++){const rx=px0+5+R()*(w-10),rr=1+R()*1.5;peb(rx,py+0.4,rr,0.7+R()*0.45)}
   ctx.restore()}}
 // ================= WORLD RENDER =================
 // ================= WORLD PARTICLES =================
@@ -6606,7 +6639,9 @@ function drawFX(near,th){if(!QUAL||RM()||!th)return;const set=FXK[th.deco];if(!s
  const cx=G.cam.x,cy=G.cam.y+(G.L.vy0||0),t=gtime,M=40,W=VW+2*M,H=VH+2*M;let j=near?30:0; // vy0: see drawWorld
  ctx.save();
  for(const [k,nf,nn] of set){const n=near?nn:nf;
-  for(let i=0;i<n;i++,j++){const b=FXS[j%48],z=near?1.25+b.d*.75:.35+b.d*.5,par=near?.55:.04+b.d*.08;
+  // (a near leaf or petal is kept a little under the square's size: at the near layer's full scale a leaf was bigger
+  // than the hero and, blown up past its picture, soft)
+  for(let i=0;i<n;i++,j++){const b=FXS[j%48],z=near?(k=='leaf'||k=='petal'?.62+b.d*.28:1.25+b.d*.75):.35+b.d*.5,par=near?.55:.04+b.d*.08;
    let vx=0,vy=0,sway=0,rot=0,flip=1,sz=6,a=1,img=null,add=false;
    if(k=='leaf'||k=='petal'){vx=22+b.q*20;vy=16+b.d*16;sway=16*Math.sin(t*(.7+b.q*.6)+b.p);rot=b.p+t*(1+b.q);flip=Math.cos(t*(1.4+b.d)+b.p);sz=k=='leaf'?13:8;img=k=='leaf'?fxImg('leaf'+(j%4),'leaf'):fxImg('petal','leaf');a=.95}
    else if(k=='chip'){vx=-8-b.q*10;vy=20+b.d*14;sway=8*Math.sin(t*.9+b.p);rot=b.p+t*(2+b.q*2);flip=Math.cos(t*2+b.p);sz=7;img=fxImg('chip'+(j%2),'chip');a=.9}
@@ -6633,7 +6668,15 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
  ctx.translate(Math.round(-G.cam.x+sx),Math.round(-G.cam.y+sy));
  const x0=Math.max(0,Math.floor(G.cam.x/TS)-1),x1=Math.min(L.W-1,Math.floor((G.cam.x+VW)/TS)+1),y0=Math.max(0,Math.floor(G.cam.y/TS)-1),y1=Math.min(L.H-1,Math.floor((G.cam.y+VH)/TS)+1);
  const clm=G.mode=='endless'||G.mode=='daily',fd=clm&&G.bgI!=null?{a:G.bgI,b:G.bgJ,k:ease(G.bgK)}:null;
- const layer=(t2,al)=>{ctx.globalAlpha=al;for(let cy=Math.floor(y0/CH);cy<=Math.floor(y1/CH);cy++)for(let cx=Math.floor(x0/CH);cx<=Math.floor(x1/CH);cx++)ctx.drawImage(chunkOf(L,t2,cx,cy),cx*CHP,cy*CHP,CHP,CHP);ctx.globalAlpha=1};
+ // the tile layer: every chunk on screen, past the level's own edge too (see chunkOf). While the canvas is only scaled
+ // (no turn), each goes down on whole device pixels, 1:1 when it was baked at this scale, so nothing resamples it
+ const gx0=Math.floor(G.cam.x/TS)-1,gx1=Math.floor((G.cam.x+VW)/TS)+1,gy0=Math.floor(G.cam.y/TS)-1,gy1=Math.floor((G.cam.y+VH)/TS)+1;
+ const layer=(t2,al)=>{ctx.globalAlpha=al;const m=ctx.getTransform(),px1=!m.b&&!m.c&&m.a===m.d;if(px1)ctx.setTransform(1,0,0,1,0,0);
+  for(let cy=Math.floor(gy0/CH);cy<=Math.floor(gy1/CH);cy++)for(let cx=Math.floor(gx0/CH);cx<=Math.floor(gx1/CH);cx++){const c=chunkOf(L,t2,cx,cy),X=cx*CHP,Y=cy*CHP;
+   if(!px1){ctx.drawImage(c,0,0,CHP*c._k,CHP*c._k,X,Y,CHP,CHP);continue}
+   const dx=Math.round(m.a*X+m.e),dy=Math.round(m.d*Y+m.f),dw=Math.round(m.a*(X+CHP)+m.e)-dx,dh=Math.round(m.d*(Y+CHP)+m.f)-dy;
+   if(Math.abs(c._k-m.a)<1e-9)ctx.drawImage(c,0,0,dw,dh,dx,dy,dw,dh);else ctx.drawImage(c,0,0,CHP*c._k,CHP*c._k,dx,dy,dw,dh)}
+  if(px1)ctx.setTransform(m);ctx.globalAlpha=1};
  if(fd&&fd.k<0.998&&fd.a!==fd.b){layer(fd.a,1);if(fd.k>0.002)layer(fd.b,fd.k)}else layer(fd?fd.b:ti,1);
  if(wzo&&WZ.h>WZ_STOPS[3])wzTiles(L,x0,x1,y0,y1); // a glitch's wrong-world blocks, the wireframes
  drawCraterRims(L,th);
@@ -6647,7 +6690,9 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
  ctx.lineCap='butt';
  for(const dd of L.dyn){const x=dd[0],y=dd[1],c=dd[2];if(x<x0-1||x>x1+1||y<y0-1||y>y1+1)continue;const px=x*TS,py=y*TS;
   switch(c){
-  case'c':case'C':{ctx.drawImage(tileSpr(ti,c,0,0),px-4,py-4);const dir=c=='C'?1:-1;ctx.save();ctx.beginPath();ctx.rect(px,py,TS,8);ctx.clip();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2.2;ctx.lineCap='round';
+  // CONVEYOR: the art pack's belt (a drum at each end of a run, rollers on a steel frame, its top level with the floor's)
+  case'c':case'C':{const nl=tAt(L,x-1,y),nr=tAt(L,x+1,y),el=nl!='c'&&nl!='C',er=nr!='c'&&nr!='C';
+   if(!(window.ART&&ART.belt(el?(er?'s':'l'):(er?'r':'m'),px,py)))ctx.drawImage(tileSpr(ti,c,0,0),px-4,py-4);const dir=c=='C'?1:-1;ctx.save();ctx.beginPath();ctx.rect(px,py,TS,8);ctx.clip();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2.2;ctx.lineCap='round';
    for(let k=-1;k<2;k++){const ax=px+(((t*90*dir)%24)+24)%24+k*24;ctx.beginPath();ctx.moveTo(ax-4*dir,py+2);ctx.lineTo(ax+2*dir,py+4);ctx.lineTo(ax-4*dir,py+6);ctx.stroke()}
    ctx.restore();ctx.lineCap='butt';break}
   // (second pass) a phase block SNAPS on - in from 70% with one overshoot, white for a blink - and goes off with a ring
@@ -6687,7 +6732,8 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
     ctx.rect(lft?X0:X0+W/2,py-6,W/2,TS+12);ctx.clip();ctx.translate((lft?-1:1)*e*W/2,0)}
    else{const Y0=(y-a)*TS,H=(a+b+1)*TS;ctx.rect(px-6,Y0,TS+12,H);ctx.clip();ctx.translate(0,-e*H)}   // a door: up into the ceiling
    doorPart(ti,dm,0,px,py);ctx.restore();break}
-  case'~':{if(window.ART&&ART.lavaTop(th,px,py,t))break; // art pack: the Blender crest (the melt under it is in the chunk)
+  case'~':{const le=lavaEdge(L,x,y);if(le&2)break; // a fall out of a ceiling has no surface up there (the melt is in the chunk)
+   if(window.ART&&ART.lavaTop(th,px,py,t,le|(tAt(L,x-1,y)=='~'&&lavaEdge(L,x-1,y)&1?32:0)|(tAt(L,x+1,y)=='~'&&lavaEdge(L,x+1,y)&1?64:0)))break; // art pack: the Blender crest (the melt under it is in the chunk)
    const gld=th.deco==7; // Gilded Vale runs the same lava system, poured as molten GOLD (art only, see tileSpr's '~')
    // white-hot crest into a deep orange body: the Vale's tiles are yellow-gold, so the melt has to sit clearly HOTTER
    // and more orange than them or a pour of molten metal reads as just another gold floor
@@ -6715,7 +6761,7 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
   }}
  // lava bubbles (see lavaBub) in a pass of their own over the crests, so the crests still go down as one run of the same
  // picture instead of being broken up by a bubble between every two of them
- if(QUAL&&!RM()){const gld=th.deco==7;for(const dd of L.dyn){if(dd[2]!='~')continue;const x=dd[0],y=dd[1];if(x<x0-1||x>x1+1||y<y0-1||y>y1+1)continue;lavaBub(x,x*TS,y*TS,t,gld)}}
+ if(QUAL&&!RM()){const gld=th.deco==7;for(const dd of L.dyn){if(dd[2]!='~')continue;const x=dd[0],y=dd[1];if(x<x0-1||x>x1+1||y<y0-1||y>y1+1||lavaEdge(L,x,y)&2)continue;lavaBub(x,x*TS,y*TS,t,gld)}}
  if(QUAL)drawLights(L,th,t,x0,x1,y0,y1); // glow from lava, lasers, the exit and gems (+ Magma Core's heat shimmer): see LIGHTS
  // ORB HUBS FIRST. The little dot that marks an orb ring's centre of rotation is pure signposting, so it belongs
  // UNDER the pickups - parked on a gem (2-4) or a coin it hid the thing you were there to collect. Drawn in its own
@@ -6784,9 +6830,13 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
   ctx.fillStyle=th.acc;ctx.fillRect(m.x+3,m.y+1.5,m.w-6,2.5);
   ctx.fillStyle='#3c4257';for(let bx=m.x+6;bx<m.x+m.w-3;bx+=14){ctx.beginPath();ctx.arc(bx,m.y+8,1.8,0,7);ctx.fill()}}
  if(L.rise&&G.lavaY<G.cam.y+VH+100){const ly=G.lavaY;const gl=ctx.createLinearGradient(0,ly-90,0,ly);gl.addColorStop(0,'rgba(255,120,40,0)');gl.addColorStop(1,'rgba(255,120,40,0.45)');ctx.fillStyle=gl;ctx.fillRect(G.cam.x-10,ly-90,VW+20,90);
-  if(!(window.ART&&ART.rise(ly,G.cam.x-10,G.cam.x+VW+20,t))){ // art pack: the same melt and crest as the pools
+  // the melt fills the shaft, between the level's side walls (outside them is more wall, see chunkOf; the glow above
+  // still lights all of it)
+  ctx.save();ctx.beginPath();ctx.rect(TS,ly-40,(L.W-2)*TS,VH+440);ctx.clip();
+  if(!(window.ART&&ART.rise(ly,Math.max(TS,G.cam.x-10),Math.min((L.W-1)*TS,G.cam.x+VW+20),t))){ // art pack: the same melt and crest as the pools
   const gr=ctx.createLinearGradient(0,ly,0,ly+200);gr.addColorStop(0,'#ffb13b');gr.addColorStop(0.3,'#ff5a24');gr.addColorStop(1,'#a3141c');ctx.fillStyle=gr;ctx.beginPath();ctx.moveTo(G.cam.x-10,ly+VH+200);for(let xx=G.cam.x-10;xx<=G.cam.x+VW+20;xx+=16)ctx.lineTo(xx,ly+Math.sin(xx*0.04+t*3)*5+Math.sin(xx*0.11-t*2)*2);ctx.lineTo(G.cam.x+VW+20,ly+VH+200);ctx.closePath();ctx.fill();
-  ctx.fillStyle='rgba(255,230,140,.7)';for(let i=0;i<6;i++){const bx=G.cam.x+((i*173+t*40)%VW),by=ly+20+((i*37+t*30)%60);ctx.beginPath();ctx.arc(bx,by,3+i%3,0,7);ctx.fill()}}}
+  ctx.fillStyle='rgba(255,230,140,.7)';for(let i=0;i<6;i++){const bx=G.cam.x+((i*173+t*40)%VW),by=ly+20+((i*37+t*30)%60);ctx.beginPath();ctx.arc(bx,by,3+i%3,0,7);ctx.fill()}}
+  ctx.restore()}
  if(G.rc||G.cg)rgLayer(); // RACE: ghost racers and the Speed Course best-run ghost, under the player (see RACE MODE)
  drawParts(G.parts,[G.cam.x-20,G.cam.y-20,G.cam.x+VW+20,G.cam.y+VH+20]);
  if(wzo)wzMid(L,x0,x1,y0,y1); // night, gold, the drain, the void, red hazards, hitboxes, the copycat, the wind (under the square)
@@ -6828,14 +6878,23 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
 function drawFlag(c,px,py,th){const rm=RM(),on=c.on,ag=on&&c._an?gtime-c._an:9,k=on?(rm||!c._an?1:clamp(ag/0.22,0,1)):0,fy=py-10+(1-(rm?ease(k):eob(k)))*13,
   wb=!rm&&ag<1?0.2*Math.exp(-5*ag)*Math.sin(ag*21):0;
  if(wb){ctx.save();ctx.translate(px+6.5,py+24);ctx.rotate(wb);ctx.translate(-px-6.5,-py-24)}
- ctx.fillStyle='#3a3548';ctx.fillRect(px+5,py-10,3,34);ctx.fillRect(px+4,py-12,5,3);
+ // the pole: the art pack's (a slim post on a footing, a ball on top), else the code's
+ if(!(window.ART&&ART.flagPole(px,py))){ctx.fillStyle='#3a3548';ctx.fillRect(px+5,py-10,3,34);ctx.fillRect(px+4,py-12,5,3)}
  if(on&&QUAL){ctx.save();ctx.globalCompositeOperation='lighter';glow(th.acc,px+14,fy+5,24,0.3+0.4*(1-k));ctx.restore()}
  const amp=(on?2.6:0.8)*(rm?0.3:1),w=on?9:2.6,ph=c.x*1.7+c.y,t=gtime,fa=on&&!rm?3*Math.exp(-3.5*ag):0; // fa: the fast flap just after the raise
- ctx.fillStyle=on?th.acc:'#b9b6c6';ctx.beginPath();ctx.moveTo(px+8,fy);
- for(let i=1;i<=3;i++){const u=i/3;ctx.lineTo(px+8+14*u,fy+5*u+amp*u*Math.sin(t*w-u*2.4+ph)+fa*u*Math.sin(t*23-u*3.2))}
- for(let i=2;i>=1;i--){const u=i/3;ctx.lineTo(px+8+14*u,fy+10-5*u+amp*u*Math.sin(t*w-u*2.4+ph)+fa*u*Math.sin(t*23-u*3.2))}
- ctx.lineTo(px+8,fy+10);ctx.closePath();ctx.fill();
- if(on&&k<1){ctx.globalAlpha=1-k;ctx.fillStyle='#fff';ctx.fill();ctx.globalAlpha=1}
+ // the cloth: the same wave as ever, in six bands instead of three, each band lit by how it tilts (turned up toward the
+ // light = paler, turned down = darker), paler along its top edge, with the dark outline the rendered pieces have
+ const wv=u=>amp*u*Math.sin(t*w-u*2.4+ph)+fa*u*Math.sin(t*23-u*3.2),N=6,P=[];
+ for(let i=0;i<=N;i++){const u=i/N,d=wv(u);P.push([px+8+14*u,fy+5*u+d,fy+10-5*u+d])}
+ const cl=new Path2D();cl.moveTo(P[0][0],P[0][1]);for(let i=1;i<=N;i++)cl.lineTo(P[i][0],P[i][1]);for(let i=N-1;i>=0;i--)cl.lineTo(P[i][0],P[i][2]);cl.closePath();
+ ctx.fillStyle=on?th.acc:'#b9b6c6';ctx.fill(cl);
+ ctx.save();ctx.clip(cl);
+ for(let i=0;i<N;i++){const a=P[i],b=P[i+1],s=clamp(((b[1]+b[2])-(a[1]+a[2]))*0.5*0.35,-0.3,0.3);if(Math.abs(s)<0.02)continue;
+  ctx.fillStyle=s>0?'rgba(20,14,40,'+s.toFixed(3)+')':'rgba(255,255,255,'+(-s*0.8).toFixed(3)+')';ctx.fillRect(a[0]-0.2,fy-8,b[0]-a[0]+0.4,28)}
+ const sg=ctx.createLinearGradient(0,fy-2,0,fy+10);sg.addColorStop(0,'rgba(255,255,255,.32)');sg.addColorStop(0.45,'rgba(255,255,255,0)');sg.addColorStop(1,'rgba(20,14,40,.22)');ctx.fillStyle=sg;ctx.fillRect(px+7,fy-8,17,28);
+ ctx.restore();
+ ctx.strokeStyle='rgba(27,26,38,.85)';ctx.lineWidth=0.9;ctx.lineJoin='round';ctx.stroke(cl);
+ if(on&&k<1){ctx.globalAlpha=1-k;ctx.fillStyle='#fff';ctx.fill(cl);ctx.globalAlpha=1}
  if(wb)ctx.restore()}
 function drawVignette(){const th=themeOf(),key='vig'+(th.stars?1:0);let s=SPR.get(key);
  if(!s){s=document.createElement('canvas');s.width=VW;s.height=VH;const g=s.getContext('2d');const gr=g.createRadialGradient(VW/2,VH/2,VH*0.42,VW/2,VH/2,VH*0.95);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,th.stars?'rgba(0,0,0,.5)':'rgba(10,6,25,.32)');g.fillStyle=gr;g.fillRect(0,0,VW,VH);SPR.set(key,s)}
@@ -7176,7 +7235,15 @@ function laserCap(cx,cy,cw,ch,horz,on,w,col,fl){if(window.ART&&ART.lzCap(cx,cy,c
 function drawLaser(L,x,y,c,px,py){const on=laserOn(c,L),col=c=='l'?'#ff3b7a':'#27d7ff',o=L.lo[y*L.W+x];
  const w=on?0:laserWarnK(c,L),vt=o=='v',hz=o=='h';
  const fl=(!RM()&&w>0.78)?(Math.sin(G.t*34)>0?1:0.7):1; // last-quarter pulse only, and never under Reduce Motion
+ // the ends of the run in this tile: [side -1/1, 'cap' or 'free']. A housing goes only where the run is mounted on
+ // something (see EMITTER HOUSINGS below); a free end has no housing and the beam rounds off there instead
+ const ends=[];if(vt||hz){const dx=hz?1:0,dy=vt?1:0,mt=(x2,y2)=>{const q=tAt(L,x2,y2);return q=='#'||q=='D'||q=='X'||q=='c'||q=='C'||q=='='||q=='T'||q=='t'};
+  for(const s of[-1,1]){if(tAt(L,x+s*dx,y+s*dy)==c)continue;let ox=x,oy=y;while(tAt(L,ox-s*dx,oy-s*dy)==c){ox-=s*dx;oy-=s*dy}   // (ox,oy): the run's other end
+   ends.push([s,mt(x+s*dx,y+s*dy)||!mt(ox-s*dx,oy-s*dy)?'cap':'free'])}}
  ctx.save();
+ for(const [s,k] of ends)if(k=='free'){const p=new Path2D();   // the beam and its glow end in a rounded tip inside the tile
+  if(vt){p.rect(px,s<0?py+7:py,TS,TS-7);p.ellipse(px+12,s<0?py+7:py+TS-7,8,7,0,0,7)}else{p.rect(s<0?px+7:px,py,TS-7,TS);p.ellipse(s<0?px+7:px+TS-7,py+12,7,8,0,0,7)}
+  ctx.clip(p)}
  if(on&&window.ART&&ART.beam(c,o,px,py)){} // art pack: the same firing bar, rendered (the armed rails below stay as they are)
  else if(on){if(QUAL){ctx.fillStyle=col;ctx.globalAlpha=0.16;
    if(vt)ctx.fillRect(px+1,py,22,TS);else if(hz)ctx.fillRect(px,py+1,TS,22);else ctx.fillRect(px+1,py+1,22,22);
@@ -7215,8 +7282,14 @@ function drawLaser(L,x,y,c,px,py){const on=laserOn(c,L),col=c=='l'?'#ff3b7a':'#2
    if(vt)ctx.fillRect(px+12-wd/2,py,wd,TS);else if(hz)ctx.fillRect(px,py+12-wd/2,TS,wd);else ctx.fillRect(px+12-wd/2,py+12-wd/2,wd,wd);ctx.globalAlpha=1}}
  // EMITTER HOUSINGS: dark rim, pale plate, and a lens that fills like a gauge - the one place the countdown is
  // allowed to BE a gauge, because it sits at the ends and can never be mistaken for the beam itself.
- if(vt){if(L.g[y-1][x]!=c)laserCap(px+3,py,18,7,1,on,w,col,fl);if(L.g[y+1][x]!=c)laserCap(px+3,py+TS-7,18,7,1,on,w,col,fl)}
- else if(hz){if(L.g[y][x-1]!=c)laserCap(px,py+3,7,18,0,on,w,col,fl);if(L.g[y][x+1]!=c)laserCap(px+TS-7,py+3,7,18,0,on,w,col,fl)}}
+ // Only where the run is mounted on something, though: a beam hung from a ceiling has its housing up there and just
+ // ends at its free end, in a small hot tip (a housing at a free end hung in mid-air on nothing). A run with nothing
+ // at either end keeps a housing at both, as before.
+ for(const [s,k] of ends){if(k=='cap'){if(vt)laserCap(px+3,s<0?py:py+TS-7,18,7,1,on,w,col,fl);else laserCap(s<0?px:px+TS-7,py+3,7,18,0,on,w,col,fl)}
+  else if(on)laserTip(vt?px+12:s<0?px+3:px+TS-3,vt?(s<0?py+3:py+TS-3):py+12,col)}}
+// the free end of a firing beam: a small white-hot tip with a soft glow (the glow not on Low graphics)
+function laserTip(x,y,col){if(QUAL){ctx.save();ctx.globalCompositeOperation='lighter';glow(col,x,y,10,0.55);ctx.restore()}
+ ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(x,y,2.4,0,7);ctx.fill()}
 // CRUMBLE, live states. cr.s and cr.t are READ here and never written - updCrumble owns them, and the 0.38s fuse and
 // the 2.6s respawn are untouched; this only reads them to decide how far apart the pieces are.
 // s==1 (going): the four slabs bakeCrumble drew as one block come apart. Each 12x12 quadrant is lifted straight out
@@ -7285,12 +7358,22 @@ function sawSpr(){let s=SPR.get('saw');if(s)return s;
   ctx.fillStyle='#eef1f8';ctx.beginPath();ctx.arc(0,0,3.1,0,7);ctx.fill();
   ctx.fillStyle='#0a0814';ctx.beginPath();ctx.arc(0,0,1.5,0,7);ctx.fill()});
  SPR.set('saw',s);return s}
-function drawSaw(x,y,r){ctx.save();ctx.translate(x,y);
+// A blade that runs into a block (a floor saw's teeth, one riding along a wall) sinks into it through a slot instead of
+// being drawn over the block's face: the part inside a solid tile is clipped off (it can't touch you in there anyway) and
+// a dark slit opens in a top face where the blade goes in. -> the clip (a Path2D, even-odd) or null
+function sawSlot(x,y,slit){const L=G&&G.L;if(!L)return null;const R=14.2;let p=null;
+ for(let ty=Math.floor((y-R)/TS);ty<=Math.floor((y+R)/TS);ty++)for(let tx=Math.floor((x-R)/TS);tx<=Math.floor((x+R)/TS);tx++){
+  if(tx<0||ty<0||tx>=L.W||ty>=L.H||!isSolid(L,tx,ty))continue;
+  if(!p){p=new Path2D();p.rect(x-40,y-40,80,80)}p.rect(tx*TS,ty*TS,TS,TS);
+  const top=ty*TS;if(slit&&y<top&&y+R>top&&!isSolid(L,tx,ty-1)){const hw=Math.sqrt(R*R-(top-y)*(top-y))+1.5,a=Math.max(tx*TS,x-hw),b=Math.min(tx*TS+TS,x+hw);
+   if(b>a){ctx.fillStyle='rgba(12,8,22,.6)';ctx.fillRect(a,top-0.6,b-a,2.2)}}}
+ return p}
+function drawSaw(x,y,r){const sl=sawSlot(x,y,1);ctx.save();if(sl)ctx.clip(sl,'evenodd');ctx.translate(x,y);
  ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.arc(1.6,2.6,12.6,0,7);ctx.fill();
  ctx.rotate(r);if(!(window.ART&&ART.saw()))ctx.drawImage(sawSpr(),-17,-17);ctx.restore()} // art pack: the Blender blade, same size, same spin
 // ---- second animation pass: small draw helpers (see ANIMATION) ----
 // a faint copy of a blade (the smear behind a moving saw): no shadow, just the blade at alpha a
-function sawGhost(x,y,r,a){ctx.save();ctx.globalAlpha=a;ctx.translate(x,y);ctx.rotate(r);if(!(window.ART&&ART.saw()))ctx.drawImage(sawSpr(),-17,-17);ctx.restore()}
+function sawGhost(x,y,r,a){const sl=sawSlot(x,y,0);ctx.save();if(sl)ctx.clip(sl,'evenodd');ctx.globalAlpha=a;ctx.translate(x,y);ctx.rotate(r);if(!(window.ART&&ART.saw()))ctx.drawImage(sawSpr(),-17,-17);ctx.restore()}
 // seconds since a laser (either colour) or a phase block last switched, on the clock laserOn/phaseOn read
 function laserSince(L){const per=L.def.lp||2.4,ph=((G.t*G.spd)%per)/per;return(ph<0.5?ph:ph-0.5)*per/(G.spd||1)}
 function phaseSince(L){const per=L.def.pp||3.2,ph=((G.t*G.spd)%per)/per;return(ph<0.5?ph:ph-0.5)*per/(G.spd||1)}
