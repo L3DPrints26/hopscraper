@@ -5183,7 +5183,7 @@ function levelWon(){const i=G.idx,def=LEVELS[i];
   if(res.first&&i==NL+NB-1)grant('rocket');
   if(res.first&&i<NL-1&&i%8==7){res.worldClear=Math.floor(i/8);grant('w'+(res.worldClear+1));const it=WREW[res.worldClear];if(!S.own[it]){S.own[it]=1;res.reward=it}}
   if(i==NL-1&&!S.finale){res.finaleFirst=true;S.finale=1;grant('top');}
-  if(!res.usedCard&&(res.bestT||res.first)){const w=i>=NL?4:i<NL-1?Math.floor(i/8):-1,wt=worldTime(w);if(wt)submitScore('world'+(w+1),wt)}submitScore('stars',totalStars())}
+  if(!res.usedCard&&(res.bestT||res.first)){const w=i>=NL?4:i<NL-1?Math.floor(i/8):-1,wt=worldTime(w);if(wt)submitScore('world'+(w+1),wt)}}
  else if(G.mode=='hard'){const rec=S.hard[i]||(S.hard[i]={done:0,t:0});res.first=!rec.done;if(!rec.t||G.time<rec.t){res.bestT=!!rec.t;rec.t=G.time}
   if(res.first){S.bank+=3;S.earned+=3;res.bonus=3}rec.done=1;if(i==NL-1)grant('hard')}
  // coins: pickups + clear reward + par + no falls
@@ -5206,7 +5206,11 @@ function saveEndless(){if(G.endSaved)return G.endSaved;const dly=G.mode=='daily'
  const r=G.endSaved={h:G.height,gems:pay,gemsRaw:raw,daily:dly,best:false};S.bank+=pay;S.earned+=pay;r.coins=addCoins(endCoins(r.h)); // the gold zone pays double: endCoins
  if(r.daily){const d=dd;S.daily.gp=Math.max(S.daily.gp||0,raw);r.rollover=d!=weekStr();if(r.h>S.daily.h){S.daily.h=r.h;r.best=true}r.bestV=S.daily.h;{const wn=+String(d).slice(1)||0;if(wn>(S.wtix|0)){S.wtix=wn;S.tix+=WEEK_TIX;r.tix=WEEK_TIX}}submitScore('daily',S.daily.h)}
  else{if(r.h>S.endBest){S.endBest=r.h;r.best=true}r.bestV=S.endBest;submitScore('endless',S.endBest)}
+ S.climbTot=climbTot()+r.h;submitScore('climbed',S.climbTot);
  if(r.h>=100)grant('climb');if(r.h>=250)grant('mountain');checkAch();save();return r}
+// TOTAL CLIMBED (replaced the Stars board, which lots of players tied on): every metre of every Endless and Weekly run,
+// added up for life. An older save starts from its best run, the one number we know it really climbed.
+function climbTot(){const v=S.climbTot;return typeof v=='number'&&v>=0&&isFinite(v)?Math.floor(v):Math.max(S.endBest|0,(S.daily&&S.daily.h)|0)}
 function onWinDone(){
  // Straight into 1-1 the first time: MODES is almost entirely locked this early and reads as a wall of padlocks.
  // A refresher replay (S.tut already set) goes back to the story level select instead of restarting the game for you.
@@ -8695,7 +8699,7 @@ SCREENS.load={enter(a){this.t=0;this.song=a&&a.song;if(mus.song!==this.song)musi
 // The board for whatever you are playing right now, so Pause can open it (owner: 'view the leaderboard when you pause').
 function modeBoard(){if(!G)return null;const m=G.mode,i=G.idx;
  if(m=='endless'||m=='daily')return m;if(m=='course')return'course'+i;if(m=='speed')return'marathon';if(m=='hspeed'||m=='hard')return'hmarathon';
- if(m=='story'){if(i<NL-1)return'world'+(Math.floor(i/8)+1);if(i>=NL&&i<NL+8)return'world5';return'stars'}return null}
+ if(m=='story'){if(i<NL-1)return'world'+(Math.floor(i/8)+1);if(i>=NL&&i<NL+8)return'world5';return'marathon'}return null}
 // back from Pause: the level's song again, from the bar it stopped on
 function pauseMusicBack(){const P=SCREENS.pause;if(mus.want===SONG_PAUSE&&P.mw!=null){musicPlay(P.mw);if(P.ms!=null)mus.step=P.ms}}
 SCREENS.pause={enter(){if(mus.want!==SONG_PAUSE){this.mw=mus.want;this.ms=mus.step}musicPlay(SONG_PAUSE)},
@@ -9924,8 +9928,8 @@ function lbBoards(cat){const B=[];
  if(cat=='w'){for(let w=0;w<5;w++){const wi=w<4?w:5,tm=worldTime(w),nt=worldTimed(w); // world 5 is Rocket Yard = WORLDS[5]; WORLDS[4] is THE TOP
    B.push({id:'world'+(w+1),n:'World '+(w+1),sub:WORLDS[wi].n,k:'t',v:tm,c:WORLDS[wi].acc,ic:'story',
     how:tm?'Your best time on all 8 levels, added up.':nt+' of 8 levels timed. A world time needs all 8.'})}
-  B.push({id:'stars',n:'Stars',sub:'Story total',k:'s',v:totalStars(),c:'#ffd45e',ic:'star',
-   how:'Three per level: finish it, get every gem, beat the target time.'+(bonusStars()?'  Bonus worlds add '+bonusStars()+' more.':'')})}
+  B.push({id:'climbed',n:'Total Climbed',sub:'Every Endless and Weekly run, added up',k:'m',v:climbTot(),c:'#ffd45e',ic:'endless',
+   how:'Every metre you climb in Endless and the Weekly Climb counts, forever.'})}
  // an unlock hint is only ever shown to someone who is actually still locked out: a board that already HAS a record
  // (or a save that has clearly been there) describes the mode instead, so a real time is never captioned "to unlock".
  else if(cat=='r'){const f=!!S.finale||!!S.dev||!!S.speedBest,hf=!!S.dev||!!S.hspeedBest||!!(S.hard[NL-1]&&S.hard[NL-1].done),e=endOpen()||!!S.endBest||!!S.daily.d;
@@ -9957,7 +9961,7 @@ function lbIcon(b,x,y){ctx.save();ctx.translate(x,y);
 // best, your place, when the tower changes, Play and the full board. Everything else is all-time, in three tabs of
 // tiles underneath; a tile opens that one board (Game Center, in the app). Every value is the player's own record and
 // every rank comes from Game Center - nothing on this screen is ever invented.
-const LBG=[['a','All-time','#ff7043',['endless','stars','marathon','hmarathon']],['w','Worlds','#5fc93a',['world1','world2','world3','world4','world5']],
+const LBG=[['a','All-time','#ff7043',['endless','climbed','marathon','hmarathon']],['w','Worlds','#5fc93a',['world1','world2','world3','world4','world5']],
  ['c','Speed Courses','#ffb02e',['course0','course1','course2','course3']]];
 function lbAll(){const m={};for(const c of LB_TABS)for(const b of lbBoards(c[0]))m[b.id]=b;return m}
 function lbRankTxt(b){return b.rank?'#'+fmtN(b.rank.r)+' of '+fmtN(b.rank.of):gcOn()?(!lbSet(b)?'no score yet':LBQ[b.id]?'not ranked yet':'checking...'):'rank in the app'}
