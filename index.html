@@ -64,6 +64,7 @@ const CHANGELOG=[
   'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
   'Endless and the Weekly Climb open right after the tutorial. No need to beat World 2 first.',
   'A Button Guide on the main menu shows what every button does, one at a time.',
+  'Meet something new and the game tells you what it is: friendly or dangerous. Every card is in the new Field Guide.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
   'Every world got a whole new look: new art, and calmer backgrounds that stay out of your way.',
   'Bounce pads got rebuilt: a real spring that squashes down when you land on it.',
@@ -176,8 +177,9 @@ const SKEY='hopscraper_save_v1';
 // "Reduce Flashing & Motion" setting defaults to the system's reduced-motion preference (see RM())
 function prefersRM(){try{return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?1:0}catch(e){return 0}}
 function RM(){try{return !!S.set.rm}catch(e){return false}}
-function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tips:{},tut:0,tf:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,ui:1,vmas:1,vmus:0.8,vsfx:0.8,vui:0.8,shake:1,gfx:'auto',rm:prefersRM(),vib:1},
+function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jumps:0,deaths:0,time:0,clears:0},own:{c_red:1,h_none:1,t_none:1,t_dust:1},eq:{c:'c_red',h:'h_none',t:'t_dust'},ach:{},notes:{},tips:{},tut:0,tf:0,endBest:0,daily:{d:'',h:0,gp:0},speedBest:0,hspeedBest:0,finale:0,set:{music:1,sfx:1,ui:1,vmas:1,vmus:0.8,vsfx:0.8,vui:0.8,shake:1,gfx:'auto',rm:prefersRM(),vib:1,meet:1},
  // vib = Settings > Vibration: the iPhone taps on landings, pickups, deaths and wins (see haptic()). On by default.
+ // meet = Settings > New-thing tips (the first-encounter cards, see FIRST-ENCOUNTER TIPS). On by default.
  // AUDIO MIX: vmas/vmus/vsfx/vui are 0..1 slider positions (SCREENS.settings' Audio section -> applyVol). music/sfx/ui
  // stay as the on-off truth every other call site already reads (`if(!S.set.music)`, sfx()'s gate, the M key) and are
  // kept in sync with their slider: 0 = off, dragging up from 0 turns the category back on. Old saves pick the defaults
@@ -192,6 +194,9 @@ function defSave(){return{lv:{},hard:{},course:{},dev:0,bank:0,earned:0,st:{jump
  // seenVer = the APP_VER whose What's New this player has already had (or was spared, on a fresh install - see newsDue).
  // '' = none yet, which is what every save from before 1.2 repairs to, so 1.0/1.1 players get the 1.2 notes once.
  ver:2,cver:COURSE_VER,coins:0,tix:0,tixDay:0,drDay:0,drN:0,dtix:0,wtix:0,rvAt:0,spun:0,cardTip:0,dbl:0,coinMed:{},club:0,clubExp:0,clubDay:0,clubMonth:-1,clubSpinWeek:-1,txDone:{},iap:{},pw:0,tixBuyDay:0,tixBuy:0,seenVer:'',
+ // meet = every kind of thing whose first-encounter card has been shown ({k:1}, see MEET). A save from before the cards
+ // arrives without it, and parseSave flags that (meetMig) so meetMigrate can mark what the player has already beaten.
+ meet:{},
  // Power Cards: consumable, Story Mode only (see "POWER CARDS" section). chaos = one-time unlock flag for Chaos Replay.
  // goldrush is a Gold World bundle exclusive: see "GOLD RUSH" section for its spawn-in-coins-then-carry-across-levels behavior.
  cards:{shield:0,slowmo:0,xjump:0,magnet:0,goldrush:0},chaos:0,
@@ -237,6 +242,10 @@ function parseSave(r){const o=JSON.parse(r);if(!isObj(o))throw new Error('bad sa
  // seenVer: missing on every save before 1.2 (Object.assign above already gave it the '' default), and anything that
  // isn't a short version string is junk - both mean "hasn't seen this update's notes", the safe way to be wrong.
  if(typeof s.seenVer!='string'||s.seenVer.length>12)s.seenVer='';
+ // meet: missing on every save from before the first-encounter cards. That is not "has met nothing": a returning player
+ // has been through whole worlds, and a flood of cards for things they know would be the wrong welcome. meetMigrate
+ // (run once the level data exists) marks everything in the levels they have beaten.
+ if(!isObj(o.meet)){s.meet={};s.meetMig=1}
  // TUTORIAL GATE MIGRATION. PLAY now refuses to open the level select until the tutorial is beaten, so a returning
  // player whose save predates the tut flag (or who skipped it back when skipping was possible) must NOT be sent back
  // through it and locked out of their own progress. Any trace of story progress counts as "already knows how".
@@ -793,6 +802,7 @@ function tReconcile(list){const live=new Set();for(let i=0;i<list.length;i++)liv
 document.addEventListener('touchstart',e=>{e.preventDefault();lastTouch=performance.now();audioInit();if(rotOn()){tReset();return}tReconcile(e.touches);
  for(const t of e.changedTouches){const p=tpos(t);
   if(touchOn()&&playing()){
+   if(meetTap())continue; // a first-encounter card is up: the finger is for the card, not a jump or the stick
    // A note card NEVER eats a touch. Any finger down anywhere clears it AND still does its normal job (jump, stick,
    // pause, cards) - that's how "tap and it goes away" and "don't swallow my jump" can both be true at once. The grace
    // window stops the same burst of taps that walked you into the note from wiping it in the same breath.
@@ -3252,16 +3262,90 @@ function startChaosReplay(i,modKey){const def=LEVELS[i],M=new Set(modKey?[modKey
  if(M.has('lasers'))injectLasers(L,3);if(M.has('saws'))injectSaws(L,4);
  G=newG({mode:'chaos',idx:i,L,intro:2.6,spd:1.15,riseMul:1,tipT:0,mods:M,gs:M.has('flip')?-1:1});
  spawn();updCam(0,true);enterPlay(WORLDS[def.wd].song)}
+// ================= FIRST-ENCOUNTER TIPS: THE LIST =================
+// Owner: "every time you get to a new thing it gives you a tip: it says if they are good, friendly ... and it needs to
+// include everything." Players were reading Hopscraper as "touch nothing", when half of what is on screen is there TO
+// be touched. So the first time each kind of thing comes on screen near you, the game stops under one card that says
+// what it is, whether it's FRIENDLY, a PICKUP or DANGER (or HEADS UP, for the things that change how you move rather
+// than anything you can touch), and one line on what it does. Seen ones are kept in S.meet; the Field Guide lists all
+// of them. Machinery: see "FIRST-ENCOUNTER TIPS" further down (meetUpd / meetScan / meetPic / SCREENS.field).
+// k = the S.meet key, g = the tag (MEET_TAGS), n = name, d = the line - read off the code that runs the thing, not
+// guessed. p = its PICTURE: a tiny level built by buildLevel and drawn by the real drawWorld (meetPic), so the card shows
+// the thing exactly as the game draws it. p.w world, r/m/g/c/k/key/ch/pt/e the usual level fields (a floor is added at
+// rows 10-12 unless nf), c0 the view's centre in tiles and z its width in tiles, t the clock to draw it at, sim seconds
+// to run its hazards first (rockets), pl where the square stands (tiles) and pv whether it is drawn, fx(L) a last
+// touch, ov an overlay for the things that are a force rather than an object. The order here is the Field Guide's.
+const MEET_TAGS={f:['FRIENDLY','#7bdc3b'],p:['PICKUP','#ffd45e'],d:['DANGER','#ff5468'],h:['HEADS UP','#8dd3ff']};
+const MEET=[
+ // ---- FRIENDLY: things you stand on, ride, or walk into on purpose
+ {k:'thin',g:'f',n:'Thin Platform',d:'Jump up through it from below. Hold down to drop back through.',p:{w:0,r:[['=',9,7,7,1]],pl:[12,6],pv:1}},
+ {k:'pad',g:'f',n:'Bounce Pad',d:'Land on it and it launches you way up, higher than any jump.',p:{w:2,r:[['B',12,9,1,1]],pl:[12,6.3],pv:1,air:1}},
+ {k:'crumble',g:'f',n:'Crumbling Block',d:'Safe to land on, but it drops out a moment later, so keep moving. It comes back after a few seconds.',
+  p:{w:1,r:[['X',9,8,7,1]],pl:[12.3,7],pv:1,fx:L=>{const c=L.crl[4];if(c){c.s=1;c.t=0.2}}}},
+ {k:'belt',g:'f',n:'Conveyor Belt',d:'Stand on it and it carries you the way the arrows point.',p:{w:1,r:[['C',8,10,9,1]],pl:[11,9],pv:1}},
+ {k:'phase',g:'f',n:'Phase Blocks',d:'They take turns being solid. Stand on the solid ones. The striped ones let you fall right through.',
+  p:{w:2,r:[['T',8,8,3,1],['t',14,8,3,1]],t:0.8,pl:[9,7],pv:1}},
+ {k:'plat',g:'f',n:'Moving Platform',d:'Hop on and ride it. It slides back and forth along its track.',p:{w:0,m:[['plat',7,7,13,7,0.9,3]],t:3.33,pl:[11,6.25],pv:1}},
+ {k:'portal',g:'f',n:'Portal',d:'Step in and you pop out of its partner, somewhere else in the level.',
+  p:{w:5,pt:[[9,9,16,9]],pl:[12.5,9],pv:1,fx:L=>{for(const q of L.portals){q.litA=q.litB=1.4}}}},
+ {k:'nojump',g:'f',n:'No-Jump Zone',d:'Safe to touch, but your air jumps and wall jumps don’t work inside it. Jumping off the ground still does.',
+  p:{w:2,r:[['N',8,5,9,5]],pl:[12,7],pv:1,air:1}},
+ {k:'vent',g:'f',n:'Gas Vent',d:'Its jet pushes you the way it blows, usually up. Hop in and ride it.',p:{w:6,m:[['vnt',12,9,'U',5,1]],pl:[12,6],pv:1,air:1}},
+ {k:'well',g:'f',n:'Gravity Well',d:'It pulls you toward its middle and bends your jumps. It can’t hurt you.',p:{w:6,m:[['wel',13,6,2.4,1]],z:12,c0:[12.5,7.5],pl:[8.5,6.5],pv:1,air:1}},
+ {k:'door',g:'f',n:'Locked Door',d:'It’s a wall until you grab its key. Then it slides open and stays open.',p:{w:2,r:[['#',12,1,1,6],['D',12,7,1,3]],pl:[9.5,9],pv:1}},
+ {k:'vault',g:'f',n:'Vault Door',d:'Open every treasure chest in the level and the gold doors slide open.',p:{w:7,r:[['#',12,1,1,6],['D',12,7,1,3]],pl:[9.5,9],pv:1}},
+ {k:'flag',g:'f',n:'Checkpoint',d:'Touch the flag to save your spot. If you fall after that, you start again here.',p:{w:0,k:[[12,9]],pl:[9.5,9],pv:1,fx:L=>{L.checks[0].on=true}}},
+ {k:'exit',g:'f',n:'Exit Door',d:'Get to it and jump in to finish the level.',p:{w:0,e:[12,9],pl:[9,9],pv:1}},
+ {k:'racer',g:'f',n:'Ghost Racer',d:'They’re racing you to the door. They can’t touch you, so run right through them.',p:{w:0,pl:[13,9],pv:1,ov:'racer'}},
+ // ---- PICKUPS
+ {k:'gem',g:'p',n:'Gem',d:'Grab every gem in a level to earn a star. You can spend gems in the shop.',p:{w:0,g:[[12,8]]}},
+ {k:'coin',g:'p',n:'Coin',d:'Grab them as you go. Spend your coins in the shop.',p:{w:0,c:[[10,8],[12,8],[14,8]]}},
+ {k:'key',g:'p',n:'Key',d:'Grab it and its locked door opens.',p:{w:2,key:[12,8]}},
+ {k:'note',g:'p',n:'Hidden Note',d:'Every story level hides one. Read the ones you find in your Backpack.',p:{w:0,fx:L=>{L.note={x:12*TS+12,y:8*TS+12,got:false}}}},
+ {k:'chest',g:'p',n:'Treasure Chest',d:'Touch it to pop it open. Coins and gems spill out.',p:{w:7,ch:[[12,9]]}},
+ // ---- DANGER: touch these and you're out
+ {k:'spike',g:'d',n:'Spikes',d:'Touch the points and you’re out. Jump over them or go around.',p:{w:0,r:[['^',9,9,7,1]],pl:[12,6.8],pv:1,air:1}},
+ {k:'lava',g:'d',n:'Lava',d:'Touch it and you’re out. Jump over it.',p:{w:3,r:[['~',8,10,9,2]],pl:[12,7],pv:1,air:1}},
+ {k:'gold',g:'d',n:'Molten Gold',d:'Looks like treasure, but it’s as hot as lava. Touch it and you’re out.',p:{w:7,r:[['~',8,10,9,2]],pl:[12,7],pv:1,air:1}},
+ {k:'rise',g:'d',n:'Rising Lava',d:'It keeps coming up from below. Keep climbing and stay ahead of it.',
+  p:{w:3,nf:1,rise:9.2,r:[['#',6,8,4,1],['#',15,6,4,1]],pl:[7.5,7],pv:1}},
+ {k:'laser',g:'d',n:'Laser',d:'It switches on and off. Its ends glow right before it fires, so go while it’s off.',p:{w:2,r:[['#',12,1,1,4],['l',12,5,1,5]],t:0.6}},
+ {k:'saw',g:'d',n:'Saw Blade',d:'Touch it and you’re out. If it slides on a track, wait for it to pass, then go.',p:{w:1,m:[['saw',8,8,17,8,2]],t:2.2}},
+ {k:'orb',g:'d',n:'Saw Ring',d:'Blades spin around a center point. Wait for a gap, then go through.',p:{w:1,m:[['orb',12,7,2,3,1.4]],t:0.3}},
+ {k:'rocket',g:'d',n:'Rocket Launcher',d:'It fires rockets in a straight line. The bar on it fills up before each shot.',
+  p:{w:5,r:[['#',5,6,2,4]],m:[['rkt',7,8,'R',1.3,'s',1.0]],sim:0.55,pl:[22,9],c0:[11.2,8]}},
+ {k:'seeker',g:'d',n:'Heat Seeker',d:'Its missiles chase you, but they’re slower than you. Keep moving, or lead them into a wall.',
+  p:{w:5,m:[['rkt',8,6,'R',3,'h',2.3]],sim:1.05,pl:[17,9]}},
+ {k:'ast',g:'d',n:'Meteor',d:'Meteors streak across and burst on whatever they hit. Watch where they come from, then time your move.',
+  p:{w:6,fx:L=>{L.ast.push({x:14*TS,y:7.7*TS,vx:120,vy:100,r:19,hr:13,big:true,rot:0.7})}}},
+ {k:'rover',g:'d',n:'Moon Rover',d:'It shoots when it can see you. When it stops to aim, move. Touching it hurts too.',
+  p:{w:6,m:[['rov',9,9,9,9,0,0,2.2,1,0]],pl:[18,9],fx:L=>{const b={x:14*TS,y:9*TS+7,vx:300,vy:0,a:0,life:2,trail:[]};for(let i=9;i>0;i--)b.trail.push(b.x-i*5,b.y);L.rov.push(b)}}},
+ {k:'zombie',g:'d',n:'Zombie',d:'It lurches back and forth. Touch it and you’re out, so jump over it.',p:{w:8,m:[['zom',9,9,15,9,0.8,0.3]],t:1.6}},
+ {k:'ogre',g:'d',n:'Ogre',d:'Only his club hurts, and only while he swings it. Watch him wind up, then run past.',p:{w:8,m:[['ogre',12,9,2.2,0]],t:1.32}},
+ {k:'ghost',g:'d',n:'Ghost',d:'It drifts through walls toward you, but it only hurts while it’s solid. You can outrun it.',p:{w:8,m:[['gho',12,7,3.4,0,7]],t:1.2}},
+ {k:'chand',g:'d',n:'Chandelier',d:'It swings back and forth. The ring of candles hurts, the chain doesn’t.',
+  p:{w:7,r:[['#',1,1,24,3]],m:[['chan',12,3,4,0.7,2.6,0]],t:0.33,c0:[12.5,6.2]}},
+ // ---- HEADS UP: not things at all, but they change how you move
+ {k:'lowg',g:'h',n:'Low Gravity',d:'Gravity is weak out here. You jump way higher and fall slower.',p:{w:6,pl:[12.5,6.2],pv:1,air:1,ov:'arc'}},
+ {k:'wind',g:'h',n:'Wind',d:'Gusts push you sideways while you’re in the air, and streaks show them coming. Hold the other way and it can’t move you.',
+  p:{w:3,pl:[12,6.5],pv:1,air:1,ov:'wind'}},
+ {k:'elowg',g:'h',n:'Floaty Jumps',d:'From here up, holding jump floats you higher. Let go and you fall like normal.',p:{w:1,pl:[12.5,6.2],pv:1,air:1,ov:'arc'}},
+ {k:'cflip',g:'h',n:'Control Flip',d:'Left and right swap for a few seconds. Arrows over your square warn you first.',p:{w:4,pl:[12,9],pv:1,ov:'cflip'}},
+ {k:'gflip',g:'h',n:'Gravity Flip',d:'For a moment you float up instead of falling. Arrows under your square warn you first.',p:{w:4,pl:[12,7],pv:1,air:1,ov:'gflip'}},
+];
+// Endless and the Weekly Climb build their towers from these (see the ENDLESS GENERATOR) - used to mark a returning
+// climber's things as met, since a random tower can't be rebuilt to look inside it
+const MEET_ENDLESS=['spike','thin','pad','crumble','laser','nojump','saw','orb','gem','rise'];
 // TUTORIAL: one long level that shows every good and bad thing, with a sign for each part
 const TUT={wd:0,n:'Tutorial',W:112,H:22,t:60,s:[3,18],e:[108,18],k:[[33,18]],key:[84,18],g:[[40,5],[52,11],[64,6]],
  r:[['#',1,19,110,2],['#',11,17,2,2],['#',18,12,2,7],['^',25,18,5,1],['#',38,8,1,8],['#',42,8,1,11],['=',46,15,4,1],['=',50,12,4,1],
   ['B',64,19,1,1],['~',69,19,8,2],['X',70,17,6,1],['#',90,1,1,11],['D',90,12,1,7],['#',96,1,1,12],['l',96,13,1,6],['C',101,19,5,1]],
  m:[['saw',58,9,58,18,2.2]],
  signs:[[1,9,'Arrows or A/D to move.','Drag anywhere on the left side to move.'],[10,14,'Jump over the wall. SPACE, W or Up.','Tap the right side to jump over the wall.'],
-  [15,21,'Too tall? Jump again in mid-air. You get 2 extra jumps.',null],[22,30,'Spikes hurt. Jump over them.',null],[31,35,'Flags save your spot. Die and you come back here.',null],
+  [15,21,'Too tall? Jump again in mid-air. You get 2 extra jumps.',null],[22,30,'Spikes: touch the points and you’re out. Jump over them.',null],[31,35,'Touch the flag to save your spot. If you fall after that, you start again here.',null],
   [36,44,'Push into a wall and jump to kick off it. Bounce between two walls to climb.',null],[45,54,'Thin platforms: jump up through them. Hold Down to drop through.','Thin platforms: jump up through them. Hold down on the stick to drop through.'],
-  [55,61,'Saws hurt. Wait for it to move, then go.',null],[62,66,'Bounce pads launch you way up. Try it!',null],[67,79,'Lava = instant ouch. Cracked blocks fall after you step on them.',null],
-  [80,91,'Grab the key to open the gold door.',null],[92,99,'Lasers blink. Go when they turn off.',null],[100,105,'Arrow floors push you along.',null],[106,111,"That's it! Touch the door to finish.",null]]};
+  [55,61,'Saws: touch one and you’re out. Wait for it to pass, then go.',null],[62,66,'Bounce pads launch you way up, higher than any jump. Try it!',null],[67,79,'Lava: touch it and you’re out. Crumbling blocks drop out a moment after you land, so keep moving.',null],
+  [80,91,'Grab the key and its locked door slides open.',null],[92,99,'Lasers switch on and off. Their ends glow right before they fire, so go while they’re off.',null],[100,105,'Conveyor belts carry you the way the arrows point.',null],[106,111,"That's it! Touch the door to finish.",null]]};
 function startTutorial(){const L=buildLevel(TUT);G=newG({mode:'tut',idx:-1,L,intro:0,tipT:0});spawn();updCam(0,true);enterPlay(0)}
 function startEndless(daily){TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?climbWeek()*7919+20261:(Math.random()*1e9|0);const L=endLevel(seed);
  G=newG({mode:daily?'daily':'endless',idx:-1,L,lavaY:(L.start.y+7)*TS,tipT:6,dailyDay:daily?weekStr():''});
@@ -6663,7 +6747,8 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
  // wzo / wzsp: THE WEIRD STUFF is on (Endless, the Weekly), and we are in space or past it (no leaves drifting by)
  const wzo=wzOn(),wzsp=wzo&&wzK(WZ.h,5)>0.5;
  {const cl=G.mode=='endless'||G.mode=='daily',vcy=G.cam.y+(L.vy0||0),hy=cl?vcy-((L.vy0!=null?END_OH:L.H)*TS-VH):undefined;
-  if(cl){const f=climbSky();if(!(wzo&&wzSkyCovers()))drawBGFade(f,G.cam.x,vcy,gtime,hy);if(wzo)wzSky()}else drawBG(th,G.cam.x,G.cam.y,gtime,hy);if(!wzsp)drawFX(0,th);}
+  if(MEET_DRAW){} // a first-encounter picture (meetRender) paints its own plain sky and no world FX
+  else if(cl){const f=climbSky();if(!(wzo&&wzSkyCovers()))drawBGFade(f,G.cam.x,vcy,gtime,hy);if(wzo)wzSky()}else drawBG(th,G.cam.x,G.cam.y,gtime,hy);if(!wzsp&&!MEET_DRAW)drawFX(0,th);}
  ctx.save();let sx=0,sy=0;if(G.shake>0.3){sx=rnd(-G.shake,G.shake);sy=rnd(-G.shake,G.shake)}
  ctx.translate(Math.round(-G.cam.x+sx),Math.round(-G.cam.y+sy));
  const x0=Math.max(0,Math.floor(G.cam.x/TS)-1),x1=Math.min(L.W-1,Math.floor((G.cam.x+VW)/TS)+1),y0=Math.max(0,Math.floor(G.cam.y/TS)-1),y1=Math.min(L.H-1,Math.floor((G.cam.y+VH)/TS)+1);
@@ -7891,6 +7976,167 @@ function remDraw(){if(!REM.cur||!remOn())return;const r=REM.cur,a=remA(),g=remRe
  ctx.beginPath();ctx.moveTo(cx-6,cy-6);ctx.lineTo(cx+6,cy+6);ctx.moveTo(cx+6,cy-6);ctx.lineTo(cx-6,cy+6);ctx.stroke();ctx.lineCap='butt';
  ctx.restore()}
 
+// ================= FIRST-ENCOUNTER TIPS =================
+// The list (MEET) and why it exists are up by the tutorial. This is the machinery:
+//   meetScan   every MEET_EVERY s of play: what kinds of thing are on screen AND near the square (MEET_RX/RY), nearest
+//              first. New ones queue up (or, with Settings > New-thing tips off, are just marked seen).
+//   meetUpd    SCREENS.play.update calls it first. While a card is up it returns true and the level does not step at all:
+//              no physics, no clock, no lava, no race time - you cannot die or lose time while reading. Input is ignored
+//              for MEET_GRACE s (so the jump you were already making can't wipe it), then any new key, click or tap
+//              closes it; the touch handler swallows that tap (MEETS.tap) so it doesn't also jump. Queued cards follow
+//              one at a time.
+//   meetCard   the card. meetPic draws its picture: a tiny level built from the entry's p and run through the real
+//              drawWorld (with MEET_DRAW set it paints no sky; meetRender paints a plain one from the world's colours,
+//              so a picture never draws - or decodes - a world's big background layers). Cached; see MEETPIC.
+//   meetMigrate  once per old save: marks everything in the levels it has beaten as met.
+//   SCREENS.field  the Field Guide: every card, ??? silhouettes for the ones not met yet, and "Show tips again".
+const MEET_BY={};for(const e of MEET)MEET_BY[e.k]=e;
+const MEET_GRACE=0.4,MEET_EVERY=0.1,MEET_RX=10*TS,MEET_RY=7*TS,MEET_PW=400,MEET_PH=200,MEET_TW=156,MEET_TH=78;
+const MEETS={q:[],cur:null,t0:0,g:null,st:0,tap:false};
+let MEET_DRAW=0;
+const MEET_MOV={saw:'saw',orb:'orb',rov:'rover',zom:'zombie',ogre:'ogre',gho:'ghost',chan:'chand'};
+function meetOn(){return S.set.meet!==0}
+// a tile's kind. '~' is molten gold in the Gilded Vale (same lava, poured as gold), a 'D' with no key in its level is a
+// vault door (the chests open it)
+function meetTileK(L,c,gold){switch(c){case'=':return'thin';case'^':case'v':case'<':case'>':return'spike';case'~':return gold?'gold':'lava';
+ case'X':return'crumble';case'l':case'L':return'laser';case'T':case't':return'phase';case'B':return'pad';case'c':case'C':return'belt';case'N':return'nojump';
+ case'D':return(!L.key&&L.chests&&L.chests.length)?'vault':'door'}return null}
+function meetScan(){if(S.meetMig)meetMigrate();
+ const L=G.L,p=G.player,M=S.meet||(S.meet={}),Q=MEETS.q,F=[],pcx=p.x+8,pcy=p.y+8;
+ const x0=Math.max(G.cam.x,pcx-MEET_RX),x1=Math.min(G.cam.x+VW,pcx+MEET_RX),y0=Math.max(G.cam.y,pcy-MEET_RY),y1=Math.min(G.cam.y+VH,pcy+MEET_RY);
+ const want=k=>!!k&&!M[k]&&Q.indexOf(k)<0&&!F.some(f=>f[1]==k);
+ const see=(k,x,y,r)=>{if(!want(k))return;r=r||12;if(x+r<x0||x-r>x1||y+r<y0||y-r>y1)return;F.push([Math.hypot(x-pcx,y-pcy),k])};
+ const now=(k,d)=>{if(want(k))F.push([d||0,k])};
+ // world-wide ones first: they are true the moment you arrive
+ if(L.def&&L.def.grav!=null&&L.def.grav<1)now('lowg');
+ if(wzOn()){const h=G.height;if(h>WZ_STOPS[1])now('wind');if(h>WZ_STOPS[4])now('elowg');if(wzK(h,10)>0.5){now('cflip',1);now('gflip',2)}}
+ if((G.rc&&G.rc.rs&&G.rc.rs.some(r=>r.src))||(G.cg&&G.cg.src&&S.set.pbg!==0))now('racer',3);
+ const gold=themeOf().deco==7;
+ for(let ty=Math.floor(y0/TS);ty<=Math.floor(y1/TS);ty++)for(let tx=Math.floor(x0/TS);tx<=Math.floor(x1/TS);tx++){const c=tAt(L,tx,ty);if(c=='.'||c=='#')continue;see(meetTileK(L,c,gold),tx*TS+12,ty*TS+12)}
+ for(const m of L.movers){const k=MEET_MOV[m.t];if(!k)continue;if(m.t=='orb')see(k,m.cx,m.cy,m.r+12);else see(k,m.x,m.y,m.t=='ogre'?30:16)}
+ for(const m of L.plats)see('plat',m.x+m.w/2,m.y+6,m.w/2);
+ for(const la of L.launchers||[])see(la.kind=='h'?'seeker':'rocket',la.tx*TS+12,la.ty*TS+12);
+ for(const r of L.rk||[])see(r.kind=='h'?'seeker':'rocket',r.x,r.y);
+ for(const a of L.ast||[])see('ast',a.x,a.y,a.r||12);
+ for(const b of L.rov||[])see('rover',b.x,b.y);
+ for(const v of L.vents||[])see('vent',v.tx*TS+12,v.ty*TS+12);
+ for(const w of L.wells||[])see('well',w.x,w.y,Math.min(w.r,3*TS));
+ for(const q of L.portals||[]){see('portal',q.a.x*TS+12,q.a.y*TS);see('portal',q.b.x*TS+12,q.b.y*TS)}
+ for(const c of L.chests||[])if(!c.got)see('chest',c.x,c.y);
+ if(L.key&&!L.key.got)see('key',L.key.x,L.key.y);
+ for(const g of L.gems)if(!g.got)see('gem',g.x,g.y);
+ for(const c of L.coins)if(!c.got)see('coin',c.x,c.y);
+ if(L.note&&!L.note.got)see('note',L.note.x,L.note.y);
+ for(const c of L.checks)see('flag',c.x*TS+12,c.y*TS+6);
+ if(L.exit.y>0)see('exit',L.exit.x*TS+12,L.exit.y*TS+6);
+ // rising lava: once it's on screen - or straight away in Endless and the Weekly, where it's the whole game
+ if(L.rise&&(L.rise.endless||G.lavaY<G.cam.y+VH-TS))now('rise',Math.max(0,G.lavaY-pcy));
+ if(!F.length)return;F.sort((a,b)=>a[0]-b[0]);
+ if(!meetOn()){for(const f of F)M[f[1]]=1;save();return}   // tips off: still remembered, so the Field Guide fills in
+ for(const f of F)Q.push(f[1])}
+// Every kind a built level holds, wherever it is in it (for marking a beaten level's things as met)
+function meetKindsOf(L,def){const o=new Set(),gold=def.wd==7;
+ for(let y=0;y<L.H;y++)for(let x=0;x<L.W;x++){const k=meetTileK(L,L.g[y][x],gold);if(k)o.add(k)}
+ for(const m of L.movers)if(MEET_MOV[m.t])o.add(MEET_MOV[m.t]);
+ if(L.plats.length)o.add('plat');for(const la of L.launchers)o.add(la.kind=='h'?'seeker':'rocket');
+ if(L.astSpawn.length)o.add('ast');if(L.vents.length)o.add('vent');if(L.wells.length)o.add('well');if(L.portals.length)o.add('portal');
+ if(L.chests.length)o.add('chest');if(L.key)o.add('key');if(L.gems.length)o.add('gem');if(L.coins.length)o.add('coin');
+ if(L.checks.length)o.add('flag');if(L.exit.y>0)o.add('exit');if(L.rise)o.add('rise');if(def.grav!=null&&def.grav<1)o.add('lowg');
+ return o}
+// A save from before the cards: everything in what the player has already beaten counts as met (story levels and
+// their Hard Mode runs, the tutorial, the Speed Courses, notes found, and the Endless heights reached), so a returning
+// player only gets cards for things they really haven't seen. Runs once per such save - parseSave sets meetMig.
+function meetMigrate(){if(!S.meetMig)return;delete S.meetMig;const M=S.meet=isObj(S.meet)?S.meet:{},add=s=>{for(const k of s)if(MEET_BY[k])M[k]=1};
+ try{LEVELS.forEach((d,i)=>{const a=S.lv[i],b=S.hard[i];if((a&&a.done)||(b&&b.done))add(meetKindsOf(buildLevel(d,{coins:COINS[i]}),d))});
+  if(S.tut)add(meetKindsOf(buildLevel(TUT),TUT));
+  COURSES.forEach((c,i)=>{if(S.course[i]&&S.course[i].t){const d=makeCourse(i);add(meetKindsOf(buildLevel(d,{skipBlocked:true}),d))}});
+  if(Object.keys(S.notes).some(k=>S.notes[k]))M.note=1;
+  const eb=Math.max(S.endBest||0,(S.daily&&S.daily.h)||0);
+  if(eb>0){add(MEET_ENDLESS);if(eb>WZ_STOPS[1])M.wind=1;if(eb>WZ_STOPS[4])M.elowg=1;if(eb>WZ_STOPS[10])M.cflip=M.gflip=1}}
+ catch(e){}
+ save()}
+function meetOpen(k){const e=MEET_BY[k];if(!e)return;S.meet[k]=1;save();MEETS.cur=e;MEETS.t0=gtime;sfx('move')}
+// SCREENS.play.update's first call. true = a card is up (or just closed this frame): the level does nothing this frame.
+function meetUpd(dt){const M=MEETS;
+ if(M.g!==G){M.g=G;M.q.length=0;M.cur=null;M.st=0;M.tap=false}   // a new run: anything still queued from the last one is dropped, unseen
+ if(M.cur){if(gtime-M.t0>MEET_GRACE&&(M.tap||mouse.click||pressed.NEWKEY||pressed.J||pressed.U||pressed.OK||pressed.ESC)){M.cur=null;sfx('click')}
+  M.tap=false;mouse.click=false;for(const k in pressed)delete pressed[k];return true}
+ const p=G.player;if(!p||p.dead||G.won)return false;
+ if(!M.q.length&&(M.st-=dt)<=0){M.st=MEET_EVERY;meetScan()}
+ if(M.q.length&&meetOn()){meetOpen(M.q.shift());return true}
+ return false}
+// the touch handler: a finger that lands while a card is up belongs to the card (true = swallowed)
+function meetTap(){if(!MEETS.cur||SCR!==SCREENS.play)return false;MEETS.tap=true;return true}
+function meetDraw(){const M=MEETS,e=M.cur;if(!e||M.g!==G)return;const a=gtime-M.t0,rm=RM(),k=rm?clamp(a/0.12,0,1):ease(a/0.24);
+ ctx.save();ctx.globalAlpha=k;ctx.fillStyle='rgba(10,8,22,.58)';ctx.fillRect(0,0,VW,VH);
+ if(!rm){const s=0.9+0.1*eob(clamp(a/0.3,0,1));ctx.translate(VW/2,VH/2);ctx.scale(s,s);ctx.translate(-VW/2,-VH/2)}
+ meetCard(e,VW/2,VH/2+16,{foot:'Tap to keep going',fa:clamp((a-MEET_GRACE)/0.25,0,1)});ctx.restore()} // (a little low: clear of the tutorial's sign)
+// THE CARD: picture, then the name with its tag beside it, then the line. Flat plate on an ink outline (the UI kit's
+// look without the lip), its inner rim in the tag's colour. o.foot = a hint along the bottom (o.fa its alpha).
+function meetCard(e,cx,cy,o){o=o||{};const tg=MEET_TAGS[e.g],W=MEET_PW+32,tw=Math.ceil(txtW(tg[0],16))+30,
+ ln=wrapText(e.d,W-48,18).slice(0,3),H=16+MEET_PH+16+32+8+ln.length*24+(o.foot?38:18),x=Math.round(cx-W/2),y=Math.round(cy-H/2);
+ ctx.save();
+ ctx.fillStyle='rgba(10,6,26,.3)';rr(x-1,y+6,W+2,H+2,20);ctx.fill();
+ ctx.fillStyle=INK;rr(x-3,y-3,W+6,H+6,21);ctx.fill();
+ ctx.fillStyle=UIC.plate;rr(x,y,W,H,18);ctx.fill();
+ ctx.strokeStyle=tg[1];ctx.globalAlpha*=0.9;ctx.lineWidth=2.5;rr(x+5,y+5,W-10,H-10,14);ctx.stroke();ctx.globalAlpha/=0.9;
+ const px=x+16,py=y+16,pic=meetPic(e,MEET_PW,MEET_PH,!!o.sil);
+ ctx.save();rr(px,py,MEET_PW,MEET_PH,12);ctx.clip();ctx.fillStyle='#1a1530';ctx.fillRect(px,py,MEET_PW,MEET_PH);if(pic)ctx.drawImage(pic,px,py,MEET_PW,MEET_PH);ctx.restore();
+ ctx.strokeStyle=INK;ctx.lineWidth=3;rr(px,py,MEET_PW,MEET_PH,12);ctx.stroke();
+ const ny=py+MEET_PH+16+16,nm=o.sil?'???':e.n;
+ display(nm,x+24,ny,fitPx(nm,30,W-48-tw-12),'#ffffff','left');
+ if(!o.sil){const bx=x+W-24-tw;ctx.fillStyle=INK;rr(bx-2.5,ny-16.5,tw+5,33,16.5);ctx.fill();ctx.fillStyle=tg[1];rr(bx,ny-14,tw,28,14);ctx.fill();
+  txt(tg[0],bx+tw/2,ny+1,16,INK,'center',false)}
+ if(!o.sil)ln.forEach((l,i)=>txt(l,x+24,ny+32+i*24,18,'#e6e3f4','left',false));
+ if(o.foot&&o.fa>0){ctx.globalAlpha*=o.fa;txt(o.foot,cx,y+H-22,14,'rgba(255,255,255,.62)','center',false)}
+ ctx.restore()}
+// ---- THE PICTURES ----
+// Thumbnails stay cached (40 of them at 156x78 is small); the big card ones are let go past 3. A world's art pack is
+// asked for the first time an entry is drawn, and once it lands that entry is drawn again with it (code art until then).
+const MEETPIC=new Map(),MEETBIG=[];let MEETPIC_N=0;
+function meetPic(e,w,h,sil,lim){const q=Math.min(2,Math.max(1,KS||1)),key=e.k+'|'+w+'|'+(sil?1:0)+'|'+q;let c=MEETPIC.get(key);if(c)return c;
+ if(lim&&MEETPIC_N>=lim)return null;MEETPIC_N++;
+ if(window.ART&&ART.load&&!e._ld){e._ld=1;Promise.all([ART.load(e.p.w|0),ART.load('hz')]).then(()=>{for(const k2 of[...MEETPIC.keys()])if(k2.split('|')[0]===e.k)MEETPIC.delete(k2)},()=>{})}
+ try{c=meetRender(e,w,h,q,sil)}catch(err){console.warn('meet picture',e.k,err);c=document.createElement('canvas');c.width=c.height=1}
+ MEETPIC.set(key,c);if(w>=MEET_PW){MEETBIG.push(key);while(MEETBIG.length>3)MEETPIC.delete(MEETBIG.shift())}
+ return c}
+function meetLevel(e){const p=e.p,def={wd:p.w|0,n:e.n,W:26,H:14,t:60,s:[2,9],e:p.e||[0,0],r:(p.nf?[]:[['#',1,10,24,3]]).concat(p.r||[]),
+  m:p.m||[],g:p.g||[],k:p.k||[],ch:p.ch||[],pt:p.pt||[]};
+ if(p.key)def.key=p.key;if(p.rise!=null)def.rise={d:99,v:0};if(p.w==6){def.grav=0.33;def.jmul=0.75}
+ return buildLevel(def,{coins:p.c||[]})}
+// The tiny level is played for real into a canvas: a stand-in G for the length of one drawWorld, then the game's own G
+// back. Its hazards are posed by the clock (t) or run for a moment (sim: rockets need to have fired), with the sound off.
+function meetRender(e,w,h,q,sil){const p=e.p,L=meetLevel(e),G0=G,z=(p.z||10)*TS,zh=z*h/w,c0=p.c0||[12.5,8],sc=w/z,
+  cv2=document.createElement('canvas');cv2.width=Math.ceil(w*q);cv2.height=Math.ceil(h*q);const g=cv2.getContext('2d'),s0=S.set.sfx,u0=S.set.ui;
+ try{S.set.sfx=0;S.set.ui=0;
+  G=newG({mode:'meet',idx:-1,L,intro:0,tipT:0});spawn();G.parts.length=0;
+  const pl=G.player;if(p.pl){pl.x=p.pl[0]*TS+4;pl.y=p.pl[1]*TS+8}else{pl.x=2*TS+4;pl.y=9*TS+8}
+  pl.px=pl.x;pl.py=pl.y;pl.sx=pl.sy=1;pl.onG=!p.air;pl.face=1;
+  if(p.sim){for(let i=0,n=Math.round(p.sim/DT);i<n;i++){G.t+=DT;updMovers(L,G.t);updPlats(L,G.t);updRockets(L,DT);updRovers(L,DT);updParts(G.parts,DT)}}
+  else{G.t=p.t||0;updMovers(L,G.t);updPlats(L,G.t)}
+  if(p.rise!=null)G.lavaY=p.rise*TS;
+  if(p.fx)p.fx(L);
+  for(const m of L.plats){m.dx=0;m.dy=0}
+  pl.dead=!p.pv;G.cam.x=c0[0]*TS-z/2;G.cam.y=c0[1]*TS-zh/2;G.acc=DT; // acc=DT: drawn exactly where things are, not between two steps
+  withCtx(g,()=>{ctx.setTransform(q*sc,0,0,q*sc,0,0);
+   if(!sil){const th=WORLDS[p.w|0],gr=ctx.createLinearGradient(0,0,0,zh);gr.addColorStop(0,th.bg[0]);gr.addColorStop(1,th.bg[1]);ctx.fillStyle=gr;ctx.fillRect(0,0,z,zh)}
+   MEET_DRAW=1;drawWorld();MEET_DRAW=0;
+   if(p.ov){ctx.save();ctx.translate(-G.cam.x,-G.cam.y);meetOv(p.ov,pl);ctx.restore()}
+   if(sil){ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='source-in';ctx.fillStyle='#0b0818';ctx.fillRect(0,0,cv2.width,cv2.height);ctx.globalCompositeOperation='source-over'}})}
+ finally{G=G0;S.set.sfx=s0;S.set.ui=u0;MEET_DRAW=0}
+ return cv2}
+// the forces have no object to show, so their pictures draw what they do to the square (in world space)
+function meetOv(k,pl){const x=pl.x+8,y=pl.y+8;ctx.save();ctx.lineCap='round';
+ if(k=='arc'){ctx.fillStyle='rgba(255,255,255,.8)';for(let i=0;i<=26;i++){const u=i/26,X=x-4.2*TS+u*8.4*TS,Y=10*TS-6-(1-Math.pow(2*u-1,2))*(10*TS-6-(y+14));
+  if(Math.abs(X-x)<16)continue;ctx.beginPath();ctx.arc(X,Y,2.2,0,7);ctx.fill()}}
+ else if(k=='wind'){ctx.strokeStyle='#ffffff';ctx.lineWidth=1.8;ctx.globalAlpha=0.75;
+  for(const[dx,dy,l]of[[-70,-22,46],[-40,-6,62],[-96,8,40],[-30,20,52],[40,-30,44],[52,4,58],[30,26,36],[-60,36,30]]){ctx.beginPath();ctx.moveTo(x+dx,y+dy);ctx.lineTo(x+dx+l,y+dy);ctx.stroke()}
+  ctx.globalAlpha=1}
+ else if(k=='cflip'){ctx.translate(x,y-32);wzArrow(-15,0,1,8);wzArrow(15,0,-1,8)}
+ else if(k=='gflip'){for(let i=0;i<3;i++)wzChev(x,y+40-i*10,7)}
+ else if(k=='racer'){for(const[o,c,dy]of[[-2.6*TS,'c_sky',0],[2.4*TS,'c_lime',-1.6*TS]]){const s=rgSpr(c,'h_none',1);ctx.globalAlpha=0.5;ctx.drawImage(s,pl.x+8+o-s.ox,pl.y+16+dy-s.oy,s.dw,s.dh)}}
+ ctx.restore()}
+
 // ================= SCREENS =================
 let SCR=null,fadeA=1,gtime=0;
 function go(name,arg){UIA.t0=gtime;BTN.clear();if(SCREENS[name]!==SCR)tReset();if(SCR&&SCR===SCREENS.wheel&&SCREENS[name]!==SCR&&S.wpend)claimPrize();tapBlock=performance.now()+220;SCR=SCREENS[name];UI.selId=null;UI.hit=null;UI.clickId=null;UI.kb=false;UI.prev=[];UI.list=[];fadeA=0.85;mouse.moved=false;MBG.n++;SLD.id=null;if(SCR.enter)SCR.enter(arg)}
@@ -8409,6 +8655,8 @@ SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
 
 SCREENS.play={enter(){},
  update(dt){
+  // a first-encounter card is up (see FIRST-ENCOUNTER TIPS): the level is paused under it, nothing below runs
+  if(meetUpd(dt))return;
   // A note never pauses the level and never consumes an input. Any fresh key, click or finger makes it go away, and
   // that same input still moves/jumps as normal (touchstart clears it directly - see the TOUCH section).
   // NEWKEY, not ANY: a direction key the player was ALREADY holding when they walked into the note must not count.
@@ -8426,7 +8674,7 @@ SCREENS.play={enter(){},
   feelUpd(dt);ambient(dt);updParts(G.parts,dt*hm);if(G.player)updCam(dt);if(wzOn())wzUpdate(dt);if(G.intro>0)G.intro-=dt;if(G.tipT>0&&G.intro<=0)G.tipT-=dt;G.shake*=Math.pow(0.0005,dt);
   if(G.won){G.winT+=dt;if(G.winT>1.0&&!G.winDone){G.winDone=1;onWinDone();return}}
   if(Math.floor(G.t)!=Math.floor(G.t-dt))checkAch()},
- draw(){drawWorld();drawHUD();drawFliers();drawIris()}}; // fliers + iris: see ANIMATION
+ draw(){drawWorld();drawHUD();drawFliers();drawIris();meetDraw()}}; // fliers + iris: see ANIMATION; meetDraw: the first-encounter card
 
 // the loading beat in front of levels and modes - see enterPlay()
 // the same track carries straight on (owner: 'it keeps cutting off the music even though it's the same track') - only a
@@ -8461,6 +8709,8 @@ SCREENS.pause={enter(){if(mus.want!==SONG_PAUSE){this.mw=mus.want;this.ms=mus.st
   // the stack centres itself between the header and the controls line, however many rows this mode has
   const bh=B.length>4?48:50,gap=B.length>4?8:12,y0=Math.round(316-(B.length*bh+(B.length-1)*gap)/2);
   B.forEach((b,k)=>button(b[0],VW/2-140,y0+k*(bh+gap),280,bh,b[1],b[2]));
+  // the Field Guide, top right (after the stack, so Resume keeps the first pick): every first-encounter card
+  button('field',VW-196,18,176,42,'Field Guide',{fs:17,bg:'#cfe3ff'});
   // DEV (recording): god mode and jump-to-height, right of the stack. Dev mode only - never in a shipped build (devOn)
   if(en&&devOn()){const X=VW-224,Y=92;txt('DEV',X+102,Y-12,14,'#7bdc3b',undefined,false);
    button('dvgod',X,Y,204,36,'God mode: '+(G.god?'ON':'OFF'),{fs:15,bg:G.god?'#c8f5cf':'#ffffff'});
@@ -8470,6 +8720,7 @@ SCREENS.pause={enter(){if(mus.want!==SONG_PAUSE){this.mw=mus.want;this.ms=mus.st
   if(id=='dvgod'){if(devOn()){DEVW.god=!DEVW.god;G.god=DEVW.god;if(G.god)G.devRun=true}return}
   if(id.slice(0,3)=='dvj'){if(devOn()){devJump(DEV_HTS[+id.slice(3)]);if(SCR===SCREENS.pause){SCR=SCREENS.play;pauseMusicBack()}}return}
   if(id=='lbd')return openBoard(modeBoard(),'pause');
+  if(id=='field')return go('field',{from:'pause'});
   if(G.mode=='tut')return go('menu');if(G.mode=='endless'||G.mode=='daily')return endEndless();if(G.mode=='course')return go('courses');if(G.mode=='speed'||G.mode=='hspeed')return go('sub',MARAS);go('levels',{hard:G.mode=='hard',tab:tabOf(G.idx,G.mode=='hard')})}};
 
 // ================= POWER CARDS SCREEN =================
@@ -10124,11 +10375,17 @@ SCREENS.settings={enter(){this.conf=0},
   panel(498,84,418,150);sectTitle('DISPLAY & MOTION',520,110);
   button('gfx',514,124,386,42,'Graphics: '+SET_GN[S.set.gfx||'auto'],{fs:19});
   button('shake',514,176,188,42,'Shake: '+on(S.set.shake),{fs:17});button('rm',706,176,188,42,'Less Motion: '+on(S.set.rm),{fs:15});
-  panel(498,246,418,188);sectTitle('GAME',520,272);
+  // GAME rows, 48 apart from 284: Vibration | Feedback, New-thing tips | Field Guide, (web only) the play trace, then
+  // Dev Mode (dev builds) and Reset Save. The panel and the footer below it follow however many rows there are.
+  const web=!window.HopNative,RW=[284,332,380,428,476],rTr=2,rDev=web?3:2,rRes=rDev+(DEV_OK?1:0),gh=RW[rRes]+54-246;
+  panel(498,246,418,gh);sectTitle('GAME',520,272);
   // Vibration (the iPhone haptics, see haptic()) shares the top row with Feedback, the same half-width pair as
   // Shake / Less Motion. It shows on the web too, where it simply has nothing to switch.
   button('vib',514,284,188,40,'Vibration: '+on(S.set.vib),{fs:17});
   button('feedback',706,284,188,40,'Send Feedback',{fs:16});
+  // the first-encounter cards (see FIRST-ENCOUNTER TIPS): switch them off, or open the guide that lists them all
+  button('meet',514,332,188,40,'New-thing tips: '+on(meetOn()),{fs:meetOn()?15:14});
+  button('field',706,332,188,40,'Field Guide',{fs:17});
   // Play trace: lets a real run be recorded and handed over, so levels can be built
   // around how the player actually moves instead of around what a solver can reach.
   // Half-width pair on ONE row: the footer hint line starts at y452, so this panel
@@ -10137,13 +10394,13 @@ SCREENS.settings={enter(){this.conf=0},
    * web build (where the owner records runs for level design) and are hidden in
    * the shipped iOS app, where a 'Record My Play' button in Settings would just
    * puzzle players and invite questions from App Review. */
-  if(!window.HopNative){
-   button('trace',514,332,188,40,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
+  if(web){
+   button('trace',514,RW[rTr],188,40,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
     {fs:TRACE.on?15:16,bg:TRACE.on?'#c8f5cf':'#ffffff'});
-   button('tracesave',706,332,188,40,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
+   button('tracesave',706,RW[rTr],188,40,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
   }
-  if(DEV_OK)button('dev',514,428,386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
-  button('reset',514,DEV_OK?428:380,386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
+  if(DEV_OK)button('dev',514,RW[rDev],386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
+  button('reset',514,RW[rRes],386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
   // How to Play lives HERE - it is where people look for it, and it is also the way to replay the tutorial once the
   // first run has forced it. Credits is NOT here any more: it is the byline in the main menu's bottom-left corner.
   // Pushed LAST so the first Audio slider keeps the default keyboard selection.
@@ -10153,12 +10410,14 @@ SCREENS.settings={enter(){this.conf=0},
   {const fl=[];
    if(UI.selId=='rm')fl.push(['Less Motion: softer flashes, calmer wheel lights, no screen shake.',13]);
    if(UI.selId=='vib')fl.push(['Vibration: little taps on big landings, pickups, deaths and wins (iPhone).',13]);
+   if(UI.selId=='meet'||UI.selId=='field')fl.push(['New-thing tips: a card tells you what each new thing is the first time you meet it.',13]);
    fl.push([S.set.gfx=='perf'||(!S.set.gfx||S.set.gfx=='auto')&&AUTOLV==2?'Performance: lower detail, best for slow devices.':S.set.gfx=='high'?'High Quality: sharpest picture, can lag.':S.set.gfx=='bal'?'Balanced: softer picture, runs smoother.':'Auto: lowers quality if the game starts lagging.',14]);
    fl.push(['Progress saves automatically on this device.',14]);
-   const FY=452,LH=Math.min(24,Math.floor((VH-14-FY)/Math.max(1,fl.length-1)));
+   const FY=Math.max(452,246+gh+10),LH=Math.min(24,Math.floor((VH-14-FY)/Math.max(1,fl.length-1)));
    fl.forEach((l,i)=>txt(l[0],VW/2,FY+i*LH,l[1],'#ffffff',undefined,false))}},
  onBtn(id,b){if(id=='back')return go('menu');
   if(id=='howto')return startTutorial();
+  if(id=='field')return go('field',{from:'settings'});
   if(sldClick(b))return; // a tap straight on a track sets the value there; the drag path is sldUpd's job
   if(id=='dev'){if(!DEV_OK)return;if(S.dev){S.dev=0;save();toast('Dev mode off','Back to normal unlocks','info')}else go('pin');return}
   if(id=='feedback'){if(!openFeedback())toast('Feedback isn’t set up yet','Try again after the next update','info');return}
@@ -10174,8 +10433,48 @@ SCREENS.settings={enter(){this.conf=0},
   if(id=='gfx'){const o=['auto','high','bal','perf'];S.set.gfx=o[(o.indexOf(S.set.gfx||'auto')+1)%4];AUTOLV=0;applyGfx()}
   if(id=='shake')S.set.shake=S.set.shake?0:1;
   if(id=='vib'){S.set.vib=S.set.vib?0:1;haptic('success')} // turning it on answers with a tap, so you know it works
+  if(id=='meet')S.set.meet=meetOn()?0:1;
   if(id=='rm'){S.set.rm=S.set.rm?0:1;if(S.set.rm)S.set.shake=0}
   if(id=='reset'){if(!this.conf){this.conf=1;this.confT=gtime;return}resetSave();this.conf=0;toast('Progress erased','Purchases were kept','info')}else this.conf=0;applyVol();save()}};
+
+// ================= FIELD GUIDE =================
+// Every first-encounter card (MEET), one tab per tag. Met ones show their picture and name and open the full card;
+// the rest are a dark silhouette and ???. "Show tips again" forgets them all (two taps), so every card comes back.
+// Reached from Settings and from Pause; Back returns to whichever opened it.
+const FG_TABS=[['f','FRIENDLY'],['p','PICKUPS'],['d','DANGER'],['h','HEADS UP']],FG_W=172,FG_H=104,FG_GX=10,FG_GY=10,FG_Y0=146;
+SCREENS.field={tab:0,enter(a){this.from=(a&&a.from)||'settings';this.open=null;this.conf=0;this.mt=0;if(S.meetMig)meetMigrate();UI.selId='ft'+this.tab},
+ update(dt){
+  // the open card registers no buttons: any tap or key closes it, and that is all it does
+  if(this.open){if(mouse.click||pressed.NEWKEY){this.open=null;mouse.click=false;sfx('click')}return}
+  uiNav(this);if(SCR!==this)return;if(this.conf&&gtime-this.confT>3)this.conf=0;if(this.mt>0)this.mt-=dt;
+  if(pressed.ESC)return this.onBtn('back');
+  const s=UI.selId||'';if(UI.kb&&s.startsWith('ft'))this.tab=+s.slice(2)},
+ onBtn(id){if(id=='back')return go(this.from);
+  if(id.startsWith('ft')){this.tab=+id.slice(2);return}
+  if(id.startsWith('fe')){const e=MEET[+id.slice(2)];if(S.meet[e.k]){this.open=e;sfx('check')}else{this.mt=1.8;sfx('no')}return}
+  if(id=='fmeet'){S.set.meet=meetOn()?0:1;save();return}
+  if(id=='freset'){if(!this.conf){this.conf=1;this.confT=gtime;return}S.meet={};save();this.conf=0;toast('Tips are back on the way','Each card shows up again the next time you meet it','info')}},
+ draw(){menuBG();ctx.fillStyle='rgba(10,8,22,.6)';ctx.fillRect(0,0,VW,VH);MEETPIC_N=0;
+  if(this.open){ctx.fillStyle='rgba(8,6,18,.6)';ctx.fillRect(0,0,VW,VH);meetCard(this.open,VW/2,VH/2,{foot:'Tap anywhere to close',fa:1});return}
+  const met=MEET.filter(e=>S.meet[e.k]).length;
+  backBtn();header('FIELD GUIDE',44);
+  txt(met+' of '+MEET.length+' found. Each one gets a card the first time you meet it.',VW/2,80,15,'#d8d5ea',undefined,false);
+  const TW=196,TG=10,tx0=Math.round(VW/2-(FG_TABS.length*TW+(FG_TABS.length-1)*TG)/2);
+  FG_TABS.forEach((t,k)=>{const E=MEET.filter(e=>e.g==t[0]),f=E.filter(e=>S.meet[e.k]).length,col=MEET_TAGS[t[0]][1];
+   button('ft'+k,tx0+k*(TW+TG),96,TW,42,'',{bg:this.tab==k?col:'#ffffff',col:this.tab==k?col:'#ffe9a8',draw:()=>{txt(t[1],-10,1,17,INK,'center',false);txt(f+'/'+E.length,TW/2-30,1,13,'#4b4860','center',false)}})});
+  const tk=FG_TABS[this.tab][0],E=MEET.filter(e=>e.g==tk),cols=5,gx0=Math.round(VW/2-(cols*FG_W+(cols-1)*FG_GX)/2);
+  E.forEach((e,j)=>{const i=MEET.indexOf(e),x=gx0+(j%cols)*(FG_W+FG_GX),y=FG_Y0+Math.floor(j/cols)*(FG_H+FG_GY),got=!!S.meet[e.k];
+   button('fe'+i,x,y,FG_W,FG_H,'',{bare:true,draw:(w,h,sel)=>{const X=-w/2,Y=-h/2;
+    ctx.fillStyle=INK;rr(X-2.5,Y-2.5,w+5,h+5,14);ctx.fill();ctx.fillStyle=got?UIC.plate:'#1d1835';rr(X,Y,w,h,12);ctx.fill();
+    if(sel){ctx.strokeStyle=UIC.gold;ctx.lineWidth=3;rr(X+1.5,Y+1.5,w-3,h-3,11);ctx.stroke()}
+    const px=X+8,py=Y+8,pic=meetPic(e,MEET_TW,MEET_TH,!got,2);
+    ctx.save();rr(px,py,MEET_TW,MEET_TH,8);ctx.clip();ctx.fillStyle=got?'#1a1530':'#2a2448';ctx.fillRect(px,py,MEET_TW,MEET_TH);if(pic)ctx.drawImage(pic,px,py,MEET_TW,MEET_TH);ctx.restore();
+    if(got){ctx.fillStyle=MEET_TAGS[e.g][1];ctx.fillRect(px,py+MEET_TH-3,MEET_TW,3)}
+    txt(got?e.n:'???',0,Y+h-10,fitPx(got?e.n:'???',15,w-14),got?'#ffffff':'#8b86a6','center',false)}})});
+  button('freset',30,490,250,40,this.conf?'Tap again to reset':'Show tips again',{fs:this.conf?16:18,bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e'});
+  button('fmeet',VW-280,490,250,40,'New-thing tips: '+(meetOn()?'ON':'OFF'),{fs:17});
+  if(this.mt>0){ctx.save();ctx.globalAlpha=clamp(this.mt*3,0,1);const w=380,h=58,x=VW/2-w/2,y=VH/2-h/2+40;chip(x,y,w,h,{r:14,rim:UIC.gold,fill:'#28214a'});
+   txt('Not met yet',VW/2,y+20,17,UIC.gold,undefined,false);txt('Its card shows up the first time you run into it.',VW/2,y+40,13,'#d8d5ea',undefined,false);ctx.restore()}}};
 
 // ================= STUDIO INTRO (GamerCrafter) =================
 // Plays once at boot: a 3D controller whooshes past the camera, swings back and slams into place,
@@ -10855,7 +11154,7 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  wzAudio(); // THE WEIRD STUFF's music / effects levels (back to normal on every other screen)
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(SCR!==SCREENS.play&&(STK||tp.size))tReset(); // (not on the win beat, so held fingers carry into the next Marathon level)
- UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();
+ UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing()&&!MEETS.cur)drawTouch();
  if(updOn){ctx.save();ctx.translate(UR.x+UR.w/2,UR.y+UR.h/2);const fy=keyPlate(UR.w,UR.h,{face:UIC.green,sel:RM()||Math.sin(gtime*4)>0,r:UR.h/2});txt('Update ready - tap to reload',0,fy+1,17,'#10240a','center',false);ctx.restore()}
  remDraw();guideDraw(); // above the menu, below the toasts and below the fade - see GENTLE REMINDERS
  if(SCR!==SCREENS.intro)drawToasts();
@@ -10869,6 +11168,7 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
    try{if(G)G.won=0;go('menu');toast('Something went wrong','Your progress is saved','info')}catch(e2){console.error(e2)}}}
  for(const k in pressed)delete pressed[k];mouse.click=false;typedDigit=null;typedDel=false;
  requestAnimationFrame(frame)}
+meetMigrate(); // an old save's first load: mark what it has already beaten (needs the level data, so it runs here)
 go('intro');requestAnimationFrame(frame);setTimeout(chkUpd,4000);
 </script>
 </body>
