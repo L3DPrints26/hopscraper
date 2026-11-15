@@ -3065,7 +3065,7 @@ function devJump(m){if(!devOn()||!G||!G.L||!G.L.es)return;const daily=G.mode=='d
  const r0=R-es.top,p=G.player,open=c=>c=='.'||c=='N',st=(x,y)=>open(tAt(L,x,y))&&open(tAt(L,x,y-1))&&WZ_HZ.indexOf(tAt(L,x,y-2))<0&&isSolid(L,x,y+1)&&tAt(L,x,y+1)!='X'&&tAt(L,x,y+1)!='B';
  let spot=null;for(let d=0;d<40&&!spot;d++)for(const y of[r0+d,r0-d])if(y>2&&y<END_WIN-2&&!spot)for(let x=2;x<L.W-2;x++)if(st(x,y)&&wzClear(L,{x:x*TS+4,y:y*TS+TS-16,w:16,h:16},2)){spot=[x,y];break}
  if(!spot)spot=[11,r0];
- p.x=spot[0]*TS+4;p.y=spot[1]*TS+TS-16;p.px=p.x;p.py=p.y;p.vx=p.vy=0;p.dead=false;p.bnc=false;p.aj=AIRJ;
+ p.x=spot[0]*TS+4;p.y=spot[1]*TS+TS-16;p.px=p.x;p.py=p.y;p.vx=p.vy=0;p.ivx=0;p.dead=false;p.bnc=false;p.aj=AIRJ;
  G.height=Math.floor((L.start.y*TS+TS-16-p.y)/TS);G.lavaY=p.y+16+12*TS;G.parts.length=0;G.wzc=G.wzg=0;G.bgJ=null;
  updCam(0,true);wzReset(G.height)}
 
@@ -3855,7 +3855,7 @@ function animUpd(dt){const p=G.player,L=G.L;if(!p||!L)return;const A=G.an||(G.an
 function anDoor(L,kx,ky){let best=null,bd=1e18;for(const dd of L.dyn){if(dd[2]!='D'||!(doorMask(L,dd[0],dd[1])&16))continue;
  const x=dd[0]*TS+12,y=dd[1]*TS+12,d=(x-kx)*(x-kx)+(y-ky)*(y-ky);if(d<bd){bd=d;best=dd}}return best}
 function anWorld(A,L,p,dt,rm,fx,dead,landed){
- if(p.plat!==A.plat){const m=p.plat;if(m&&!rm&&landed){m._sg=m._sg||0;m._sv=(m._sv||0)+clamp(A.fv*0.2,30,95)}A.plat=p.plat}
+ if(p.plat!==A.plat)A.plat=p.plat; // (the landing dip is gone: the owner found the bounce made landing feel off)
  for(const m of L.plats){if(rm){m._sg=m._sv=0;continue}if(m._sv||m._sg){sprStep(m,'_sg','_sv',0,520,17,dt);if(Math.abs(m._sg)<0.02&&Math.abs(m._sv)<0.5)m._sg=m._sv=0}}
  // the key: off it goes to the lock the moment it's taken (G.doorT is that moment, on the game clock the door reads)
  const K=L.key;
@@ -4553,7 +4553,7 @@ function portalStep(L,p,dt){if(!L.portals||!L.portals.length)return;let inAny=nu
  for(const q of L.portals)for(const side of['a','b']){const e=q[side];if(p.x+p.w>e.x*TS+3&&p.x<e.x*TS+21&&p.y+p.h>(e.y-1)*TS+4&&p.y<(e.y+1)*TS){inAny=q.c+side;
   if(p.portIn===q.c+side)continue;const o=q[side=='a'?'b':'a'];
   if(side=='a')q.litA=PORTAL_LIT;else q.litB=PORTAL_LIT; // the mouth you STEPPED INTO, and only that one
-  burst(p.x+8,p.y+8,PCOL[q.c%4],12);p.x=o.x*TS+4;p.y=(o.y+1)*TS-p.h-0.5;p.px=p.x;p.py=p.y;p.portIn=q.c+(side=='a'?'b':'a');p.plat=null;
+  burst(p.x+8,p.y+8,PCOL[q.c%4],12);p.x=o.x*TS+4;p.y=(o.y+1)*TS-p.h-0.5;p.px=p.x;p.py=p.y;p.portIn=q.c+(side=='a'?'b':'a');p.plat=null;p.ivx=0;
   burst(p.x+8,p.y+8,PCOL[q.c%4],16);sfx('air');return}}
  if(!inAny)p.portIn=null}
 // one portal mouth. `lit` is that end's own remaining reveal time: full pair colour while it runs, blended back to
@@ -4823,7 +4823,11 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
  if(rode){const ov=p.vx;p.x+=rode.dx;p.vx=rode.dx;colX(L,p);p.vx=ov;p.y+=rode.dy}
  const oy=p.y,was=p.onG,fall=p.vy;
  p.plat=null;
- p.x+=p.vx*dt;colX(L,p);p.y+=p.vy*dt;colY(L,p,oy,down,gs);
+ p.x+=p.vx*dt;colX(L,p);
+ // the speed a platform gave you when you left it: kept for the whole jump (your own air control and air drag act on
+ // p.vx only), so a straight-up jump off a moving platform comes back down onto it. A wall in the way ends it.
+ if(p.ivx){const ov=p.vx,x0=p.x,tx=p.x+p.ivx*dt;p.vx=p.ivx;p.x=tx;colX(L,p);if(Math.abs(p.x-tx)>1e-6)p.ivx=0;p.vx=ov}
+ p.y+=p.vy*dt;colY(L,p,oy,down,gs);
  for(const m of L.plats){if(p.vy>=0&&!down&&p.x+p.w>m.x+2&&p.x<m.x+m.w-2&&oy+p.h<=m.y+Math.max(2,m.dy+2)&&p.y+p.h>=m.y&&p.y+p.h<=m.y+m.h+2){p.y=m.y-p.h;p.vy=0;p.onG=true;p.plat=m}}
  // The hand-off (owner: "it like flings you forward ... the movement isn't real"). Leaving a platform used to drop its
  // whole speed in one step and landing on one added it in one step - up to ~290px/s on a speed-course ferry. Now the
@@ -4831,7 +4835,13 @@ function step(dt){if(G.L.es)endFeed();const L=G.L,p=G.player;G.t+=dt;traceTick(d
  // across the hand-off is continuous (fully so on every story platform, all under PCAP) and the normal air drag / run
  // accel bleeds it off in under 0.1s. Measured off a ferry at full speed: a jump lands ~5px further going with it and
  // ~3px shorter going against it than with the old instant drop - a smooth exit, never a fling.
- if(rode!==p.plat){if(rode)p.vx+=clamp(rode.dx/dt,-PCAP,PCAP);if(p.plat)p.vx-=clamp(p.plat.dx/dt,-PCAP,PCAP)}
+ // Owner (2026-11-15): landing felt off and jumps off went wrong "once in a while". The old hand-off folded the
+ // platform's speed into vx, where air drag bled it to nothing in ~0.05 s (a straight-up jump fell behind the
+ // platform), and took it back out of vx on landing (a fake skid). Now: leaving hands the speed to p.ivx (above);
+ // landing ON a platform is sticky - it carries you from that step, your own vx untouched; landing on the ground
+ // folds what's left of it into vx, and the normal ground stop takes it from there.
+ if(rode!==p.plat){if(rode&&!p.plat)p.ivx=clamp(rode.dx/dt,-PCAP,PCAP);if(p.plat)p.ivx=0}
+ if(p.ivx&&p.onG&&!p.plat){p.vx+=p.ivx;p.ivx=0}
  // arrow floors: the tile you are STANDING ON is below you normally, above you under UPSIDE DOWN (same gs test the
  // crumble-block check below already uses) - otherwise a belt does nothing at all while gravity is inverted.
  if(p.onG&&!p.plat){const fy=gs>0?Math.floor((p.y+p.h+1)/TS):Math.floor((p.y-1)/TS);for(let tx=Math.floor(p.x/TS);tx<=Math.floor((p.x+p.w-0.01)/TS);tx++){const cc=tAt(L,tx,fy);if(cc=='c'||cc=='C'){const bv=cc=='C'?115:-115,ov=p.vx;p.x+=bv*dt;p.vx=bv;colX(L,p);p.vx=ov;break}}}
