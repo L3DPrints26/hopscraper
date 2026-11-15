@@ -8062,7 +8062,11 @@ function meetMigrate(){if(!S.meetMig)return;delete S.meetMig;const M=S.meet=isOb
 function meetOpen(k){const e=MEET_BY[k];if(!e)return;S.meet[k]=1;save();MEETS.cur=e;MEETS.t0=gtime;sfx('move')}
 // SCREENS.play.update's first call. true = a card is up (or just closed this frame): the level does nothing this frame.
 function meetUpd(dt){const M=MEETS;
- if(M.g!==G){M.g=G;M.q.length=0;M.cur=null;M.st=0;M.tap=false}   // a new run: anything still queued from the last one is dropped, unseen
+ if(M.g!==G){M.g=G;M.q.length=0;M.cur=null;M.st=0;M.tap=false;   // a new run: anything still queued from the last one is dropped, unseen
+  // ...and every new kind of thing anywhere in this level is explained up front, before anything moves (owner: "give what
+  // it is before anything starts"). The tutorial keeps teaching one thing at a time as you reach it.
+  if(meetOn()&&G.mode!='tut'&&G.L)try{const MM=S.meet||(S.meet={}),ks=meetKindsOf(G.L,G.L.def||{});
+   if(G.rc&&G.rc.rs&&G.rc.rs.some(r=>r.src))ks.add('racer');for(const k of ks)if(MEET_BY[k]&&!MM[k])M.q.push(k)}catch(e){}}
  if(M.cur){if(gtime-M.t0>MEET_GRACE&&(M.tap||mouse.click||pressed.NEWKEY||pressed.J||pressed.U||pressed.OK||pressed.ESC)){M.cur=null;sfx('click')}
   M.tap=false;mouse.click=false;for(const k in pressed)delete pressed[k];return true}
  const p=G.player;if(!p||p.dead||G.won)return false;
@@ -10832,6 +10836,7 @@ function startRace(key,lu){lu=lu||raceLineup(key);if(!lu)return go('race');
  if(R.rs.some(r=>r.id=='best'))rgStore()[key][2]=Date.now();
  raceStand(R);musicPlay(WORLDS[L.def.wd].song);sfx('rcd',0);if(SCR!==SCREENS.play)go('play');else{UI.selId=null}fadeA=1}
 function raceUpd(dt,orig,scr){const R=G.rc,p=G.player;
+ if(meetUpd(dt))return; // a tip card is up: the countdown, the race clock and every bot wait for it
  if(!R.go){ // COUNTDOWN: the world is frozen, nothing steps; a held direction carries straight into the start
   if(pressed.ESC){go('pause');return}if(pressed.RST){restartLevel();return}
   if(mouse.click&&Math.hypot(mouse.x-RB.x,mouse.y-RB.y)<RB.r*1.7){mouse.click=false;restartLevel();return}
@@ -10939,7 +10944,7 @@ function raceCountdown(R){const n=Math.ceil(R.cd),f=R.cd-Math.floor(R.cd);raceBi
 // ---- TRACK PICKER ----------------------------------------------------------------------------------------------------
 const RACE_ROWS=5;
 SCREENS.race={enter(a){this.T=raceTracks();if(!this.sel||this.T.indexOf(this.sel)<0)this.sel=this.T[0]||null;this.pg=Math.max(0,Math.floor(this.T.indexOf(this.sel)/RACE_ROWS));this.lu=null;musicPlay(0)},
- update(){uiNav(this);if(pressed.ESC)go('modes')},
+ update(dt){sldUpd();sldKeys(dt||0);uiNav(this);if(pressed.ESC)go('modes')}, // sldUpd: the Bots slider drags
  draw(){menuBG();backBtn();header('RACE');const T=this.T,np=Math.max(1,Math.ceil(T.length/RACE_ROWS));this.pg=clamp(this.pg,0,np-1);
   txt('You and three rivals on one track. Rivals are ghosts: no bumping.',VW/2,88,15,'#ffffff','center');
   if(!T.length){txt('No tracks yet.',VW/2,260,22,'#fff','center');return}
