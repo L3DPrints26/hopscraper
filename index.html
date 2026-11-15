@@ -62,6 +62,7 @@ const CHANGELOG=[
  {v:'1.2',date:'November 2026',items:[
   'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten. The Rival matches your pace, or slide the bots from Easy all the way to Perfect.',
   'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
+  'Endless and the Weekly Climb are open from the start. No need to beat World 2 first.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
   'Every world got a whole new look: new art, and calmer backgrounds that stay out of your way.',
   'Bounce pads got rebuilt: a real spring that squashes down when you land on it.',
@@ -7716,7 +7717,7 @@ const REM_RULES=[
  {k:'daily',c:'#ff77c8',ic:(x,y)=>{ctx.save();ctx.translate(x,y);modeIcon('daily',13,'#14102a','#ffffff');ctx.restore()},
   a:()=>'Have you tried this week’s Weekly Climb?',
   b:()=>'Everyone gets the same tower all week. A new one in '+wkStr()+'.',
-  when:()=>worldDone(1)&&S.daily.d!=weekStr(),go:()=>go('modes')},
+  when:()=>true&&S.daily.d!=weekStr(),go:()=>go('modes')},
 ];
 // ---- TIPS -------------------------------------------------------------------------------------------------------
 // The reminders above are TIME-SENSITIVE (a ticket is waiting, today's tower is unplayed) and always win. Tips are
@@ -7751,7 +7752,7 @@ const TIP_RULES=[
  {k:'t_speed',c:'#f0b323',ic:tipMode('speed'),a:()=>'Speed Courses are pure time attack',
   b:()=>'Four short courses, three medals each. No checkpoints, just the clock.',when:()=>true,go:()=>go('courses')},
  {k:'t_endless',c:'#ff7043',ic:tipMode('endless'),a:()=>'Endless Climb builds a brand new tower every run',
-  b:()=>'The lava never stops rising. Your only job is to stay above it.',when:()=>worldDone(1),go:()=>go('modes')},
+  b:()=>'The lava never stops rising. Your only job is to stay above it.',when:()=>true,go:()=>go('modes')},
  {k:'t_cards',c:'#ffe9a8',ic:tipIc('card'),a:()=>'Power Cards give you a shield or an extra jump',
   b:()=>'Story Mode only. When you have some, they show up next to PLAY.',when:()=>cardCount()>0,go:()=>go('cards',{from:'menu'})},
  {k:'t_hard',c:'#ec4e63',ic:tipMode('hard'),a:()=>'Hard Mode runs every level again, harder',
@@ -8588,7 +8589,7 @@ function modeIcon(k,s,ink,paper){ctx.save();ctx.lineJoin='round';ctx.lineCap='ro
  ctx.restore()}
 // One card definition. `hot` = this one is genuinely waiting for the player right now (see the Daily's attention ring).
 function modeCards(){const obw=ownedBonusWorlds(),nbl=obw.reduce((a,b)=>a+LEVELS.filter(l=>l.wd==b.wd).length,0);
- const f=!!S.finale||!!S.dev,e=worldDone(1),dn=S.daily.d==weekStr();
+ const f=!!S.finale||!!S.dev,e=true,dn=S.daily.d==weekStr();
  let med=0;COURSES.forEach((c,k)=>{if(medalOf(k,(S.course[k]||{}).t)>=0)med++});
  let hd=0;for(let k=0;k<NL;k++)if(S.hard[k]&&S.hard[k].done)hd++;
  // level counts have to agree with the menu's star total (STAR_MAX = STORY_ORDER.length * 3): STORY_ORDER already
@@ -9538,7 +9539,7 @@ function lbBoards(cat){const B=[];
    how:'Three per level: finish it, get every gem, beat the target time.'+(bonusStars()?'  Bonus worlds add '+bonusStars()+' more.':'')})}
  // an unlock hint is only ever shown to someone who is actually still locked out: a board that already HAS a record
  // (or a save that has clearly been there) describes the mode instead, so a real time is never captioned "to unlock".
- else if(cat=='r'){const f=!!S.finale||!!S.dev||!!S.speedBest,hf=!!S.dev||!!S.hspeedBest||!!(S.hard[NL-1]&&S.hard[NL-1].done),e=worldDone(1)||!!S.endBest||!!S.daily.d;
+ else if(cat=='r'){const f=!!S.finale||!!S.dev||!!S.speedBest,hf=!!S.dev||!!S.hspeedBest||!!(S.hard[NL-1]&&S.hard[NL-1].done),e=true||!!S.endBest||!!S.daily.d;
   B.push({id:'marathon',n:'Marathon',sub:'Every story level, one timer',k:'t',v:S.speedBest,c:'#4aa8e8',ic:'mara',
    how:f?'One run, no breaks, deaths included.':'Reach THE TOP to unlock it.'});
   B.push({id:'hmarathon',n:'Hard Marathon',sub:'Every hard level, one timer',k:'t',v:S.hspeedBest,c:'#ec4e63',ic:'mara',
@@ -9582,7 +9583,7 @@ SCREENS.boards={enter(a){if(a&&a.from)this.from=a.from;else if(!this.from)this.f
   if(id=='wk_lb')return openBoard('daily','boards');
   if(id.startsWith('lb_')&&gcOn())openBoard(id.slice(3),'boards')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('LEADERBOARDS');
-  const all=lbAll(),wk=all.daily,open=worldDone(1)||!!S.dev;
+  const all=lbAll(),wk=all.daily,open=true||!!S.dev;
   // ---- THE WEEKLY CLIMB ----
   const X=24,Y=84,W=912,H=150;
   uiPanel(X,Y,W,H,{r:20,fill:'#3a1446',rim:'rgba(255,119,200,.75)'});
@@ -9640,7 +9641,7 @@ SCREENS.board={enter(a){a=a||{};if(a.id)this.id=a.id;if(a.from)this.from=a.from;
   if(this.state=='web'){msg('Rankings live in the iOS app (Game Center). Your best on this device: '+lbVal(b)+'.');return}
   const E=(d.entries||[]).slice(0,10),mine=d.mine,showMine=mine&&!E.some(e=>e.me);
   if(!E.length){msg(wk?'No scores this week yet. Climb now and you are #1.':'No scores yet. Set one and you are #1.');
-   if(wk&&(worldDone(1)||S.dev))button('wk_go',X+W/2-110,Y+260,220,48,'Play this week',{bg:'#7bdc3b',col:'#a9f95e',fs:18});return}
+   if(wk&&(true||S.dev))button('wk_go',X+W/2-110,Y+260,220,48,'Play this week',{bg:'#7bdc3b',col:'#a9f95e',fs:18});return}
   const rh=30,y0=Y+52;
   const row=(e,y,me)=>{if(me){ctx.fillStyle='rgba(255,212,94,.18)';rr(X+14,y-rh/2+1,W-28,rh-2,9);ctx.fill();ctx.strokeStyle='rgba(255,212,94,.7)';ctx.lineWidth=1.5;rr(X+14,y-rh/2+1,W-28,rh-2,9);ctx.stroke()}
    const r=e.rank|0;if(r>=1&&r<=3){ctx.fillStyle=MEDAL3[r-1];ctx.beginPath();ctx.arc(X+44,y,11,0,7);ctx.fill();txt(String(r),X+44,y+1,13,'#1d1a2e','center',false)}
