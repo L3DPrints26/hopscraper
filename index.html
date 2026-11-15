@@ -62,7 +62,8 @@ const CHANGELOG=[
  {v:'1.2',date:'November 2026',items:[
   'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten. The Rival matches your pace, or slide the bots from Easy all the way to Perfect.',
   'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
-  'Endless and the Weekly Climb are open from the start. No need to beat World 2 first.',
+  'Endless and the Weekly Climb open right after the tutorial. No need to beat World 2 first.',
+  'A Button Guide on the main menu shows what every button does, one at a time.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
   'Every world got a whole new look: new art, and calmer backgrounds that stay out of your way.',
   'Bounce pads got rebuilt: a real spring that squashes down when you land on it.',
@@ -7717,7 +7718,7 @@ const REM_RULES=[
  {k:'daily',c:'#ff77c8',ic:(x,y)=>{ctx.save();ctx.translate(x,y);modeIcon('daily',13,'#14102a','#ffffff');ctx.restore()},
   a:()=>'Have you tried this week’s Weekly Climb?',
   b:()=>'Everyone gets the same tower all week. A new one in '+wkStr()+'.',
-  when:()=>true&&S.daily.d!=weekStr(),go:()=>go('modes')},
+  when:()=>endOpen()&&S.daily.d!=weekStr(),go:()=>go('modes')},
 ];
 // ---- TIPS -------------------------------------------------------------------------------------------------------
 // The reminders above are TIME-SENSITIVE (a ticket is waiting, today's tower is unplayed) and always win. Tips are
@@ -7752,7 +7753,7 @@ const TIP_RULES=[
  {k:'t_speed',c:'#f0b323',ic:tipMode('speed'),a:()=>'Speed Courses are pure time attack',
   b:()=>'Four short courses, three medals each. No checkpoints, just the clock.',when:()=>true,go:()=>go('courses')},
  {k:'t_endless',c:'#ff7043',ic:tipMode('endless'),a:()=>'Endless Climb builds a brand new tower every run',
-  b:()=>'The lava never stops rising. Your only job is to stay above it.',when:()=>true,go:()=>go('modes')},
+  b:()=>'The lava never stops rising. Your only job is to stay above it.',when:()=>endOpen(),go:()=>go('modes')},
  {k:'t_cards',c:'#ffe9a8',ic:tipIc('card'),a:()=>'Power Cards give you a shield or an extra jump',
   b:()=>'Story Mode only. When you have some, they show up next to PLAY.',when:()=>cardCount()>0,go:()=>go('cards',{from:'menu'})},
  {k:'t_hard',c:'#ec4e63',ic:tipMode('hard'),a:()=>'Hard Mode runs every level again, harder',
@@ -7965,6 +7966,60 @@ function drawMiniWheel(bw,bh,sel){const r=MWR,TAU=Math.PI*2,sp=S.dev||S.tix>0,cx
 // The pop-ups the menu can open on arrival, ONE AT A TIME and in this order: the Daily Reward first (it has a deadline),
 // then What's New. Daily's Continue comes back through here, so this same line opens What's New on that second pass;
 // What's New marks itself seen the moment it opens, so its own Continue lands on a plain menu and never loops.
+// ---- BUTTON GUIDE (menu > Button Guide) ------------------------------------------------------------------------------
+// Dims everything except one button, points at it with an arrow and says what it does, one button at a time (3/14).
+// Any tap or key moves on; a step on another screen takes you there; Skip or Back ends it. While a step is on screen
+// the screen underneath gets no input at all, so a tap can never press the button behind the dim.
+const GUIDE_STEPS=[
+ ['menu','play','PLAY','The story. It starts with a quick tutorial, then you climb world by world.'],
+ ['menu','modes','MORE MODES',()=>endOpen()?'Endless, the Weekly Climb, Race and more. Let’s look inside.':'Endless, the Weekly Climb, Race and more. They open after the tutorial.'],
+ ['modes','endless','ENDLESS CLIMB','A new tower every run. There’s no top, and the lava never stops.'],
+ ['modes','daily','WEEKLY CLIMB','One tower for everybody, new every Monday. Climb the highest to top the leaderboard.'],
+ ['modes','race','RACE','Race three ghost squares to the door. Slide the bots from Easy to Perfect.'],
+ ['modes','speed','SPEED COURSES','Four courses. Race the clock.'],
+ ['modes','marathon','MARATHON',()=>'Every level in a row, on one timer.'+(S.finale||S.dev?'':' Unlocks later in the story.')],
+ ['modes','hard','HARD MODE',()=>'One air jump and no checkpoints.'+(S.finale||S.dev?'':' Unlocks later in the story.')],
+ ['menu','wheel','PRIZE WHEEL','Spin it for prizes. You get tickets from playing and from Daily Rewards.'],
+ ['menu','shop','SHOP','Skins, hats and more.'],
+ ['menu','inv','INVENTORY','Everything you own. Pick what your square wears.'],
+ ['menu','settings','SETTINGS','Sound, controls and more.'],
+ ['menu','boards','LEADERBOARDS','See where you rank against everyone.'],
+ ['menu','share','SHARE','Send Hopscraper to a friend.'],
+ ['menu','credits','CREDITS','Who made the game, and what’s new in each update.']];
+let GUIDE=null;
+function guideStart(){GUIDE={i:0,t:0,L:GUIDE_STEPS.filter(q=>q[0]=='menu'||endOpen()),skip:null};guideGo()}
+function guideGo(){const q=GUIDE&&GUIDE.L[GUIDE.i];if(!q)return guideEnd();GUIDE.t=0;GUIDE.skip=null;if(SCR!==SCREENS[q[0]])go(q[0])}
+function guideNext(){if(!GUIDE)return;GUIDE.i++;if(GUIDE.i>=GUIDE.L.length){guideEnd();toast('That’s everything!','Tap Button Guide any time to see it again','info')}else guideGo()}
+function guideEnd(){GUIDE=null;if(SCR!==SCREENS.menu)go('menu')}
+// runs before the screen's own update; true = the guide owns this frame's input
+function guideUpd(dt){if(!GUIDE)return false;const q=GUIDE.L[GUIDE.i];if(!q||SCR!==SCREENS[q[0]])return false;GUIDE.t+=dt;
+ if(GUIDE.t>0.3&&!UI.prev.some(b=>b.id==q[1])){guideNext();return true} // that button isn't on screen right now
+ if(pressed.ESC){pressed.ESC=false;guideEnd();return true}
+ if(mouse.click){mouse.click=false;const k=GUIDE.skip;if(k&&inR(mouse,k))guideEnd();else if(GUIDE.t>0.25)guideNext();return true}
+ if(pressed.OK||pressed.J){pressed.OK=pressed.J=false;if(GUIDE.t>0.25)guideNext()}
+ return true}
+function guideRR(x,y,w,h,r){ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function guideWrap(str,size,w){const out=[];let line='';for(const wd of str.split(' ')){const t=line?line+' '+wd:wd;if(line&&txtW(t,size)>w){out.push(line);line=wd}else line=t}if(line)out.push(line);return out}
+function guideDraw(){if(!GUIDE)return;const q=GUIDE.L[GUIDE.i];if(!q||SCR!==SCREENS[q[0]])return;const b=UI.prev.find(z=>z.id==q[1]);if(!b)return;
+ const rm=RM(),a=Math.min(1,GUIDE.t/0.18),P=7,hx=b.x-P,hy=b.y-P,hw=b.w+P*2,hh=b.h+P*2,hr=Math.min(16,hh/2);
+ ctx.save();ctx.globalAlpha=a;
+ ctx.fillStyle='rgba(8,6,20,.74)';ctx.beginPath();ctx.rect(0,0,VW,VH);guideRR(hx,hy,hw,hh,hr);ctx.fill('evenodd');
+ const pulse=rm?0:Math.sin(gtime*5)*1.5;ctx.strokeStyle='#ffd45e';ctx.lineWidth=3;ctx.beginPath();guideRR(hx-2-pulse,hy-2-pulse,hw+4+pulse*2,hh+4+pulse*2,hr+2);ctx.stroke();
+ // the bubble: below the button when it sits in the top half, above it otherwise
+ const body=typeof q[3]=='function'?q[3]():q[3],BW=330,lines=guideWrap(body,15,BW-36),BH=58+lines.length*20+34;
+ const below=b.y+b.h/2<VH/2,bx=clamp(b.x+b.w/2-BW/2,14,VW-14-BW),by=below?Math.min(VH-14-BH,hy+hh+44):Math.max(14,hy-44-BH);
+ ctx.fillStyle='#fff8ea';ctx.strokeStyle='#1d1a2e';ctx.lineWidth=2.5;ctx.beginPath();guideRR(bx,by,BW,BH,14);ctx.fill();ctx.stroke();
+ txt(q[2],bx+18,by+26,20,'#1d1a2e','left',false);
+ lines.forEach((l,i)=>txt(l,bx+18,by+54+i*20,15,'#3b3752','left',false));
+ ctx.fillStyle='rgba(29,26,46,.12)';ctx.fillRect(bx+14,by+BH-36,BW-28,1);
+ txt((GUIDE.i+1)+'/'+GUIDE.L.length,bx+18,by+BH-17,16,'#1d1a2e','left',false);
+ txt('Tap to continue',bx+BW/2+10,by+BH-17,13,'#7a7590','center',false);
+ const K={x:bx+BW-74,y:by+BH-31,w:60,h:28};GUIDE.skip=K;ctx.fillStyle='#e9e4f5';ctx.beginPath();guideRR(K.x,K.y,K.w,K.h,14);ctx.fill();txt('Skip',K.x+K.w/2,K.y+K.h/2+1,13,'#3b3752','center',false);
+ // the arrow, from the bubble to the button
+ const bob=rm?0:Math.sin(gtime*4)*3,sx=clamp(b.x+b.w/2,bx+24,bx+BW-24),sy=below?by-6:by+BH+6,ex=b.x+b.w/2,ey=below?hy+hh+8+bob:hy-8-bob;
+ const an=Math.atan2(ey-sy,ex-sx);ctx.strokeStyle='#ffd45e';ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex-Math.cos(an)*8,ey-Math.sin(an)*8);ctx.stroke();
+ ctx.fillStyle='#ffd45e';ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-Math.cos(an-0.5)*16,ey-Math.sin(an-0.5)*16);ctx.lineTo(ex-Math.cos(an+0.5)*16,ey-Math.sin(an+0.5)*16);ctx.closePath();ctx.fill();
+ ctx.restore()}
 SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:0,vy:0,a:0,va:0,g:false,ox:0,oy:0,sq:0,idle:1.5};
   this.bt=2.2;this.bl=null;this.bi=0;claimPrize();clubDaily();flushSaveMsgs();if(drState().can)go('daily');else if(newsDue())go('news')},
  // toyGrab runs BEFORE uiNav on purpose - it is what decides who owns this frame's press. dt is CLAMPED AT BOTH ENDS:
@@ -8113,7 +8168,7 @@ SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:
   {const R=LBD_R;button('boards',R.x,R.y,R.w,R.h,'Leaderboards',{fs:18,ic:'podium'});}
   // SHARE: top-left on its own, the one BLUE key (owner: "put the share button in the top left and make it look
   // different") - same build as every other key, so it still belongs; only its colour sets it apart
-  {const R=SHARE_R;button('share',R.x,R.y,R.w,R.h,'Share',{fs:19,ic:'share',bg:UIC.sky,col:'#b5e6ff'});}
+  {const R=SHARE_R;button('share',R.x,R.y,R.w,R.h,'Share',{fs:19,ic:'share',bg:UIC.sky,col:'#b5e6ff'});button('guide',R.x+R.w+10,R.y,176,R.h,'Button Guide',{fs:18,bg:UIC.cream,col:'#ffffff'});}
   // CREDITS: a signature in the bottom-left corner, not a destination competing with PLAY - the one quiet NAVY key,
   // small cream type, a full-size tap target, and the square passes BEHIND it so it can never be hidden or blocked.
   {const R=CRED_R;button('credits',R.x,R.y,R.w,R.h,'',{bare:1,draw:(bw,bh,sel)=>{
@@ -8123,7 +8178,7 @@ SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:
  // PLAY is the tutorial gate. A player who has not beaten it goes STRAIGHT into it and there is no way round: the
  // only other door into a story level is SCREENS.levels, which bounces back here, and More Modes is disabled until
  // then. Once it is beaten PLAY opens the level select on the world you are up to ({cur:1}).
- onBtn(id){if(id=='tutorial')return startTutorial();if(id=='share')return shareGame();if(id=='boards')return go('boards',{from:'menu'});
+ onBtn(id){if(id=='guide')return guideStart();if(id=='tutorial')return startTutorial();if(id=='share')return shareGame();if(id=='boards')return go('boards',{from:'menu'});
   if(id=='play')return(S.tut||S.dev)?go('levels',{cur:1}):startTutorial();
   if(id=='modes'&&!S.tut&&!S.dev)return toast('Finish the tutorial first','It takes about a minute','info');
   go(id)}};
@@ -8589,7 +8644,7 @@ function modeIcon(k,s,ink,paper){ctx.save();ctx.lineJoin='round';ctx.lineCap='ro
  ctx.restore()}
 // One card definition. `hot` = this one is genuinely waiting for the player right now (see the Daily's attention ring).
 function modeCards(){const obw=ownedBonusWorlds(),nbl=obw.reduce((a,b)=>a+LEVELS.filter(l=>l.wd==b.wd).length,0);
- const f=!!S.finale||!!S.dev,e=true,dn=S.daily.d==weekStr();
+ const f=!!S.finale||!!S.dev,e=endOpen(),dn=S.daily.d==weekStr();
  let med=0;COURSES.forEach((c,k)=>{if(medalOf(k,(S.course[k]||{}).t)>=0)med++});
  let hd=0;for(let k=0;k<NL;k++)if(S.hard[k]&&S.hard[k].done)hd++;
  // level counts have to agree with the menu's star total (STAR_MAX = STORY_ORDER.length * 3): STORY_ORDER already
@@ -8597,8 +8652,8 @@ function modeCards(){const obw=ownedBonusWorlds(),nbl=obw.reduce((a,b)=>a+LEVELS
  const sb=bonusStars();
  return[
   {k:'story',ic:'story',c:'#5fc93a',n:'STORY',d:STORY_ORDER.length+' levels, '+Math.round((STORY_ORDER.length-1)/8)+' worlds'+(nbl?' (+'+nbl+' bonus)':''),ok:true,stat:'★ '+totalStars()+'/'+STAR_MAX+(sb?'  +'+sb:''),go:()=>go('levels',{from:'modes'})},
-  {k:'daily',ic:'daily',c:'#ff77c8',n:'WEEKLY CLIMB',d:'One tower a week, same for everyone.',ok:e,lock:'Clear World 2 to unlock',stat:dn?'This week '+S.daily.h+'m':'Not played this week',hot:e&&!dn,go:()=>startEndless(true)},
-  {k:'endless',ic:'endless',c:'#ff7043',n:'ENDLESS CLIMB',d:'A new tower every run.',ok:e,lock:'Clear World 2 to unlock',stat:'Best '+S.endBest+'m',go:()=>startEndless(false)},
+  {k:'daily',ic:'daily',c:'#ff77c8',n:'WEEKLY CLIMB',d:'One tower a week, same for everyone.',ok:e,lock:'Finish the tutorial to unlock',stat:dn?'This week '+S.daily.h+'m':'Not played this week',hot:e&&!dn,go:()=>startEndless(true)},
+  {k:'endless',ic:'endless',c:'#ff7043',n:'ENDLESS CLIMB',d:'A new tower every run.',ok:e,lock:'Finish the tutorial to unlock',stat:'Best '+S.endBest+'m',go:()=>startEndless(false)},
   {k:'speed',ic:'speed',c:'#f0b323',n:'SPEED COURSES',d:'4 courses. Race the clock.',ok:true,stat:med+'/4 medals',go:()=>go('courses')},
   {k:'marathon',ic:'mara',c:'#4aa8e8',n:'MARATHON',d:'Every level, one timer.',ok:f,lock:'Reach THE TOP to unlock',stat:'Best '+fmtT(S.speedBest),go:()=>go('sub',MARAS)},
   {k:'hard',ic:'hard',c:'#ec4e63',n:'HARD MODE',d:'One air jump. No checkpoints.',ok:f,lock:'Reach THE TOP to unlock',stat:hd+'/'+NL+' cleared',go:()=>go('levels',{hard:true,from:'modes'})}]}
@@ -9539,15 +9594,15 @@ function lbBoards(cat){const B=[];
    how:'Three per level: finish it, get every gem, beat the target time.'+(bonusStars()?'  Bonus worlds add '+bonusStars()+' more.':'')})}
  // an unlock hint is only ever shown to someone who is actually still locked out: a board that already HAS a record
  // (or a save that has clearly been there) describes the mode instead, so a real time is never captioned "to unlock".
- else if(cat=='r'){const f=!!S.finale||!!S.dev||!!S.speedBest,hf=!!S.dev||!!S.hspeedBest||!!(S.hard[NL-1]&&S.hard[NL-1].done),e=true||!!S.endBest||!!S.daily.d;
+ else if(cat=='r'){const f=!!S.finale||!!S.dev||!!S.speedBest,hf=!!S.dev||!!S.hspeedBest||!!(S.hard[NL-1]&&S.hard[NL-1].done),e=endOpen()||!!S.endBest||!!S.daily.d;
   B.push({id:'marathon',n:'Marathon',sub:'Every story level, one timer',k:'t',v:S.speedBest,c:'#4aa8e8',ic:'mara',
    how:f?'One run, no breaks, deaths included.':'Reach THE TOP to unlock it.'});
   B.push({id:'hmarathon',n:'Hard Marathon',sub:'Every hard level, one timer',k:'t',v:S.hspeedBest,c:'#ec4e63',ic:'mara',
    how:hf?'One air jump, no checkpoints, one clock.':'Clear Hard Mode THE TOP to unlock it.'});
   B.push({id:'endless',n:'Endless Climb',sub:'Your highest climb ever',k:'m',v:S.endBest,c:'#ff7043',ic:'endless',
-   how:e?'A new tower every run. The lava never stops.':'Clear World 2 to unlock the climbs.'});
+   how:e?'A new tower every run. The lava never stops.':'Finish the tutorial to unlock the climbs.'});
   B.push({id:'daily',n:'Weekly Climb',sub:'This week’s tower',k:'m',v:(S.daily.d==weekStr()?S.daily.h:0),c:'#ff77c8',ic:'daily',
-   how:e?'Same tower for everyone. A new one in '+wkStr()+'.':'Clear World 2 to unlock the climbs.'})}
+   how:e?'Same tower for everyone. A new one in '+wkStr()+'.':'Finish the tutorial to unlock the climbs.'})}
  else COURSES.forEach((c,i)=>{const t=(S.course[i]||{}).t||0;
   B.push({id:'course'+i,n:c.n,sub:c.sub,k:'t',v:t,ci:i,md:medalOf(i,t),ic:'speed',c:['#27b865','#e0a02a','#e0762a','#e0384a'][c.diff]})});
  for(const b of B)b.rank=lbRank(b.id);
@@ -9583,7 +9638,7 @@ SCREENS.boards={enter(a){if(a&&a.from)this.from=a.from;else if(!this.from)this.f
   if(id=='wk_lb')return openBoard('daily','boards');
   if(id.startsWith('lb_')&&gcOn())openBoard(id.slice(3),'boards')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('LEADERBOARDS');
-  const all=lbAll(),wk=all.daily,open=true||!!S.dev;
+  const all=lbAll(),wk=all.daily,open=endOpen();
   // ---- THE WEEKLY CLIMB ----
   const X=24,Y=84,W=912,H=150;
   uiPanel(X,Y,W,H,{r:20,fill:'#3a1446',rim:'rgba(255,119,200,.75)'});
@@ -9597,7 +9652,7 @@ SCREENS.boards={enter(a){if(a&&a.from)this.from=a.from;else if(!this.from)this.f
   txt('YOUR RANK',X+298,Y+100,11,'#e7b3d6','left',false);
   txt(rk?'#'+fmtN(rk.r)+'  of '+fmtN(rk.of):gcOn()?(best?'not ranked yet':'climb to get ranked'):'in the iOS app',X+298,Y+122,rk?22:16,rk?'#ffd45e':'#d9b9cf','left');
   if(open)button('wk_play',X+W-262,Y+24,238,48,'Play this week',{bg:'#7bdc3b',col:'#a9f95e',fs:19});
-  else txt('Clear World 2 to unlock',X+W-143,Y+48,15,'#f3c4e2',undefined,false);
+  else txt('Finish the tutorial to unlock',X+W-143,Y+48,15,'#f3c4e2',undefined,false);
   if(gcOn())button('wk_lb',X+W-262,Y+84,238,44,'Full leaderboard',{bg:'#ffe9a8',fs:16});
   // ---- ALL-TIME: tabs, then one tile per board ----
   const tw=Math.floor((W-20)/3);
@@ -9641,7 +9696,7 @@ SCREENS.board={enter(a){a=a||{};if(a.id)this.id=a.id;if(a.from)this.from=a.from;
   if(this.state=='web'){msg('Rankings live in the iOS app (Game Center). Your best on this device: '+lbVal(b)+'.');return}
   const E=(d.entries||[]).slice(0,10),mine=d.mine,showMine=mine&&!E.some(e=>e.me);
   if(!E.length){msg(wk?'No scores this week yet. Climb now and you are #1.':'No scores yet. Set one and you are #1.');
-   if(wk&&(true||S.dev))button('wk_go',X+W/2-110,Y+260,220,48,'Play this week',{bg:'#7bdc3b',col:'#a9f95e',fs:18});return}
+   if(wk&&endOpen())button('wk_go',X+W/2-110,Y+260,220,48,'Play this week',{bg:'#7bdc3b',col:'#a9f95e',fs:18});return}
   const rh=30,y0=Y+52;
   const row=(e,y,me)=>{if(me){ctx.fillStyle='rgba(255,212,94,.18)';rr(X+14,y-rh/2+1,W-28,rh-2,9);ctx.fill();ctx.strokeStyle='rgba(255,212,94,.7)';ctx.lineWidth=1.5;rr(X+14,y-rh/2+1,W-28,rh-2,9);ctx.stroke()}
    const r=e.rank|0;if(r>=1&&r<=3){ctx.fillStyle=MEDAL3[r-1];ctx.beginPath();ctx.arc(X+44,y,11,0,7);ctx.fill();txt(String(r),X+44,y+1,13,'#1d1a2e','center',false)}
@@ -10368,6 +10423,8 @@ function rgKeep(key,fin,data){if(!(fin>0)||!data||data.length>RG_MAXLEN)return f
 // the lineup: the Rival first, then your best run (if you have one), then bots either side of the Rival's pace
 // The bot slider (S.rdif, 0..1, middle = the old behaviour): the far left is the slowest bot,
 // right moves it toward the fastest bot (the perfect run) at the far end.
+// Endless and the Weekly Climb open as soon as the tutorial is beaten (they used to wait for World 2).
+function endOpen(){return!!S.tut||!!S.dev}
 function raceDif(){return typeof S.rdif=='number'&&S.rdif>=0&&S.rdif<=1?S.rdif:0.5}
 function raceDifName(d){return d<0.2?'Easy':d<0.4?'Relaxed':d<0.6?'Normal':d<0.8?'Hard':d<0.97?'Expert':'Perfect'}
 function raceLineup(key){const B=raceBots(key);if(!B)return null;const T=B.b,n=T.length,pace=racePace(key);
@@ -10709,14 +10766,15 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  if(updOn&&mouse.click&&inR(mouse,UR)){mouse.click=false;try{location.reload()}catch(e){}}
  // remTap runs BEFORE the screen's own update so a tap that landed on the reminder isn't also read as a menu press -
  // and it only clears the click when it really was inside the banner, so the menu keeps every other tap
- if(!rot&&remTap())mouse.click=false;
- if(!rot){SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);remUpd(dt);wheelIdle(dt)}
+ const gIn=!rot&&guideUpd(dt);
+ if(!rot&&!gIn&&remTap())mouse.click=false;
+ if(!rot){if(!gIn)SCR.update(dt);if(SCR!==SCREENS.intro)updToasts(dt);remUpd(dt);wheelIdle(dt)}
  wzAudio(); // THE WEIRD STUFF's music / effects levels (back to normal on every other screen)
  ctx.setTransform(KS,0,0,KS,0,0);ctx.clearRect(0,0,VW,VH);
  if(SCR!==SCREENS.play&&(STK||tp.size))tReset(); // (not on the win beat, so held fingers carry into the next Marathon level)
  UI.list=[];SCR.draw();UI.prev=UI.list;if(touchOn()&&playing())drawTouch();
  if(updOn){ctx.save();ctx.translate(UR.x+UR.w/2,UR.y+UR.h/2);const fy=keyPlate(UR.w,UR.h,{face:UIC.green,sel:RM()||Math.sin(gtime*4)>0,r:UR.h/2});txt('Update ready - tap to reload',0,fy+1,17,'#10240a','center',false);ctx.restore()}
- remDraw(); // above the menu, below the toasts and below the fade - see GENTLE REMINDERS
+ remDraw();guideDraw(); // above the menu, below the toasts and below the fade - see GENTLE REMINDERS
  if(SCR!==SCREENS.intro)drawToasts();
  if(fadeA>0){ctx.fillStyle=`rgba(14,11,28,${fadeA})`;ctx.fillRect(0,0,VW,VH);fadeA=Math.max(0,fadeA-dt*3.5)}
  if(rot)drawRotate();
