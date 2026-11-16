@@ -59,22 +59,22 @@ const APP_VER='2.0';
 // 1.2 is still being built: MORE 1.2 ITEMS GET ADDED TO ITS LIST AS FEATURES LAND. Its date is the month it's due out.
 //==CHANGELOG-BEGIN==
 const CHANGELOG=[
- {v:'2.0',date:'November 2026',items:[
-  'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten. The Rival matches your pace, or slide the bots from Easy all the way to Perfect.',
+ {v:'2.0',n:'The Glow Up',date:'November 2026',items:[
+  'Every world got a whole new look: new art, and calmer backgrounds that stay out of your way.',
+  'A brand new 3D logo on the title screen, the menu and the credits.',
+  'Bounce pads got rebuilt: a real spring that squashes down when you land on it.',
+  'Every world has stuff in the air now: leaves, sparks, embers and ash, fireflies and more.',
+  'Moving platforms feel right: they ease to a stop at each end, and when you jump off you keep their speed.',
+  'Tighter controls: quick taps take small steps and stops are sharper. Top speed and jumps are exactly the same.',
+  'Way more animation: the square leans, flips, slides down walls, lands with dust, and coins fly to your counter.',
+  'Race mode! Race three ghost racers on the Speed Courses and on any level you’ve beaten, even THE TOP. The Rival matches your pace, or slide the bots from Easy all the way to Perfect.',
   'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
   'Endless and the Weekly Climb open right after the tutorial. No need to beat World 2 first.',
   'A Button Guide on the main menu shows what every button does, one at a time.',
   'Meet something new and the game tells you what it is: friendly or dangerous. Every card is in the new Field Guide.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
-  'Every world got a whole new look: new art, and calmer backgrounds that stay out of your way.',
-  'Bounce pads got rebuilt: a real spring that squashes down when you land on it.',
-  'Every world has stuff in the air now: leaves, sparks, embers and ash, fireflies and more.',
   'Locked doors got fixed up: grab the key and the door slides into the wall, and it stays open even if you die.',
-  'Moving platforms don’t fling you anymore: they ease to a stop at each end, and jumping off feels smooth.',
-  'Tighter controls: quick taps take small steps and stops are sharper. Top speed and jumps are exactly the same.',
-  'Way more animation: the square leans, flips, slides down walls, lands with dust, and coins fly to your counter.',
   'Daily Rewards! Build a 7-day streak for a big chest on Day 7. (They replace the daily ticket.)',
-  'A brand new 3D logo on the title screen, the menu and the credits.',
   'The dev square in the credits got a lot bigger.',
   'This What’s New screen! It pops up once per update, and it’s always in the credits.'
  ]},
@@ -6928,7 +6928,7 @@ function drawWorld(){const L=G.L,th=themeOf(),t=G.t,ti=Math.max(0,WORLDS.indexOf
   ctx.fillStyle=g;rpath(m.x,m.y,m.w,m.h,5,5,5,5);ctx.fill();
   ctx.fillStyle=th.acc;ctx.fillRect(m.x+3,m.y+1.5,m.w-6,2.5);
   ctx.fillStyle='#3c4257';for(let bx=m.x+6;bx<m.x+m.w-3;bx+=14){ctx.beginPath();ctx.arc(bx,m.y+8,1.8,0,7);ctx.fill()}}
- if(L.rise&&G.lavaY<G.cam.y+VH+100){const ly=G.lavaY;const gl=ctx.createLinearGradient(0,ly-90,0,ly);gl.addColorStop(0,'rgba(255,120,40,0)');gl.addColorStop(1,'rgba(255,120,40,0.45)');ctx.fillStyle=gl;ctx.fillRect(G.cam.x-10,ly-90,VW+20,90);
+ if(L.rise&&G.lavaY<G.cam.y+VH+100){const ly=G.lavaY;const gl=ctx.createLinearGradient(0,ly-90,0,ly);gl.addColorStop(0,'rgba(255,120,40,0)');gl.addColorStop(1,'rgba(255,120,40,0.45)');ctx.fillStyle=gl;ctx.fillRect(TS,ly-90,(L.W-2)*TS,90); // the heat glow stays in the shaft: across the walls it read as a laser beam
   // the melt fills the shaft, between the level's side walls (outside them is more wall, see chunkOf; the glow above
   // still lights all of it)
   ctx.save();ctx.beginPath();ctx.rect(TS,ly-40,(L.W-2)*TS,VH+440);ctx.clip();
@@ -10200,13 +10200,13 @@ SCREENS.news={enter(a){this.from=(a&&a.from)||'menu';this.atp=-1;this.P=newsPage
  draw(){menuBG(MBG_ANY);ctx.fillStyle='rgba(12,9,30,.58)';ctx.fillRect(0,0,VW,VH);
   header('WHAT’S NEW',44,'#ffd45e');const auto=this.from=='menu';
   const P=this.P,pg=clamp(this.pg,0,Math.max(0,P.length-1)),p=P[pg],top=!!p&&p.c===CHANGELOG[0];
-  txt(!top&&p?'Earlier updates':auto?'Thanks for updating! Here’s what changed.':'Every update so far, newest first',VW/2,80,16,'#fff3cf',undefined,false);
+  txt(!top&&p?'Earlier updates':auto?(CHANGELOG[0].n?'Thanks for updating! Welcome to '+CHANGELOG[0].n+'.':'Thanks for updating! Here’s what changed.'):'Every update so far, newest first',VW/2,80,16,'#fff3cf',undefined,false);
   button('wnok',VW/2-110,470,220,48,auto?'Continue':'Back',{fs:20}); // drawn first: the default pick, so Enter = done
   if(!p)return;
   const H=NEWS_BY-NEWS_TY;
   uiPanel(NEWS_X,NEWS_TY,NEWS_W,H,{r:20,lip:5,rim:top?'#ffd45e':null});
   // the version row: big gold "Version 1.2" + NEW on the newest one, plain white on the ones behind it; date on the right
-  const vl='Version '+p.c.v+(p.k?'  (continued)':''),vy=NEWS_TY+30;
+  const vl='Version '+p.c.v+(p.c.n?': '+p.c.n:'')+(p.k?'  (continued)':''),vy=NEWS_TY+30; // a big update has a name (2.0 = The Glow Up)
   txt(vl,NEWS_X+28,vy,24,top?'#ffd45e':'#ffffff','left');
   if(top){const x=NEWS_X+28+txtW(vl,24)+14;chip(x,vy-12,54,24,{fill:'#27b865',rim:'rgba(255,255,255,.35)'});txt('NEW',x+27,vy+1,14,'#ffffff','center',false)}
   txt(p.c.date+(p.n>1?'  ·  part '+(p.k+1)+' of '+p.n:''),NEWS_X+NEWS_W-28,vy+1,16,'#b9b6c6','right',false);

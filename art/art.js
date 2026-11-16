@@ -357,7 +357,8 @@ window.ART = (() => {
     return true;
   };
   // the rising lava (climbs and Endless): the same melt, put together into one 8x8-tile block once so a screenful is a
-  // handful of draws, pinned to the world so it doesn't swim when the camera moves; deeper down it darkens, as before
+  // handful of draws, riding UP WITH ITS SURFACE (owner: pinned to the world it looked like a fixed picture being uncovered, not lava
+  // rising), churning slowly sideways, with bubbles rising through it that pop at the top; deeper down it darkens
   A.rise = (ly, x0, x1, t) => {
     const p = hz(), body = melt(null, '_body'), crest = melt(null, '_crest'); if (!body || !crest) return false;
     // (16 x 8 tiles of it, each 2x2-tile cell one of the melt's mirror images, see flips: it repeats every 384 px, not 48)
@@ -366,7 +367,10 @@ window.ART = (() => {
     const BW = 16 * TS, B = 8 * TS, y1 = Math.min(ly + VH + 200, G.cam.y + VH + 30);
     if (y1 > ly) {
       ctx.save(); ctx.beginPath(); ctx.rect(x0, ly, x1 - x0, y1 - ly); ctx.clip();
-      for (let y = Math.floor(ly / B) * B; y < y1; y += B) for (let x = Math.floor(x0 / BW) * BW; x < x1; x += BW) ctx.drawImage(blk, x, y, BW, B);
+      const mv = QUAL && !RM(), sx = mv ? (t * 9) % BW : 0, top = Math.round(ly) - 4;
+      for (let y = top; y < y1; y += B) for (let x = Math.floor((x0 - sx) / BW) * BW + sx; x < x1; x += BW) ctx.drawImage(blk, x, y, BW, B);
+      if (mv) { const w = x1 - x0; ctx.fillStyle = '#ffe08a'; for (let i = 0; i < 9; i++) { const d = (i * 41 + t * (22 + i % 3 * 6)) % 110, bx = x0 + ((i * 173 + Math.sin(t * 0.8 + i) * 18) % w + w) % w, by = ly + 104 - d;
+        ctx.globalAlpha = Math.min(1, d / 30) * Math.min(1, (110 - d) / 18) * 0.75; ctx.beginPath(); ctx.arc(bx, by, 2 + (i % 3), 0, 7); ctx.fill() } ctx.globalAlpha = 1 }
       const g = ctx.createLinearGradient(0, ly + 30, 0, ly + 220); g.addColorStop(0, 'rgba(90,8,16,0)'); g.addColorStop(1, 'rgba(90,8,16,.62)');
       ctx.fillStyle = g; ctx.fillRect(x0, ly + 30, x1 - x0, y1 - ly - 30); ctx.restore();
     }
