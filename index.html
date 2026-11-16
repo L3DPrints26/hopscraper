@@ -7886,7 +7886,7 @@ function updToasts(dt){for(let i=Math.min(toastSlots(),toasts.length)-1;i>=0;i--
 // let a two-row line run out of its bottom edge on the menu, where toasts are narrower. Menu toasts are 256 wide now
 // (x20..276, still clear of PLAY's focus ring at ~x286) and stop at y362, clear of Leaderboards' focus ring (~y369): toastSlots()
 // counts how many fit there, and the rest wait their turn exactly as before.
-const TOAST_MEN={x:20,y:196,w:256,bot:362},TOAST_GAP=8;
+const TOAST_MEN={x:20,y:196,w:256,bot:296},TOAST_GAP=8; // (bot: clears the Weekly Climb key under it)
 function toastW(){return SCR===SCREENS.menu?TOAST_MEN.w:316}
 // the line, wrapped to the card (two rows at most, the second ellipsised if it still runs over); cached per width.
 // A "word" wider than the card (the store link in Share's fallback toast) is broken after its last / or - that fits.
@@ -8345,7 +8345,7 @@ const PEN={x:0,y:0,w:VW,h:VH},
  // the corner keys' name chip at y110, the Prize Wheel's pulse ring starts at y363, and PLAY's focus ring and breathe
  // reach x~668. Same height band as PLAY (centred on it), right edge level with the gear's. The left band is the
  // toasts' lane (TOAST_MEN), so the two never meet either.
- WEEK_R={x:34,y:326,w:186,h:44}; // (owner: the big card beside PLAY was "so big and random" - it lives in the left stack now, sized like Leaderboards)
+ WEEK_R={x:34,y:314,w:186,h:44}; // (owner: the big card beside PLAY was "so big and random" - it lives in the left stack now, sized like Leaderboards)
 // ---- THE PRIZE WHEEL, AS CORNER FURNITURE ----------------------------------------------------------------------
 // A real wheel standing in the bottom-right of the scene, deliberately running off the right edge of the screen so it
 // reads as an OBJECT in the world rather than a widget floating on top of it. Its wedges come from the shared
