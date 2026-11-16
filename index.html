@@ -7576,7 +7576,12 @@ function drawHUD(){const L=G.L,md=G.mode;
  if(md=='endless'||md=='daily'){const gz=G.height>WZ_GOLD;if(gz)chip(VW-262,10,112,40,{fill:'rgba(124,88,14,.9)'});else hudPill(VW-262,10,112,40);
   if(gz)coinIcon(VW-232,25,10,0);coinIcon(VW-238,30,10,0);{const cs='+'+endCoins(G.height);txt(cs,VW-220,31,fitPx(cs,20,66),gz?'#ffe9a0':'#fff','left')}
   if(gz&&QUAL&&!RM()){const u=(gtime*0.55)%1;if(u<0.22){const s=Math.sin(u/0.22*Math.PI);twinkle(VW-228,20,3+5*s,s,u*3)}}}
- if(!S.set.music)txt('music off (M)',touchOn()?VW-130:VW-60,md=='story'||md=='hard'||md=='speed'||md=='hspeed'?132:58,14,'rgba(255,255,255,.55)');
+ // MUSIC OFF (audit U12): a small chip of its own at the right edge - under the pause/restart keys on a phone, under
+ // the HUD pills with a keyboard (and under the hint banner while that is up, so they never meet). It used to be
+ // faint grey text at fixed spots that floated over the sky and, in Endless, ran partly under the coin pill.
+ if(!S.set.music){const tch=touchOn(),s=tch?'Music off':'Music off  (M)',w=txtW(s,14)+24,x=VW-12-w,hg=hintGeom();let y=tch?PB.y+PB.r+22:60;
+  if(hg&&x<VW/2+hg.w/2+8&&y<hg.y+hg.h+8)y=hg.y+hg.h+10;
+  hudPill(x,y,w,24);txt(s,x+w/2,y+12,14,'#e8e6f5','center',false)}
  drawHint();
  drawNoteCard();
  if(G.intro>0){const k=G.intro>2?ease((2.4-G.intro)/0.4):G.intro<0.4?G.intro/0.4:1;ctx.globalAlpha=clamp(k,0,1);const x=VW/2+(1-k)*-200;
@@ -7621,11 +7626,14 @@ function cTone(c,k){const v=rgbOf(c),f=k>=1?(x=>x+(255-x)*(k-1)):(x=>x*k),r=x=>M
 // the y of its face's middle, so whatever is printed on it rides down with it when it is pressed.
 //   o.face  face colour   o.sel  focused (white ring)   o.pr  held down (face sinks)   o.r  corner radius
 //   o.flat  no sheen      o.disabled
+//   o.ring  focus ring width outside the ink (default 3.5), or 'in' = drawn inside the outline (see focusRoom)
 function keyPlate(w,h,o){const R=Math.min(o.r||14,h/2,w/2),OL=h<36?2.5:3,LIP=Math.round(clamp(h*0.11,4,7)),pr=o.pr?LIP-1:0,
-  face=o.face,fh=h-LIP,y0=-h/2+pr;
+  face=o.face,fh=h-LIP,y0=-h/2+pr,RW=o.ring==null?3.5:o.ring;
  ctx.fillStyle='rgba(16,10,36,.26)';rr(-w/2-OL+1,-h/2-OL+5,w+OL*2,h+OL*2,R+OL);ctx.fill();
- if(o.sel){ctx.fillStyle='#ffffff';rr(-w/2-OL-3.5,y0-OL-3.5,w+OL*2+7,h-pr+OL*2+7,R+OL+3.5);ctx.fill()}
- ctx.fillStyle=INK;rr(-w/2-OL,y0-OL,w+OL*2,h-pr+OL*2,R+OL);ctx.fill();
+ if(o.sel&&RW=='in'){const E=OL+0.5,E2=OL-1;ctx.fillStyle=INK;rr(-w/2-E,y0-E,w+E*2,h-pr+E*2,R+E);ctx.fill();
+  ctx.fillStyle='#ffffff';rr(-w/2-E2,y0-E2,w+E2*2,h-pr+E2*2,R+E2);ctx.fill()}
+ else{if(o.sel){ctx.fillStyle='#ffffff';rr(-w/2-OL-RW,y0-OL-RW,w+OL*2+RW*2,h-pr+OL*2+RW*2,R+OL+RW);ctx.fill()}
+  ctx.fillStyle=INK;rr(-w/2-OL,y0-OL,w+OL*2,h-pr+OL*2,R+OL);ctx.fill()}
  ctx.fillStyle=cTone(face,o.disabled?0.82:0.7);rr(-w/2,y0,w,h-pr,R);ctx.fill();
  const g=ctx.createLinearGradient(0,y0,0,y0+fh);g.addColorStop(0,cTone(face,o.disabled?1.06:1.2));g.addColorStop(0.6,face);g.addColorStop(1,cTone(face,0.95));
  ctx.fillStyle=g;rr(-w/2,y0,w,fh,R);ctx.fill();
@@ -7781,14 +7789,30 @@ function btnAnim(id,sel,pr,sld){const now=gtime;let s=BTN.get(id);
 // ================= UI =================
 const UI={list:[],prev:[],selId:null};
 function inR(m,b){return m.x>=b.x&&m.x<=b.x+b.w&&m.y>=b.y&&m.y<=b.y+b.h}
+// FOCUS ROOM (audit U7). The focus ring sits 3.5px outside a key's 3px ink outline and the focused key breathes about 4%
+// bigger - so wherever keys are stacked 8-14px apart (Pause, the Prize Wheel's SPIN over Odds, the Settings sliders, the
+// menu's PLAY over More Modes) the ring ran straight into the next key's outline. The focused key now measures the gap
+// to its nearest neighbours (last frame's keys) and only takes the room that is really there: the full ring and the
+// full breathing where there is space, a slimmer ring and less growth where there is less, and in the tightest stacks
+// a ring drawn just INSIDE its own outline. Always leaving FOCUS_CLR px of clear dark between the ring and the
+// neighbour's ink. No key moves, no hit box changes, and an unfocused key draws exactly as before.
+const FOCUS_CLR=3;
+function focusRoom(id,x,y,w,h){let gx=1e9,gy=1e9;
+ for(const b of UI.prev){if(b.id==id)continue;const ox=Math.min(x+w,b.x+b.w)-Math.max(x,b.x),oy=Math.min(y+h,b.y+b.h)-Math.max(y,b.y);
+  if(oy>2){const d=b.x>=x+w?b.x-(x+w):x>=b.x+b.w?x-(b.x+b.w):-1;if(d>=0)gx=Math.min(gx,d)}
+  if(ox>2){const d=b.y>=y+h?b.y-(y+h):y>=b.y+b.h?y-(b.y+b.h):-1;if(d>=0)gy=Math.min(gy,d)}}
+ const OL=h<36?2.5:3,NB=3,free=Math.min(gx,gy)-OL-NB-FOCUS_CLR,ring=free>=3.5?3.5:free>=2?free:'in',ext=ring=='in'?0.5:ring;
+ // the most the key may grow on each side, as a scale cap per axis
+ return{ring,sx:1+2*Math.max(0,gx-OL-ext-NB-FOCUS_CLR)/w,sy:1+2*Math.max(0,gy-OL-ext-NB-FOCUS_CLR)/h}}
 // the first real option (never "< Back") starts selected on a fresh screen
 function button(id,x,y,w,h,label,o){o=o||{};UI.list.push({id,x,y,w,h,o,label});if(UI.selId==null&&id!='back')UI.selId=id;const sel=UI.selId==id;
  // the focused key breathes a little (sliders never do: a pulse under a dragging finger makes the knob drift away
  // from where it was grabbed), and holds still under Reduce Flashing & Motion
- ctx.save();ctx.translate(x+w/2,y+h/2);const sc=(sel&&!o.sld)?(RM()?1.03:1.035+Math.sin(gtime*6)*0.01):1;
+ ctx.save();ctx.translate(x+w/2,y+h/2);const sc=(sel&&!o.sld)?(RM()?1.03:1.035+Math.sin(gtime*6)*0.01):1,fr=sel&&!o.bare?focusRoom(id,x,y,w,h):null;
  // KEY MOTION (second animation pass, see UI MOTION): deals in, squashes under a finger, springs back, pops on focus.
  // Drawing only: the hit box is still exactly x,y,w,h from the first frame.
- if(!RM()){btnAnim(id,sel,!o.sld&&!o.disabled&&uiPressed(id,x,y,w,h),!!o.sld);if(BAA<1)ctx.globalAlpha*=BAA;ctx.scale(sc*BAX,sc*BAY)}else ctx.scale(sc,sc);
+ if(!RM()){btnAnim(id,sel,!o.sld&&!o.disabled&&uiPressed(id,x,y,w,h),!!o.sld);if(BAA<1)ctx.globalAlpha*=BAA;ctx.scale(fr?Math.min(sc*BAX,fr.sx):sc*BAX,fr?Math.min(sc*BAY,fr.sy):sc*BAY)}
+ else ctx.scale(fr?Math.min(sc,fr.sx):sc,fr?Math.min(sc,fr.sy):sc);
  // o.bare: NO plate at all - the rect is only the hit box and the nav box, and o.draw owns every pixel including the
  // selected look. Used by the menu's mini Prize Wheel, which has to read as a wheel, not as one more rounded key.
  if(o.bare){if(o.draw)o.draw(w,h,sel);ctx.restore();return sel}
@@ -7796,7 +7820,7 @@ function button(id,x,y,w,h,label,o){o=o||{};UI.list.push({id,x,y,w,h,o,label});i
  // face, plain white now means the kit's cream, and everything else about the look comes from keyPlate.
  let bg=o.bg||UIC.cream;if(bg=='#ffffff'||bg=='#fff')bg=UIC.cream;
  const face=o.disabled?UIC.lilac:sel?(o.col||UIC.gold):bg;
- const fy=keyPlate(w,h,{face,sel,pr:!o.sld&&!o.disabled&&uiPressed(id,x,y,w,h),r:o.r||14,flat:o.sld||o.flat,disabled:o.disabled});
+ const fy=keyPlate(w,h,{face,sel,ring:fr?fr.ring:null,pr:!o.sld&&!o.disabled&&uiPressed(id,x,y,w,h),r:o.r||14,flat:o.sld||o.flat,disabled:o.disabled});
  // o.acc: a band of the thing's OWN colour along the bottom of the face - a tab/card's identity stripe
  if(o.acc){const LIP=Math.round(clamp(h*0.11,4,7));ctx.save();rr(-w/2,fy-(h-LIP)/2,w,h-LIP,o.r||14);ctx.clip();ctx.fillStyle=o.acc;ctx.fillRect(-w/2,fy+(h-LIP)/2-5,w,5);ctx.restore()}
  ctx.translate(0,fy);UI.face={w,h:h-Math.round(clamp(h*0.11,4,7)),r:Math.min(o.r||14,h/2,w/2)}; // the face, for drawers that clip to it
@@ -7857,7 +7881,16 @@ function uiNav(scr){const L=UI.prev;if(!L.length)return;let cur=L.find(b=>b.id==
  if(pressed.OK||pressed.J)act(cur)}
 
 const toasts=[],FX=[];
-function toast(a,b,ty){toasts.push({a,b,ty,t:0})}
+function toast(a,b,ty,ic){toasts.push({a,b,ty,ic,t:0})}
+// the little picture on an info toast (it used to be a plain blue disc): a music note - struck through for "Music
+// off" - or an "i" for everything else, in ink on the toast's blue
+function toastGlyph(ic,x,y){ctx.save();ctx.translate(x,y);ctx.fillStyle=INK;ctx.strokeStyle=INK;ctx.lineCap='round';ctx.lineJoin='round';
+ if(ic=='note'||ic=='mute'){ctx.beginPath();ctx.ellipse(-1.8,3.4,3.3,2.5,-0.45,0,7);ctx.fill();
+  ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(1.2,3);ctx.lineTo(1.2,-5.6);ctx.quadraticCurveTo(4.8,-3.6,4.4,-0.4);ctx.stroke();
+  if(ic=='mute'){ctx.strokeStyle='#8dd3ff';ctx.lineWidth=4.4;ctx.beginPath();ctx.moveTo(-5.6,-5.6);ctx.lineTo(5.6,5.6);ctx.stroke();
+   ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-5.6,-5.6);ctx.lineTo(5.6,5.6);ctx.stroke()}}
+ else{ctx.beginPath();ctx.arc(0,-4.4,1.8,0,7);ctx.fill();ctx.lineWidth=2.8;ctx.beginPath();ctx.moveTo(0,-0.6);ctx.lineTo(0,5);ctx.stroke()}
+ ctx.restore()}
 // the reason a locked key gives when tapped - once: tapping it five times queues one toast, not five
 function whyToast(w){if(!toasts.some(q=>q.a==w[0]))toast(w[0],w[1],'info')}
 const TUT_WHY=['Finish the tutorial first','It takes about a minute'];
@@ -8610,7 +8643,7 @@ SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:
 // automatically (ntab/tf/tabWd/tabLabel) - no other tab-bar changes needed. Order here is left-to-right tab order.
 const BONUS_WORLDS=[{wd:6,flag:'world6',label:'6  Low-G'},{wd:7,flag:'goldworld',label:'7  Gold'},{wd:8,flag:'monsterworld',label:'8  Monster'}];
 function ownedBonusWorlds(){return S.dev?BONUS_WORLDS:BONUS_WORLDS.filter(b=>S[b.flag])}
-// ---- MORE WORLDS showcase: every paid bonus world, visible to everyone (even on the web, where Buy explains it's App Store
+// ---- BONUS WORLDS showcase (it was called More Worlds until the level map: too close to More Modes): every paid bonus world, visible to everyone (even on the web, where Buy explains it's App Store
 // only). Reached from the menu ("+ More Worlds") and the story level select. Everything shown is read from BONUS_WORLDS /
 // WORLDS / LEVELS / PRODUCTS, so a new bonus world shows up here automatically.
 function bwProducts(b){return PRODUCTS.filter(p=>p[b.flag])}
@@ -8632,7 +8665,7 @@ function bwPreview(b,x,y,w,h){const th=WORLDS[b.wd],p=bwProducts(b).find(q=>q.it
  drawSq(x+w/2,y+h-20,32,gtime,{c:sk||S.eq.c,h:'h_none',lx:Math.sin(gtime)})}
 SCREENS.worlds={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;musicPlay(0)},
  update(dt){uiNav(this);this.mt-=dt;if(pressed.ESC)this.onBtn('back')},
- draw(){drawBG(WORLDS[2],gtime*20,0,gtime);backBtn();header('MORE WORLDS',44);
+ draw(){drawBG(WORLDS[2],gtime*20,0,gtime);backBtn();header('BONUS WORLDS',44);
   textPlate('Optional - you don’t need them to finish the story.',VW/2,82,15,'#ffffff');
   // One skeleton shared by all three cards: even outer margins, identical row anchors, and a purchase band pinned to the
   // bottom whose height is the same everywhere (sized for whichever world sells the most bundles - World 6 sells three
@@ -8665,7 +8698,10 @@ SCREENS.worlds={enter(a){this.from=(a&&a.from)||'menu';this.msg='';this.mt=0;mus
   if(id.startsWith('wp_')){playBonusWorld(+id.slice(3));return}
   if(id.startsWith('wb_')){const p=PRODUCTS[+id.slice(3)];if(!p)return;if(prodOwned(p)){if(!(p.pk&&playBonusWorld(bwWorldOf(p)))){this.msg='You already own this';this.mt=1.5}return}
    if(!buyProduct(p.id))noNativeBuy()}}};
-SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
+// THE OLD LEVEL SELECT: the button grid that came before the LEVEL MAP (below). Kept whole, and still runs as the
+// level select when LVM.old is on (dev only) - SCREENS.levels hands its enter/update/draw/onBtn straight to these, so
+// `this` is still SCREENS.levels and both share the same tab, last world and the rest.
+const LVGRID={enter(a){a=a||{};this.hard=!!a.hard;
   // THE TUTORIAL GATE, second half. This screen is the ONLY door into a story level, so guarding it here closes every
   // route at once - PLAY, MODES' STORY card, a stale deep link, anything. A player who has not beaten the tutorial is
   // put into it instead. Dev mode is exempt.
@@ -8725,7 +8761,7 @@ SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
   // story only: entry to the bonus-world showcase while any bonus world is still unowned. The glow waits until World 1
   // is cleared so a brand-new player is not sold paid content before they have played anything.
   if(!this.hard&&BONUS_WORLDS.some(b=>!S[b.flag])){if(worldDone(0)){const gl=0.5+0.5*Math.sin(gtime*3.5);ctx.save();ctx.globalAlpha=0.3+0.35*gl;ctx.fillStyle='#b98cff';rr(10,466,158,48,16);ctx.fill();ctx.restore()}
-   button('moreworlds',14,470,150,40,'More Worlds',{fs:15,bg:'#e7dcff',ic:'world'})}
+   button('moreworlds',14,470,150,40,'Bonus Worlds',{fs:15,bg:'#e7dcff',ic:'world'})}
   // PLAY comes straight here now, so the other modes need a visible door from the level select too
   if(!this.hard)button('modes',782,18,164,40,'More Modes',{fs:16,bg:'#e7dcff',ic:'modes'});
   // REPLAYING THE TUTORIAL used to live behind a button called "How to Play" on the Settings screen, which is neither
@@ -8744,6 +8780,300 @@ SCREENS.levels={enter(a){a=a||{};this.hard=!!a.hard;
   if(id=='moreworlds')return go('worlds',{from:'levels'});if(id.startsWith('tab')){this.tab=+id.slice(3);return}
   if(id=='chaos'){if(this.curLv!=null&&S.lv[this.curLv]&&S.lv[this.curLv].done)return go('chaosPick',{i:this.curLv});return}
   if(id.startsWith('lv')){const i=+id.slice(2);if(this.hard)this.lastH=this.tab;else this.last=this.tab;startLevel(i,this.mode())}}};
+
+// ================= LEVEL MAP =================
+// The story and Hard Mode level select is a MAP (owner: "let's test it out making a map instead of just the basic
+// buttons"). One scene per world, on that world's own backdrop (the bg5 art in art/w1..w9), with a winding path and a
+// node for each of its levels: the number on the node, its stars under it, a padlock on a locked one; the path built up
+// to how far you are and only dotted after that; your square (whatever skin and hat you wear) standing on the level you
+// are on, and hopping along the path to the next one you pick.
+//   WORLDS: swipe, the arrows at the sides, or the row of world keys under the title. Those keys are the old tabs (same
+//     ids, same order, same rules: a bonus world only once owned, THE TOP last), so tabOf()/playBonusWorld() and every
+//     other door into this screen still land where they always did. The arrows and a swipe skip worlds still locked.
+//   PICK: tap a node and its card comes up (name, stars, best and target time, the note) with a big PLAY; tap the node
+//     you are on again, or PLAY, to start it. Keys/controller: Left/Right walk the path (past either end onto the
+//     world arrows), Up/Down reach everything else, Enter plays.
+//   HARD MODE: the same maps, darker and red, with its own progress.
+//   Reduce Motion: no hop, no slide, no swipe-follow - the square is simply there.
+// LVGRID above is the old button grid, kept whole behind a dev-only switch: LVM.old (set it here, or press ` on the level
+// select in dev mode) and the old screen runs instead, so the two can be compared.
+// FRAME COST: nothing that stays still is drawn twice. Each world's backdrop (lmBack) and its path with every node
+// (lmFront) are drawn ONCE into an offscreen canvas - in SPR, so a lost context or the late fonts rebuild them like every
+// other bake, and the front is redrawn only when that world's progress changes. A frame is two drawImage calls, the
+// world's drifting sky life on High graphics (bgFx, as in a level), the focused node, the square and the keys.
+const LVM={old:false,geo:new Map(),keys:[]};
+// node key LM_NW x LM_NH (lip included; a world's last level and THE TOP are bigger) centred on its path point, the
+// square (LM_SQ) standing on it, its star chip 6 px under it. The map lives between the world keys (LM_Y0) and the card.
+const LM_NW=58,LM_NH=54,LM_BIG=[66,60],LM_SQ=34,LM_Y0=126,LM_CARD={x:176,y:446,w:608,h:86},LM_SW=0.34,LM_KEEP=4;
+// THE PATHS: [x,y] waypoints in screen px, a node where the third number is 1, in level order. Every one runs left to
+// right overall, so Right is always the next level. A path comes in from the left edge and leaves at the right one (the
+// worlds either side). art/levelmap.js checks that no node's square, key or stars ever touch another node or a key.
+const LM_PATHS=[
+ // 0 along the bottom, back up over itself, and across the top to the flag
+ [[-30,434],[46,414],[128,378,1],[246,350,1],[364,380,1],[456,368],[488,300,1],[384,236,1],[562,206,1],[680,262,1],[806,224,1],[884,196],[990,184]],
+ // 1 down into a valley, up over a crest, and down the far side
+ [[-30,420],[56,330],[126,262,1],[222,356,1],[346,382,1],[454,320,1],[534,220,1],[652,212,1],[720,326,1],[838,350,1],[910,388],[990,410]],
+ // 2 up a hill, over the top, down into the hollow and up to the flag
+ [[-30,432],[50,414],[128,384,1],[204,296,1],[296,232,1],[412,206,1],[484,232],[520,300,1],[604,372,1],[664,390],[726,320,1],[830,236,1],[900,202],[990,190]],
+ // 3 a river bend: along the top, hooking back down under itself, then up and away
+ [[-30,200],[50,212],[130,228,1],[246,212,1],[372,252,1],[404,330],[320,382,1],[452,380,1],[560,320,1],[652,238,1],[792,226,1],[880,200],[990,194]],
+ // 4 two humps with a long dip between
+ [[-30,402],[40,372],[126,300,1],[232,236,1],[352,214,1],[452,282,1],[520,370,1],[640,384,1],[744,312,1],[840,232,1],[900,206],[990,198]],
+];
+// which path each world walks (WORLDS order; THE TOP has its own), so neighbouring worlds never share one
+const LM_PICK=[0,1,3,2,0,4,1,0,3];
+// THE TOP: one node at the summit, at the end of a long switchback climb
+const LM_TOP=[[-30,436],[120,418],[340,408],[560,394],[690,356],[620,314],[430,300],[300,268],[350,226],[480,214,1]];
+// where each world's backdrop is looked at (its camera x), the road's colour, a beaten level's face (WORLDS order)
+const LM_CX=[0,0,0,0,0,0,0,0,0];
+const LM_ROAD=['#f3e2b3','#f6dcae','#e3ecff','#ffd6b0','#ffe7a0','#f7d6b0','#e2e4ea','#fff0b8','#ddd5c0'];
+const LM_DONE=['#2fbf6c','#f08a3c','#4a82ff','#ff5a3c','#a77bff','#ff7a45','#6f9fc4','#d98a1c','#9b5de5'];
+// a path as a dense polyline (uniform Catmull-Rom through the waypoints): P points, L distance along it, N the nodes
+function lmGeo(src){let g=LVM.geo.get(src);if(g)return g;const M=18,P=[],N=[],n=src.length;
+ for(let i=0;i<n-1;i++){const p0=src[Math.max(0,i-1)],p1=src[i],p2=src[i+1],p3=src[Math.min(n-1,i+2)];if(src[i][2])N.push(P.length);
+  for(let k=0;k<M;k++){const t=k/M,t2=t*t,t3=t2*t,c=j=>0.5*(2*p1[j]+(p2[j]-p0[j])*t+(2*p0[j]-5*p1[j]+4*p2[j]-p3[j])*t2+(3*p1[j]-p0[j]-3*p2[j]+p3[j])*t3);P.push([c(0),c(1)])}}
+ if(src[n-1][2])N.push(P.length);P.push([src[n-1][0],src[n-1][1]]);
+ const L=[0];for(let i=1;i<P.length;i++)L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
+ g={P,L,N:N.map(k=>({x:P[k][0],y:P[k][1],s:L[k]})),len:L[L.length-1]};LVM.geo.set(src,g);return g}
+// the point s px along a path
+function lmAt(g,s){s=clamp(s,0,g.len);let lo=0,hi=g.L.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(g.L[m]<=s)lo=m;else hi=m}
+ const a=g.P[lo],b=g.P[hi],u=(s-g.L[lo])/Math.max(1e-6,g.L[hi]-g.L[lo]);return[lerp(a[0],b[0],u),lerp(a[1],b[1],u)]}
+// an offscreen canvas the size of the screen at k px per game px, drawn once by fn (in game coordinates) and kept in SPR.
+// Only the last LM_KEEP of them are kept: this world's two, and the two of the world sliding away or peeking in.
+function lmBake(key,k,fn){let c=SPR.get(key);
+ if(!c){c=document.createElement('canvas');c.width=Math.max(1,Math.round(VW*k));c.height=Math.max(1,Math.round(VH*k));
+  withCtx(c.getContext('2d'),()=>{ctx.setTransform(k,0,0,k,0,0);fn()});SPR.set(key,c)}
+ const K=LVM.keys,j=K.indexOf(key);if(j<0||j!==K.length-1){if(j>=0)K.splice(j,1);K.push(key);while(K.length>LM_KEEP)SPR.delete(K.shift())}
+ return c}
+// THE BACKDROP of world ti: its sky and hills, with nothing of their own drifting life baked in (QUAL 0 for the bake -
+// that is drawn live, see lmLife), darker bands where the world keys and the card sit, and Hard Mode's red night.
+// Baked at most 1.25x: it is soft art, and a whole extra screen of pixels at 2x is memory an old iPhone needs.
+// Until the world's pictures are in it is baked from the code stand-in, then baked again (the key changes) when they land.
+function lmBack(ti,hard){const th=WORLDS[ti],k=Math.min(KS,1.25),art=!!(window.ART&&ART.bgReady&&ART.bgReady(ti));
+ return lmBake('lmB'+ti+(hard?'h':'s')+(art?'a':'c')+k.toFixed(3),k,()=>{
+  const q=QUAL;QUAL=0;try{drawBG(th,LM_CX[ti]||0,0,0)}finally{QUAL=q}
+  if(th.moonEarth)drawW6Sky(-2600); // (its planets sit 52 px lower than in a level: clear of the keys at the top)
+  let g=ctx.createLinearGradient(0,0,0,150);g.addColorStop(0,'rgba(14,10,32,.42)');g.addColorStop(1,'rgba(14,10,32,0)');ctx.fillStyle=g;ctx.fillRect(0,0,VW,150);
+  g=ctx.createLinearGradient(0,404,0,VH);g.addColorStop(0,'rgba(14,10,32,0)');g.addColorStop(1,'rgba(14,10,32,.5)');ctx.fillStyle=g;ctx.fillRect(0,404,VW,VH-404);
+  if(hard){ctx.globalCompositeOperation='multiply';ctx.fillStyle='#c4566a';ctx.fillRect(0,0,VW,VH);
+   ctx.globalCompositeOperation='source-over';ctx.fillStyle='rgba(30,4,16,.36)';ctx.fillRect(0,0,VW,VH)}})}
+// the world's own sky life over the baked backdrop (High graphics only): the birds, sawdust, embers... and Gilded
+// Vale's light shafts - the same as behind a level
+function lmLife(ti){const th=WORLDS[ti],cx=LM_CX[ti]||0;if(th.deco==7)drawGoldRays(cx,gtime);bgFx(th.deco,cx,0,gtime)}
+// the stretch of path from a to b px along it, as the current path
+function lmTrace(g,a,b){ctx.beginPath();let p=lmAt(g,a);ctx.moveTo(p[0],p[1]);
+ for(let i=0;i<g.P.length;i++){if(g.L[i]<=a)continue;if(g.L[i]>=b)break;ctx.lineTo(g.P[i][0],g.P[i][1])}p=lmAt(g,b);ctx.lineTo(p[0],p[1])}
+// THE ROAD you have opened: the kit's build - ink outline, a darker lip along its lower edge, the face, a cast shadow
+function lmRoad(g,a,b,col){if(b-a<1)return;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+ ctx.translate(0,6);lmTrace(g,a,b);ctx.strokeStyle='rgba(10,6,26,.26)';ctx.lineWidth=26;ctx.stroke();ctx.translate(0,-6);
+ lmTrace(g,a,b);ctx.strokeStyle=INK;ctx.lineWidth=24;ctx.stroke();ctx.strokeStyle=cTone(col,0.74);ctx.lineWidth=18;ctx.stroke();
+ ctx.translate(0,-2);lmTrace(g,a,b);ctx.strokeStyle=col;ctx.lineWidth=14;ctx.stroke();
+ // worn into its middle: the footprints of everyone who walked it
+ ctx.setLineDash([6,12]);ctx.lineDashOffset=-4;ctx.strokeStyle=cTone(col,0.9);ctx.lineWidth=3.5;ctx.stroke();ctx.setLineDash([]);ctx.restore()}
+// ...and the way on that isn't open yet: a dotted line
+function lmDots(g,a,b){for(let s=a+14;s<b-6;s+=17){const p=lmAt(g,s);
+ ctx.fillStyle='rgba(16,10,36,.6)';ctx.beginPath();ctx.arc(p[0],p[1]+1,5.8,0,7);ctx.fill();ctx.fillStyle='rgba(255,250,235,.9)';ctx.beginPath();ctx.arc(p[0],p[1],3.9,0,7);ctx.fill()}}
+// ONE NODE at (x,y): a key from the UI kit. Cream to play, the world's colour once beaten, lilac and padlocked while
+// locked; focused it is the kit's gold with the white ring. lab: its number in the world, or 'top' (THE TOP's crown).
+function lmNode(x,y,lab,st,o){o=o||{};const w=o.big?LM_BIG[0]:LM_NW,h=o.big?LM_BIG[1]:LM_NH,fs=o.big?32:28;ctx.save();ctx.translate(x,y);
+ const face=!st.ok?UIC.lilac:o.sel?UIC.gold:st.done?o.done:UIC.cream,fy=keyPlate(w,h,{face,sel:o.sel,r:14,disabled:!st.ok});
+ if(!st.ok)uiIcon('lock',0,fy,o.big?14:12);else if(lab=='top')uiIcon('crown',0,fy,o.big?17:14);
+ else if(st.done&&!o.sel)display(lab,0,fy+1,fs,'#ffffff');else txt(lab,0,fy+1,fs,INK,'center',false);
+ ctx.restore()}
+// a node's stars on a chip under it (Hard Mode: a skull once beaten, nothing before)
+function lmStars(x,y,i,hard){if(hard){if(S.hard[i]&&S.hard[i].done){chip(x-15,y,30,22,{});skull(x,y+11,14,'#ff5c6c')}return}
+ const st=starsOf(i);chip(x-31,y,62,21,{});for(let s=0;s<3;s++)star5(x-18+s*18,y+10.5,7.4,st[s]?'#ffd45e':'rgba(255,255,255,.17)',st[s]?INK:null,1.6)}
+// the goal flag planted behind a world's last node
+function lmFlag(x,y,col){ctx.save();ctx.translate(x,y);ctx.lineCap='round';ctx.lineJoin='round';
+ ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-50);ctx.stroke();
+ ctx.strokeStyle='#ecebf4';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(0,-2);ctx.lineTo(0,-48);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(1,-50);ctx.quadraticCurveTo(14,-47,28,-41);ctx.quadraticCurveTo(14,-36,1,-31);ctx.closePath();
+ ctx.fillStyle=col;ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(3,-47,9,3);
+ ctx.fillStyle=INK;ctx.beginPath();ctx.arc(0,-52,3.6,0,7);ctx.fill();ctx.fillStyle='#ffd45e';ctx.beginPath();ctx.arc(0,-52,2,0,7);ctx.fill();ctx.restore()}
+// a note (the collectible paper): the art's own picture when it is in, faded while not found yet
+function lmNoteIc(x,y,s,got){const im=window.ART&&ART.IM&&ART.IM.note;ctx.save();if(!got)ctx.globalAlpha*=0.45;
+ if(im&&im.complete&&im.naturalWidth)ctx.drawImage(im,x-s*1.3,y-s*1.3,s*2.6,s*2.6);
+ else{ctx.translate(x,y);ctx.rotate(-0.12);ctx.fillStyle=INK;rr(-s*0.78,-s,s*1.56,s*2,s*0.2);ctx.fill();ctx.fillStyle='#fff3cf';rr(-s*0.6,-s*0.82,s*1.2,s*1.64,s*0.14);ctx.fill();
+  ctx.fillStyle='rgba(29,26,46,.45)';for(let k=0;k<3;k++)ctx.fillRect(-s*0.4,-s*0.42+k*s*0.4,s*0.8,s*0.12)}
+ ctx.restore()}
+// THE FRONT of world-tab w: the road as far as it is open, the dots beyond, every node with its stars, the flag.
+// Re-made only when the progress it shows changes (sig: each node locked / open / beaten, and which stars).
+function lmFront(scr,w){const ti=scr.tabWd(w),N=scr.nodes(w),hard=scr.hard,md=scr.mode(),
+  st=N.map(n=>({ok:unlocked(n.i,md),done:scr.doneLv(n.i),b:hard?0:starsOf(n.i).reduce((a,v,k)=>a+(v?1<<k:0),0)})),
+  sig=st.map(s=>s.ok?(s.done?String.fromCharCode(66+s.b):'a'):'_').join('');
+ return lmBake('lmF'+ti+(hard?'h':'s')+sig+KS.toFixed(3),KS,()=>{const g=scr.geo(w);
+  // the road is built to the furthest node you can play, and on out of the world once its last level is beaten
+  let open=0;N.forEach((n,k)=>{if(st[k].ok)open=n.s});if(st.length&&st[st.length-1].done)open=g.len;
+  // THE TOP's summit glows
+  for(const n of N)if(n.top){const r=130,gr=ctx.createRadialGradient(n.x,n.y,8,n.x,n.y,r);gr.addColorStop(0,hard?'rgba(255,92,108,.42)':'rgba(255,212,94,.42)');gr.addColorStop(1,'rgba(255,212,94,0)');ctx.fillStyle=gr;ctx.fillRect(n.x-r,n.y-r,r*2,r*2)}
+  lmRoad(g,0,open,hard?'#f0d2d2':LM_ROAD[ti]);lmDots(g,open,g.len);
+  const done=hard?'#e8475a':LM_DONE[ti];
+  N.forEach((n,k)=>{const h=n.big?LM_BIG[1]:LM_NH;if(n.big&&!n.top)lmFlag(n.x+25,n.y-h/2+12,st[k].done?UIC.gold:(hard?'#ff5c6c':LM_DONE[ti]));
+   lmNode(n.x,n.y,n.top?'top':String(n.k+1),st[k],{big:n.big,done});if(st[k].ok)lmStars(n.x,n.y+h/2+6,n.i,hard)})})}
+SCREENS.levels={
+ enter(a){a=a||{};
+  // a bare go('levels') is a way back from somewhere this screen sent you (Notes, Power Cards, Bonus Worlds, the
+  // tutorial): put you back on the same map, in the same mode
+  if(!Object.keys(a).length&&this.ret)a=this.ret;this.ret=null;
+  if(LVM.old)return LVGRID.enter.call(this,a);
+  this.hard=!!a.hard;
+  // THE TUTORIAL GATE (see LVGRID): this screen is the only door into a story level
+  if(!S.tut&&!S.dev){startTutorial();return}
+  this.from=a.from=='modes'?'modes':'menu';let tab=a.tab!=null?a.tab:a.cur?null:(this.hard?this.lastH:this.last);
+  if(tab==null){tab=0;for(let w=0;w<this.ntab();w++)if(this.tabOk(w))tab=w}if(tab>=this.ntab())tab=0;this.tab=tab;if(!this.tabOk(this.tab))this.tab=0;
+  this.sw=null;this.drag=null;this.dragX=0;this.trip=null;this.land=0;this.auto=null;
+  // you stand on the first level here you have not beaten yet (all beaten: the one you last played, else the first)
+  const md=this.mode(),N=this.nodes(this.tab),j=N.findIndex(n=>n.i===this.lastI);let k=N.findIndex(n=>unlocked(n.i,md)&&!this.doneLv(n.i));
+  if(k<0)k=Math.max(0,j);this.sel=this.card=N[k].i;UI.selId='lv'+this.sel;
+  // back from the level you just beat: you are standing on it, and a moment later you hop on to the next one
+  if(j>=0&&j!==k&&!RM()&&unlocked(this.lastI,md)){this.sel=this.lastI;this.auto={to:N[k].i,t:0.55}}
+  this.lastI=null;this.peek();musicPlay(0)},
+ // the levels behind world-tab w as map nodes, in path order: i level index, k place in the world, x/y, s along the path
+ nodes(w){const top=w==this.ntab()-1,g=this.geo(w),[a,n]=this.tabRange(w),out=[];
+  for(let k=0;k<n&&k<g.N.length;k++){const i=a+k;if(i>=LEVELS.length)break;out.push({i,k,x:g.N[k].x,y:g.N[k].y,s:g.N[k].s,top,big:top||k==n-1})}return out},
+ geo(w){return lmGeo(w==this.ntab()-1?LM_TOP:LM_PATHS[LM_PICK[this.tabWd(w)]||0])},
+ // the nearest world you can go to in direction d (locked ones are skipped, as their keys can't be pressed either)...
+ nb(d){for(let w=this.tab+d;w>=0&&w<this.ntab();w+=d)if(this.tabOk(w))return w;return null},
+ // ...and whether there is any world that way at all (the arrow then shows, locked)
+ any(d){const w=this.tab+d;return w>=0&&w<this.ntab()},
+ // the world number on its key: 1-5, a bonus world's own number, THE TOP's crown
+ wnum(w){if(w<4)return w+1;if(this.hard)return 0;if(w==4)return 5;const bw=ownedBonusWorlds();return w-5<bw.length?bw[w-5].wd:0},
+ setTab(w,o){o=o||{};if(w==null||w===this.tab||!this.tabOk(w))return;const from=this.tab,d=o.d||(w>from?1:-1);
+  this.tab=w;this.trip=null;this.auto=null;this.land=0;this.dragX=0;
+  const md=this.mode(),N=this.nodes(w);let k=N.findIndex(n=>unlocked(n.i,md)&&!this.doneLv(n.i));if(k<0)k=0;this.sel=this.card=N[k].i;
+  if(!o.keep)UI.selId='lv'+this.sel;
+  this.sw=RM()?null:{from,d,t:0,e0:clamp(Math.abs(o.x||0)/VW,0,0.9)};this.peek()},
+ // start the worlds either side downloading their pictures now, so a swipe lands on the real art
+ peek(){if(!window.ART||!ART.bgReady)return;for(const d of[-1,1]){const w=this.nb(d);if(w!=null)ART.bgReady(this.tabWd(w))}},
+ // PICK node i: the card shows it, and if it can be played the square hops along the path to it, landing on every
+ // node on the way (a trip: the stops along the path, a hop each, 0.26 s a hop and the whole trip under a second)
+ pick(i){this.card=i;if(!unlocked(i,this.mode())||i===this.sel)return;
+  const N=this.nodes(this.tab),b=N.find(n=>n.i===i);this.auto=null;if(!b){this.sel=i;return}
+  const s0=this.sqS();this.sel=i;if(RM()){this.trip=null;return}
+  const dir=b.s>s0?1:-1,stops=[s0];for(const n of dir>0?N:N.slice().reverse())if((n.s-s0)*dir>2&&(b.s-n.s)*dir>=0)stops.push(n.s);
+  if(stops.length<2){this.trip=null;return}
+  this.trip={stops,per:Math.min(0.26,0.95/(stops.length-1)),t:0,j:0,dir};sfx('jump')},
+ // how far along the path the square is right now (mid-hop, or the node it stands on)
+ sqS(){const T=this.trip;if(T){const L=T.stops.length-1,q=Math.min(L,T.t/T.per),j=Math.min(L-1,Math.floor(q));return lerp(T.stops[j],T.stops[j+1],q-j)}
+  const n=this.nodes(this.tab).find(n=>n.i===this.sel);return n?n.s:0},
+ // the square: x, the y its feet are at, how high it is off the path, its squash and which way it looks
+ sq(ox){const g=this.geo(this.tab),N=this.nodes(this.tab),T=this.trip;let s,lift=0,sx=1,sy=1,lx=0;
+  if(T){const L=T.stops.length-1,q=Math.min(L,T.t/T.per),j=Math.min(L-1,Math.floor(q)),u=q-j,a=T.stops[j],b=T.stops[j+1];
+   s=lerp(a,b,u);lift=4*u*(1-u)*clamp(14+Math.abs(b-a)*0.14,18,40);lx=T.dir;const k=Math.sin(u*Math.PI);sy=1+0.12*k;sx=1-0.08*k}
+  else s=this.sqS();
+  if(this.land>0){const q=this.land/0.16;sy=1-0.2*q;sx=1+0.16*q}
+  let near=N[0];for(const n of N)if(Math.abs(n.s-s)<Math.abs(near.s-s))near=n;
+  const p=lmAt(g,s);return{x:p[0]+ox,y:p[1]-(near.big?LM_BIG[1]:LM_NH)/2-1,lift,sx,sy,lx}},
+ // SWIPE between worlds: a drag that starts on the map and goes mostly sideways. The map follows the finger (a stiff
+ // rubber band where there is no world to go to), and letting go past 70 px slides the next world in from there.
+ swipe(dt){const T=uiTouch,src=T?{x:T.px,y:T.py,x0:T.x,y0:T.y,id:'t'+T.id}:PTR.down?{x:PTR.x,y:PTR.y,id:'p'+PTR.id}:null;let D=this.drag;
+  if(D&&(!src||src.id!==D.id)){if(D.live&&!D.dead){const dx=D.x-D.x0,d=dx<0?1:-1;
+    if(Math.abs(dx)>70){const w=this.nb(d);if(w!=null)this.setTab(w,{d,x:dx});else sfx('no')}}
+   this.drag=D=src?{dead:1,id:src.id}:null}
+  if(src&&!D){const x0=src.x0!=null?src.x0:src.x,y0=src.y0!=null?src.y0:src.y;
+   D=this.drag=(this.sw||y0<LM_Y0||y0>LM_CARD.y-4)?{dead:1,id:src.id}:{id:src.id,x0,y0,x:x0,y:y0,live:false}}
+  if(D&&!D.dead&&src){D.x=src.x;D.y=src.y;const dx=D.x-D.x0,dy=D.y-D.y0;
+   if(!D.live&&Math.abs(dx)>16&&Math.abs(dx)>Math.abs(dy)*1.2)D.live=true;
+   if(D.live&&!RM())this.dragX=this.nb(dx<0?1:-1)==null?clamp(dx*0.22,-40,40):dx}
+  if((!D||!D.live)&&this.dragX){this.dragX*=Math.pow(0.0004,dt);if(Math.abs(this.dragX)<0.5)this.dragX=0}},
+ // Left/Right on a node walk the path, one level at a time; past either end, uiNav takes over (onto the world arrows)
+ walk(){const s=UI.selId||'';if(!s.startsWith('lv'))return;const N=this.nodes(this.tab),k=N.findIndex(n=>'lv'+n.i==s);if(k<0)return;
+  for(const[key,d]of[['L',-1],['R',1]]){if(!pressed[key])continue;const n=N[k+d];if(!n)continue;
+   UI.selId='lv'+n.i;UI.kb=true;UI.clickId=UI.selId;sfx('move');delete pressed[key]}},
+ update(dt){
+  if(devOn()&&pressed.DEV){LVM.old=!LVM.old;toast(LVM.old?'Old level select':'Level map','Dev mode: ` switches back','info');return this.enter({tab:this.tab,hard:this.hard,from:this.from})}
+  if(LVM.old)return LVGRID.update.call(this,dt);
+  if(this.sw&&(this.sw.t+=dt)>=LM_SW)this.sw=null;
+  const T=this.trip;if(T){T.t+=dt;const L=T.stops.length-1,j=Math.min(L,Math.floor(T.t/T.per));if(j>T.j){T.j=j;this.land=0.16}if(j>=L)this.trip=null}
+  if(this.land>0)this.land=Math.max(0,this.land-dt);
+  if(this.auto&&(this.auto.t-=dt)<=0){const to=this.auto.to;this.auto=null;this.pick(to)}
+  this.swipe(dt);
+  // the key that had the focus went away (an arrow at the end of the row): the focus goes back to where you stand
+  if(UI.prev.length&&!UI.prev.some(b=>b.id==UI.selId))UI.selId='lv'+this.sel;
+  this.walk();const clicked=mouse.click;uiNav(this);if(SCR!==this)return;
+  if(pressed.ESC)return this.onBtn('back');
+  const s=UI.selId||'';
+  // the world keys switch world as soon as the keyboard lands on one (hover never does), like the old tabs
+  if(UI.kb&&s.startsWith('tab')){const w=+s.slice(3);if(w!=this.tab&&this.tabOk(w))this.setTab(w,{keep:1})}
+  // a node chosen by the keys, or a locked one tapped (a locked key never reaches onBtn): the card shows it
+  if(s.startsWith('lv')&&(clicked||UI.kb)){const i=+s.slice(2);if(i!==this.card)this.pick(i)}},
+ onBtn(id){if(LVM.old)return LVGRID.onBtn.call(this,id);
+  const away=()=>{this.ret={hard:this.hard,tab:this.tab,from:this.from}};
+  if(id=='back')return go(this.from=='modes'?'modes':'menu');if(id=='modes')return go('modes');
+  if(id=='tutorial'){away();return startTutorial()}
+  if(id=='cards'){away();return go('cards',{from:'levels'})}
+  if(id=='notes'){away();return go('notes',{from:'levels'})}
+  if(id=='moreworlds'){away();return go('worlds',{from:'levels'})}
+  if(id.startsWith('tab'))return this.setTab(+id.slice(3),{keep:1});
+  if(id=='wl'||id=='wr'){const d=id=='wl'?-1:1;return this.setTab(this.nb(d),{keep:1,d})}
+  if(id=='chaos'){const i=this.card;if(S.lv[i]&&S.lv[i].done){away();return go('chaosPick',{i})}return}
+  if(id=='play')return this.play(this.card);
+  // tapping the node you stand on (or are hopping to, or about to hop on to) plays it; any other node is a pick
+  if(id.startsWith('lv')){const i=+id.slice(2);if(i===this.sel||(this.auto&&this.auto.to===i))return this.play(i);this.pick(i)}},
+ play(i){if(!unlocked(i,this.mode()))return;if(this.hard)this.lastH=this.tab;else this.last=this.tab;this.lastI=i;startLevel(i,this.mode())},
+ draw(){if(LVM.old)return LVGRID.draw.call(this);
+  const sw=this.sw;
+  if(sw){const e=lerp(sw.e0,1,ease(sw.t/LM_SW));this.scene(sw.from,-sw.d*VW*e,false);this.scene(this.tab,sw.d*VW*(1-e),true)}
+  else{const dx=this.dragX;if(Math.abs(dx)>0.5){const w=this.nb(dx<0?1:-1);if(w!=null)this.scene(w,dx<0?dx+VW:dx-VW,false)}this.scene(this.tab,dx,true)}
+  this.chrome()},
+ // one world's map at x offset ox. live = the world you are on: its nodes are keys and the square stands on it
+ scene(w,ox,live){const ti=this.tabWd(w);ctx.drawImage(lmBack(ti,this.hard),ox,0,VW,VH);
+  if(live&&QUAL&&!ox&&!this.sw)lmLife(ti);
+  ctx.drawImage(lmFront(this,w),ox,0,VW,VH);
+  if(!live)return;const md=this.mode();
+  // each node is a bare key: its hit box takes in the square standing on it and the stars under it, and all it
+  // draws itself is the focused look - the node as it rests is already in the front bake
+  for(const n of this.nodes(w)){const ok=unlocked(n.i,md),st={ok,done:this.doneLv(n.i)},h=n.big?LM_BIG[1]:LM_NH,bx=Math.round(n.x+ox-34),by=Math.round(n.y-h/2-38),bh=h+38+30;
+   button('lv'+n.i,bx,by,68,bh,'',{bare:1,disabled:!ok,draw:(bw,bh2,sel)=>{if(sel)lmNode(0,n.y-(by+bh/2),n.top?'top':String(n.k+1),st,{sel:1,big:n.big})}})}
+  const q=this.sq(ox);
+  if(q.lift>0.5){ctx.fillStyle='rgba(10,6,26,.22)';ctx.beginPath();ctx.ellipse(q.x,q.y+1,LM_SQ*0.42*(1-q.lift/90),4,0,0,7);ctx.fill()}
+  const b=RM()||this.trip?0:Math.sin(gtime*2.6);
+  drawSq(q.x,q.y-q.lift,LM_SQ,gtime,{sx:q.sx*(1+b*0.015),sy:q.sy*(1-b*0.02),lx:q.lx||(RM()?0:Math.sin(gtime*0.7)*0.5)})},
+ // everything around the map: the title and its world keys, the side arrows, the card and the extras
+ chrome(){const ti=this.tabWd(this.tab),th=WORLDS[ti],nt=this.ntab(),top=this.tab==nt-1;
+  backBtn();
+  {const cn=cardCount();if(cn>0||S.dev)button('cards',140,18,152,40,'Cards  x'+curTxt(cn),{fs:16,bg:'#ffe9a8',acc:'#c2185b'})}
+  if(!this.hard)button('modes',782,18,164,40,'More Modes',{fs:16,bg:'#e7dcff',ic:'modes'});
+  header(top?'THE TOP':th.n.toUpperCase(),38,this.hard?'#ff8f9a':'#ffffff');
+  txt(this.hard?'HARD MODE  ·  One air jump. No checkpoints.':top?'THE FINALE':'WORLD '+this.wnum(this.tab),VW/2,71,13,this.hard?'#ffb3bb':'#fff3d2',undefined,false);
+  // the world keys (the old tabs): a number, THE TOP's crown, a padlock; a bar along the bottom fills as you beat it
+  const CW=46,CH=38,GP=8,x0=Math.round(VW/2-(nt*CW+(nt-1)*GP)/2);
+  for(let w=0;w<nt;w++){const ok=this.tabOk(w),pg=this.tabProg(w),on=w==this.tab,wt=WORLDS[this.tabWd(w)],tp=w==nt-1;
+   button('tab'+w,x0+w*(CW+GP),84,CW,CH,'',{disabled:!ok,bg:on?wt.top:UIC.cream,col:wt.top,draw:(bw,bh)=>{
+    if(!ok){uiIcon('lock',0,-1,9);return}
+    if(tp)uiIcon('crown',0,-4,10);else txt(String(this.wnum(w)),0,-3,19,INK,'center',false);
+    const f=pg[0]/pg[1],L=bw-16;ctx.fillStyle='rgba(29,26,46,.2)';rr(-L/2,8,L,4,2);ctx.fill();
+    if(f>0){ctx.fillStyle=f>=1?'#17924f':'#3b3752';rr(-L/2,8,Math.max(4,L*f),4,2);ctx.fill()}}})}
+  if(!this.hard){button('tutorial',20,84,132,38,'',{bg:'#cfe3ff',col:'#eaf4ff',draw:()=>{drawSq(-40,9,18,gtime,{h:'h_none',lx:RM()?0:Math.sin(gtime*1.6)});txt('Tutorial',10,1,15,'#17354f','center',false)}});
+   button('notes',808,84,132,38,'',{bg:'#fff3cf',draw:()=>{lmNoteIc(-46,0,10,1);txt('Notes',-31,1,15,INK,'left',false);txt(notesFound()+'/'+NOTES.length,54,1,13,'#6b5a3a','right',false)}})}
+  // the side arrows: the next world you can go to that way; locked while every world that way still is
+  for(const d of[-1,1]){if(!this.any(d))continue;const ok=this.nb(d)!=null;
+   button(d<0?'wl':'wr',d<0?10:VW-56,248,46,68,'',{disabled:!ok,draw:()=>{ctx.strokeStyle=ok?INK:UIC.dis;ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.beginPath();ctx.moveTo(-d*6,-13);ctx.lineTo(d*7,0);ctx.lineTo(-d*6,13);ctx.stroke()}})}
+  this.cardDraw();
+  // the story extras, where they have always been: Chaos Replay bottom right, Bonus Worlds bottom left
+  if(!this.hard&&S.chaos){const ok=!!(S.lv[this.card]&&S.lv[this.card].done);button('chaos',798,478,148,42,'Chaos Replay',{fs:14,disabled:!ok,bg:'#20b8c9',col:'#eafcff'})}
+  if(!this.hard&&BONUS_WORLDS.some(b=>!S[b.flag])){if(worldDone(0)){const gl=RM()?0.6:0.5+0.5*Math.sin(gtime*3.5);ctx.save();ctx.globalAlpha=0.3+0.35*gl;ctx.fillStyle='#b98cff';rr(10,466,158,48,16);ctx.fill();ctx.restore()}
+   button('moreworlds',14,470,150,40,'Bonus Worlds',{fs:15,bg:'#e7dcff',ic:'world'})}},
+ // THE CARD for the node you picked: its name and best time, then what each of its stars is for (lit once earned)
+ // and its note - or, on Hard Mode, the twist that level has. PLAY on the right.
+ cardDraw(){const C=LM_CARD,i=this.card,d=LEVELS[i],md=this.mode(),ok=unlocked(i,md),th=WORLDS[this.tabWd(this.tab)],PW=136,px=C.x+C.w-PW-14,L=C.x+22,R=px-18,y1=C.y+26,y2=C.y+56;
+  uiPanel(C.x,C.y,C.w,C.h,{r:18,rim:this.hard?'#ff5c6c':th.acc});
+  if(!ok){uiIcon('lock',L+11,y1+1,11);txt(lvLabel(i)+'  Locked',L+30,y1,22,'#ffffff','left');
+   const pv=this.hard?i-1:(d.wd>=6?i-1:prevOf(i));
+   txt(pv>=0&&LEVELS[pv]&&LEVELS[pv].wd==(d.wd>=6?d.wd:LEVELS[pv].wd)?'Beat '+lvLabel(pv)+' first.':'Beat the level before it.',L,y2,15,'#d8d5ea','left',false)}
+  else{const rec=this.hard?S.hard[i]:S.lv[i],bs='Best '+fmtT(rec&&rec.t),bw=txtW(bs,15);
+   txt(fitStr(lvTitle(i),R-L-bw-20,22),L,y1,22,'#ffffff','left');txt(bs,R,y1+1,15,'#d8d5ea','right',false);
+   if(this.hard){const tg='Target '+fmtT(d.t),tw=txtW(tg,15);txt(tg,L,y2,15,'#ffd45e','left',false);
+    const ml=modLabel(i);if(ml){const x=L+tw+18;txt(ml,x,y2,15,'#ff8f9a','left',false);const mw=txtW(ml,15)+10;txt(fitStr(modDesc(i),R-x-mw,14),x+mw,y2,14,'#d8d5ea','left',false)}}
+   else{const st=starsOf(i),gg=(S.lv[i]&&S.lv[i].g)||[];let gn=0;d.g.forEach((_,k)=>{if(gg[k])gn++});
+    const it=[[st[0],'Finish'],[st[1],'Gems '+gn+'/'+d.g.length],[st[2],'Target '+fmtT(d.t)]],nt=NOTES[i]?(S.notes[i]?'Note found':'Note hidden'):'';
+    let fs=15;const wid=()=>it.reduce((a,q)=>a+20+txtW(q[1],fs)+16,0)+(nt?22+txtW(nt,fs):0);while(fs>12&&wid()>R-L)fs--;
+    let x=L;for(const[q,s]of it){star5(x+8,y2,8,q?'#ffd45e':'rgba(255,255,255,.2)',q?INK:null,1.8);txt(s,x+20,y2+1,fs,q?'#ffffff':'#bdb7d9','left',false);x+=20+txtW(s,fs)+16}
+    if(nt){const got=!!S.notes[i];lmNoteIc(x+8,y2,8,got);txt(nt,x+22,y2+1,fs,got?'#9df3c4':'#bdb7d9','left',false)}}}
+  button('play',px,C.y+12,PW,58,'PLAY',{fs:26,bg:UIC.green,ic:'play',disabled:!ok})}};
+// the tab rules are the old screen's, word for word (see LVGRID): the map only changes how they are drawn
+for(const k of['mode','ntab','tf','tabWd','tabLabel','doneLv','tabRange','tabProg','tabOk'])SCREENS.levels[k]=LVGRID[k];
 
 SCREENS.play={enter(){},
  update(dt){
@@ -8798,8 +9128,9 @@ SCREENS.pause={enter(){if(mus.want!==SONG_PAUSE){this.mw=mus.want;this.ms=mus.st
   const bd=modeBoard(),B=[];
   if(G.mode=='story')B.push(['resume','Resume',{ic:'play'}],['cards','Power Cards  x'+cardCount(),{fs:20,bg:'#ffe9a8',col:'#ffd45e',ic:'card'}]);else B.push(['resume','Resume',{ic:'play'}]);
   B.push(['restart','Restart  (R)',{ic:'restart'}]);if(bd)B.push(['lbd','Leaderboard',{bg:'#ffe9a8',ic:'podium'}]);B.push(['quit',en?'End Run':'Quit',{ic:'x'}]);
-  // the stack centres itself between the header and the controls line, however many rows this mode has
-  const bh=B.length>4?48:50,gap=B.length>4?8:12,y0=Math.round(316-(B.length*bh+(B.length-1)*gap)/2);
+  // the stack centres itself between the header and the controls line, however many rows this mode has. 12-13px
+  // between keys (was 8 with five rows): enough for the focus ring to clear the next key's outline (audit U7)
+  const bh=B.length>4?44:50,gap=B.length>4?13:12,y0=Math.round(316-(B.length*bh+(B.length-1)*gap)/2);
   B.forEach((b,k)=>button(b[0],VW/2-140,y0+k*(bh+gap),280,bh,b[1],b[2]));
   // the Field Guide, top right (after the stack, so Resume keeps the first pick): every first-encounter card
   button('field',VW-196,18,176,42,'Field Guide',{fs:17,bg:'#cfe3ff'});
@@ -8865,16 +9196,91 @@ SCREENS.courses={enter(){musicPlay(0)},update(){uiNav(this);if(pressed.ESC)go('m
     if(md>=0){star5(268,16,11,medalCol(md),'rgba(0,0,0,.25)',1.5);txt(medalName(md),300,16,14,'#4a4660','right',false)}else star5(300,16,11,'rgba(0,0,0,.14)','rgba(0,0,0,.25)',1.5)}})})},
  onBtn(id){if(id=='back')return go('modes');startCourse(+id.slice(1))}};
 
-SCREENS.cdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);if(r.best)confetti(70)},
- update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
- draw(){winBack(.5);uiPanel(VW/2-320,34,640,350,{r:24,rim:'#ffd45e'});drawParts(FX);const r=this.r,c=COURSES[r.i],rec=S.course[r.i]||{};
-  txt('COURSE COMPLETE',VW/2,80,34,'#ffd45e');txt(c.n,VW/2,118,20,'#d8d5ea',undefined,false);
-  txt(fmtT(r.t),VW/2,196,80,'#fff');
-  if(r.best)txt('NEW PERSONAL BEST!',VW/2,258,26,'#7bdc3b');else txt('Your best: '+fmtT(rec.t),VW/2,258,20,'#b9b6c6');
-  if(r.medal>=0){const ml=medalName(r.medal)+' MEDAL',mw=txtW(ml,24),mx=VW/2-(mw+50)/2;star5(mx+20,310,20,medalCol(r.medal),INK,2.5);txt(ml,mx+50,310,24,medalCol(r.medal),'left')}
-  else txt('Bronze needs under '+courseTimes(r.i)[2]+'s',VW/2,310,18,'#b9b6c6');
-  txt('Falls: '+r.deaths+(r.gems?'    Gems: +'+r.gems:'')+(r.coins?'    Coins: +'+r.coins:''),VW/2,350,17,'#d8d5ea',undefined,false);
-  button('again',VW/2-300,400,190,54,'Run Again',{ic:'restart'});button('lbd',VW/2-95,400,190,54,'Leaderboard',{bg:'#ffe9a8',ic:'podium'});button('list',VW/2+110,400,190,54,'Courses')},
+// ================= RESULTS BOARDS (2.0 "The Glow Up") =================
+// Every "your run is over" screen - Level Clear, Speed Course, Chaos Replay, Marathon, Endless / Weekly and Race - is
+// built from the same few parts, so they read as one family:
+//   HEADLINE  the result in the wordmark's display type ABOVE the card ("LEVEL CLEAR!", "1ST PLACE"), dropping in
+//             with one overshoot
+//   CARD      a flat navy slab with ONE ink border - no lip, no inner rim (the double border is the "puffy" look the
+//             owner disliked) - and a band of the result's own colour along its top edge
+//   HERO      the one thing that matters most: the stars, the time, the height, the finishing order
+//   STATS     label-over-value tiles in a row; record moments as flat pills that pop in; rewards with their icons,
+//             counting up to the real figure
+//   KEYS      always BELOW the card, with a clear gap - never on its border (audit U1)
+// The rows arrive one after another (a fade and a short rise). Reduce Motion: everything is simply there, at its final
+// value - no count-ups, no slides, no pops. Every figure is read from the same result object the old boards used
+// (levelWon / saveEndless / raceDone / onWinDone); nothing here works out a number of its own.
+const RES_W=600,RES_KG=18,RES_KH=52;
+function resNow(scr){return RM()?99:scr.t}
+function resA(t,t0,d){return clamp((t-t0)/(d||0.28),0,1)}
+// flat Lilita One at any size, no ink outline: the type INSIDE the card (outlined display type is for the headline)
+function dtxt(s,x,y,size,col,align){ctx.font=`bold ${size}px ${DFONT}`;ctx.textAlign=align||'center';ctx.textBaseline='middle';ctx.fillStyle=col||'#fff';ctx.fillText(s,x,y+size*0.04)}
+function dW(s,size){ctx.font=`bold ${size}px ${DFONT}`;return ctx.measureText(s).width}
+// the biggest display size (<= size) at which s fits in w
+function dFit(s,size,w){const m=dW(s,size);return m<=w?size:Math.max(12,Math.floor(size*w/m))}
+function resCard(x,y,w,h,acc,fill){ctx.save();
+ ctx.fillStyle='rgba(10,6,26,.32)';rr(x-1,y+4,w+6,h+6,21);ctx.fill();
+ ctx.fillStyle=INK;rr(x-3,y-3,w+6,h+6,21);ctx.fill();
+ ctx.fillStyle=fill||UIC.plate;rr(x,y,w,h,18);ctx.fill();
+ if(acc){rr(x,y,w,h,18);ctx.clip();ctx.fillStyle=acc;ctx.fillRect(x,y,w,6)}
+ ctx.restore()}
+function resRule(y){ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(VW/2-RES_W/2+32,y,RES_W-64,1)}
+// a record moment (NEW BEST, FLAWLESS...): one flat fill, ink type, no outline
+function pillW(s,fs){return dW(s,fs||15)+26}
+function resPill(s,x,y,col,fs){fs=fs||15;const w=pillW(s,fs),h=fs+11;ctx.fillStyle=col;rr(x-w/2,y-h/2,w,h,h/2);ctx.fill();dtxt(s,x,y,fs,INK)}
+// a centred row of pills, each popping in a beat after the one before (from t0)
+function resPills(L,y,t,t0){const gap=10;let W=-gap;for(const p of L)W+=pillW(p[0])+gap;let x=VW/2-W/2;
+ L.forEach((p,i)=>{const w=pillW(p[0]),a=resA(t,t0+i*0.12,0.25);if(a>0){ctx.save();ctx.translate(x+w/2,y);const k=RM()?1:0.55+0.45*eob(a);ctx.scale(k,k);ctx.globalAlpha*=Math.min(1,a*2.5);resPill(p[0],0,0,p[1]);ctx.restore()}x+=w+gap})}
+// stat tiles: [label, value, value colour, foot, foot colour], spread across the card, faint rules between them
+function resTiles(L,y,t,t0){const n=L.length,w=Math.min(150,(RES_W-64)/n),x0=VW/2-(n-1)*w/2;
+ L.forEach((q,i)=>{const a=resA(t,t0+i*0.08);if(a<=0)return;const x=x0+i*w;ctx.save();ctx.globalAlpha*=a;if(!RM())ctx.translate(0,(1-eob(a))*10);
+  if(i){ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(Math.round(x-w/2),y-26,1,54)}
+  txt(q[0],x,y-23,14,'#a9a4c4','center',false);dtxt(q[1],x,y+3,dFit(q[1],28,w-14),q[2]||'#ffffff');if(q[3])txt(q[3],x,y+28,14,q[4]||'#a9a4c4','center',false);ctx.restore()})}
+// rewards: [kind ('coin'|'gem'|'tix'), amount, word, colour] - icon, "+N" and a word, centred as one unit and laid out by
+// the FINAL figures, so nothing shifts while the numbers count up (dur s, from t0)
+function resRewards(L,y,t,t0,dur){const a=resA(t,t0);if(a<=0||!L.length)return;const gap=34;
+ const P=L.map(q=>{const s='+'+fmtN(q[1]);return{q,s,w:24+dW(s,26)+7+txtW(q[2],15)}});let W=-gap;for(const p of P)W+=p.w+gap;let x=VW/2-W/2;
+ const cu=RM()?1:ease(clamp((t-t0)/(dur||0.5),0,1));ctx.save();ctx.globalAlpha*=a;if(!RM())ctx.translate(0,(1-eob(a))*10);
+ for(const p of P){const q=p.q;if(q[0]=='coin')coinIcon(x+9,y,10,gtime*3);else if(q[0]=='gem')gemShape(x+9,y,10,'#5ff4ff');else tixIcon(x+10,y,10);
+  dtxt('+'+fmtN(Math.round(q[1]*cu)),x+24,y,26,q[3],'left');txt(q[2],x+24+dW(p.s,26)+7,y+2,15,'#d8d5ea','left',false);x+=p.w+gap}
+ ctx.restore()}
+// the headline over the card (and the line under it), dropping in with one overshoot
+function resHead(s,col,sub,y,t,size){const rm=RM(),k=rm?1:0.72+0.28*eob(t/0.42);let fs=size||50;if(dW(s,fs)>700)fs=Math.floor(fs*700/dW(s,fs));
+ ctx.save();ctx.globalAlpha*=rm?1:clamp(t/0.16,0,1);ctx.translate(VW/2,y);ctx.scale(k,k);display(s,0,0,fs,col);ctx.restore();
+ if(sub){ctx.save();ctx.globalAlpha*=rm?1:resA(t,0.12,0.3);txt(fitStr(sub,560,18),VW/2,y+fs*0.5+20,18,'#ece9f8','center');ctx.restore()}}
+// the whole board: the headline block, then a card holding the rows ({h, draw(y)} - y is the row's top), then the
+// keys under it. The stack is centred in the band below the reminder lane (y 60 - see REM_RC) and above the bottom.
+function resBoard(o){const HH=o.sub?92:70,pad=10;let ch=pad*2;for(const r of o.rows)ch+=r.h;
+ const tot=HH+ch+RES_KG+RES_KH,top=Math.round(Math.max(58,60+(472-tot)/2)),cy=top+HH,x=VW/2-RES_W/2;
+ resHead(o.head,o.hc,o.sub,top+28,o.t,o.hs);
+ const rm=RM(),k=rm?1:eob(o.t/0.42);ctx.save();ctx.globalAlpha*=rm?1:clamp(o.t/0.2,0,1);ctx.translate(0,(1-k)*-36);
+ resCard(x,cy,RES_W,ch,o.acc,o.fill);let y=cy+pad;for(const r of o.rows){r.draw(y);y+=r.h}ctx.restore();
+ return cy+ch+RES_KG}
+// the keys, in a centred row; `first` is drawn first so it is the one focused on arrival
+function resKeys(y,L,first){let W=-RES_KG+2;for(const k of L)W+=k[2]+RES_KG-2;let x=VW/2-W/2;const at=[];
+ for(const k of L){at.push([k,x]);x+=k[2]+RES_KG-2}
+ at.sort((a,b)=>(b[0][0]==first)-(a[0][0]==first));for(const[k,x0]of at)button(k[0],Math.round(x0),y,k[2],RES_KH,k[1],k[3]||{})}
+// one-shot sounds on the board's own clock (played from update, never from draw)
+function resSfx(scr,k,at,n,a){scr.sf=scr.sf||{};if(scr.t>=at&&!scr.sf[k]){scr.sf[k]=1;sfx(n,a)}}
+// a run's time as the hero: counts up from zero, laid out by the final figure so it never jitters sideways
+function resTime(tv,y,t,t0,size,col){const s=fmtT(tv),w=dW(s,size),cu=RM()?1:ease(clamp((t-t0)/0.6,0,1));
+ dtxt(cu>=1?s:fmtT(Math.max(0.01,tv*cu)),VW/2-w/2,y,size,col||'#ffffff','left');return w}
+
+SCREENS.cdone={enter(r){this.r=r;this.t=0;this.sf={};FX.length=0;musicPlay(7);if(r.best)confetti(70)},
+ update(dt){this.t+=dt;updParts(FX,dt);if(this.r.best)resSfx(this,'pb',1.05,'check');
+  if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
+ draw(){winBack(.5);const r=this.r,c=COURSES[r.i],rec=S.course[r.i]||{},t=resNow(this);
+  // how the run compared with the best run it was racing (see SPEED COURSE GHOST) - only when the ghost was on
+  const C=G&&G.cg,sp=C&&C.split!=null&&S.set.pbg!==0?C.split:null;
+  const nx=r.medal<2?r.medal+1:-1,foot=r.medal<0?'bronze under '+courseTimes(r.i)[2]+'s':nx>0?medalName(nx).toLowerCase()+' under '+courseTimes(r.i)[2-nx]+'s':'top medal';
+  const ky=resBoard({head:'COURSE COMPLETE',hc:'#ffd45e',sub:c.n,acc:'#ffd45e',t,rows:[
+   {h:82,draw:y=>{const w=resTime(r.t,y+40,t,0.35,64);
+     if(sp!=null){const a=resA(t,1.0);if(a>0){ctx.save();ctx.globalAlpha*=a;const x=VW/2+w/2+24;dtxt((sp<0?'-':'+')+Math.abs(sp).toFixed(2)+'s',x,y+30,22,sp<0?'#7bdc3b':'#ff8a7a','left');txt('vs ghost',x,y+54,13,'#a9a4c4','left',false);ctx.restore()}}}},
+   {h:r.best||rec.t?40:0,draw:y=>{if(r.best)resPills([['NEW PERSONAL BEST','#7bdc3b']],y+18,t,1.05);else if(rec.t){ctx.save();ctx.globalAlpha*=resA(t,1.05);txt('Your best  '+fmtT(rec.t),VW/2,y+18,17,'#c9c5dc','center',false);ctx.restore()}}},
+   {h:14,draw:y=>resRule(y+4)},
+   {h:84,draw:y=>resTiles([['MEDAL',r.medal>=0?medalName(r.medal):'NONE',medalCol(r.medal),foot],['FALLS',''+r.deaths],['GEMS','+'+(r.gems|0),'#5ff4ff'],['COINS','+'+(r.coins|0),'#ffd45e']],y+40,t,1.35)}]});
+  resKeys(ky,[['again','Run Again',190,{ic:'restart'}],['lbd','Leaderboard',190,{bg:'#ffe9a8',ic:'podium'}],['list','Courses',190]],'again');
+  drawParts(FX)},
  onBtn(id){if(id=='again')return startCourse(this.r.i);if(id=='lbd')return openBoard('course'+this.r.i,'cdone');go('courses')}};
 
 // Chaos Replay: pick a single hard-mode modifier to replay a cleared story level with. Casual only.
@@ -8894,14 +9300,14 @@ SCREENS.chaosPick={enter(a){this.i=a.i;UI.selId=null;musicPlay(0)},
 
 SCREENS.chaosdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(50)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
- draw(){winBack(.5);uiPanel(VW/2-300,34,600,342,{r:24,rim:'#20b8c9'});drawParts(FX);const r=this.r;
-  txt('CHAOS CLEAR!',VW/2,80,34,'#20b8c9');txt(lvTitle(r.i),VW/2,118,20,'#d8d5ea',undefined,false);
-  if(r.mod)txt(MODN[r.mod],VW/2,160,22,'#ff5c6c');
-  txt(fmtT(r.time),VW/2,220,64,'#fff');
-  txt('Falls: '+r.deaths,VW/2,272,17,'#d8d5ea',undefined,false);
-  coinIcon(VW/2-30,306,9,gtime*3);txt('+5 coins',VW/2-12,307,18,'#ffd45e','left');
-  txt('Casual run - not ranked.',VW/2,340,14,'#b9b6c6',undefined,false);
-  button('again',VW/2-230,400,210,54,'Replay Again',{ic:'restart'});button('list',VW/2+20,400,210,54,'Levels')},
+ draw(){winBack(.5);const r=this.r,t=resNow(this),rows=[];
+  if(r.mod)rows.push({h:38,draw:y=>resPills([[MODN[r.mod],'#ff5c6c']],y+17,t,0.3)});
+  rows.push({h:76,draw:y=>resTime(r.time,y+36,t,0.35,60)},{h:14,draw:y=>resRule(y+4)},
+   {h:80,draw:y=>resTiles([['FALLS',''+r.deaths],['COINS','+5','#ffd45e']],y+38,t,1.1)},
+   {h:26,draw:y=>{ctx.save();ctx.globalAlpha*=resA(t,1.3);txt('Casual run - not ranked.',VW/2,y+12,14,'#a9a4c4','center',false);ctx.restore()}});
+  const ky=resBoard({head:'CHAOS CLEAR!',hc:'#3fd6e6',sub:lvTitle(r.i),acc:'#20b8c9',t,rows});
+  resKeys(ky,[['again','Replay Again',210,{ic:'restart'}],['list','Levels',210]],'again');
+  drawParts(FX)},
  onBtn(id){if(id=='again')return startChaosReplay(this.r.i,this.r.mod);go('levels',{tab:tabOf(this.r.i,false)})}};
 
 // A star on the level clear STAMPING down (a = seconds since it landed, its sound and burst are in update): it falls in
@@ -8912,44 +9318,41 @@ function clearStar(x,y,a,nw){if(a<0)return;let sc,rot=0;
  ctx.save();ctx.translate(x,y);ctx.rotate(rot);star5(0,0,26*sc,'#ffd45e','#b8860b',3);
  if(a>=0.13&&a<0.28){ctx.globalAlpha=1-(a-0.13)/0.15;star5(0,0,26*sc,'#ffffff',null,0)}ctx.restore();
  if(a>=0.13&&a<0.5){const b=(a-0.13)/0.37;ctx.save();ctx.globalAlpha=(1-b)*0.8;ctx.strokeStyle=nw?'#ffd45e':'#ffffff';ctx.lineWidth=4*(1-b)+1;ctx.beginPath();ctx.arc(x,y,26+b*(nw?70:44),0,7);ctx.stroke();ctx.restore()}}
-SCREENS.clear={enter(r){this.r=r;this.t=0;this.pl=[0,0,0];FX.length=0;if(r.first)confetti(60)},
+SCREENS.clear={enter(r){this.r=r;this.t=0;this.pl=[0,0,0];this.sf={};FX.length=0;if(r.first)confetti(60)},
  update(dt){this.t+=dt;const r=this.r;
-  if(r.mode=='story')for(let k=0;k<3;k++)if(!this.pl[k]&&this.t>0.55+k*0.38){this.pl[k]=1;if(r.stars[k]){sfx('star',k);const x=VW/2+(k-1)*100,y=196;for(let i=0;i<(r.newStars[k]?36:14);i++){const a=Math.random()*7,sp=rnd(60,260);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l:0.8,ml:0.8,c:r.newStars[k]?'#ffd45e':'#ffffff',s:rnd(2,5),g:200,sh:'sq'})}}}
+  // the burst comes out of wherever the board drew that star (this.sp, set in draw)
+  if(r.mode=='story')for(let k=0;k<3;k++)if(!this.pl[k]&&this.t>0.55+k*0.38){this.pl[k]=1;if(r.stars[k]){sfx('star',k);const q=this.sp&&this.sp[k]||[VW/2+(k-1)*112,200],x=q[0],y=q[1];for(let i=0;i<(r.newStars[k]?36:14);i++){const a=Math.random()*7,sp=rnd(60,260);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l:0.8,ml:0.8,c:r.newStars[k]?'#ffd45e':'#ffffff',s:rnd(2,5),g:200,sh:'sq'})}}}
+  if(!r.usedCard&&(r.bestT||r.time<=r.par||r.deaths==0))resSfx(this,'pb',1.7,'check');if(r.coins)resSfx(this,'c',2.3,'coin');
   updParts(FX,dt);if(this.t>0.3)uiNav(this);if(pressed.RST)this.onBtn('retry');else if(pressed.ESC)this.onBtn('levels')},
- draw(){winBack(.6);const r=this.r,t=this.t;
-  // (second pass) the panel drops in and settles with one overshoot; each star STAMPS down (see clearStar); each stat
-  // row slides in from the left. Reduce Motion: the old ease, the old pop, rows simply appear.
-  const rmc=RM(),k=rmc?ease(t/0.35):eob(t/0.42);ctx.save();ctx.translate(0,(1-k)*-60);ctx.globalAlpha=clamp(rmc?k:t/0.2,0,1);
-  uiPanel(VW/2-290,70,580,400,{r:24,rim:r.mode=='hard'?'#ff5c6c':themeOf().acc});
-  txt(r.mode=='hard'?'HARD CLEAR!':'LEVEL CLEAR!',VW/2,112,40,r.mode=='hard'?'#ff5c6c':'#ffd45e');txt(lvTitle(r.i,'  ·  '),VW/2,150,18,'#d8d5ea',undefined,false);
-  if(r.mode=='story'){const labs=['Finish','All Gems','Fast Finish'];for(let s=0;s<3;s++){const x=VW/2+(s-1)*100,y=200;const on=this.pl[s]&&r.stars[s];
-    if(on&&!rmc)clearStar(x,y,t-0.55-s*0.38,!!r.newStars[s]);
-    else{const pk=on?1+Math.max(0,0.5-(t-0.55-s*0.38))*1.2:1;star5(x,y,26*pk,on?'#ffd45e':'rgba(255,255,255,.12)',on?'#b8860b':'rgba(255,255,255,.2)',3)}
-    txt(labs[s],x,240,14,on?'#fff':'#8a87a0',undefined,false);if(on&&r.newStars[s])txt('NEW',x+26,176,14,'#7bdc3b',undefined,false)}}
-  else skull(VW/2,205,54,'#ff5c6c');
-  const rows=[['Time',fmtT(r.time)+'   (target '+fmtT(r.par)+')',r.usedCard?'NOT RANKED':r.bestT?'NEW BEST':(r.time<=r.par?'BEAT THE TARGET!':'')],['Falls',''+r.deaths,r.deaths==0&&!r.usedCard?'FLAWLESS':''],['Jumps',''+r.jumps,'']];if(r.mode=='story')rows.push(['Gems',r.gems.filter(Boolean).length+' / '+r.gt,r.newGems?'+'+r.newGems:'']);
-  // the stats block is measured and centred as a unit, so it lines up with the (centred) title, stars and buttons
-  // instead of hanging off to the left of them
-  {let lw=0,vw=0,nw=0;rows.forEach(r=>{lw=Math.max(lw,txtW(r[0],18));vw=Math.max(vw,txtW(r[1],18));if(r[2])nw=Math.max(nw,txtW(r[2],15))});
-   const GAP=18,NG=nw?24:0,bw=lw+GAP+vw+NG+nw,bx=VW/2-bw/2;
-   rows.forEach((row,i)=>{const y=280+i*30,ra=t-(1.4+i*0.12);if(ra<0)return;
-    const sl=rmc?0:(1-eob(ra/0.3))*-46;ctx.save();if(!rmc)ctx.globalAlpha*=clamp(ra*6,0,1);ctx.translate(sl,0);
-    txt(row[0],bx+lw,y,18,'#b9b6c6','right',false);txt(row[1],bx+lw+GAP,y,18,'#fff','left',false);
-    // the stat chips carry the whole message now that the "Power Card used" sentence is gone, so NOT RANKED is amber
-    // (and a chip like NEW BEST lands a beat after its row, with a pop)
-    if(row[2]){const ca=ra-0.18;if(ca>0||rmc){const pk=rmc?1:0.4+0.6*eob(ca/0.25);ctx.save();ctx.translate(bx+bw,y);ctx.scale(pk,pk);txt(row[2],0,0,15,row[2]=='NOT RANKED'?'#ffb35c':'#7bdc3b','right',false);ctx.restore()}}
-    ctx.restore()})}
+ // THE LEVEL CLEAR: headline, then the stars stamping down one by one (clearStar), then TIME / FALLS / JUMPS / GEMS
+ // tiles, the record moments as pills, and the coins counting up - each beat after the last (see RESULTS BOARDS).
+ draw(){winBack(.6);const r=this.r,t=resNow(this),T=this.t,rmc=RM(),story=r.mode=='story',hard=r.mode=='hard';
+  // the record moments: the same three chips the old stat rows carried, with the same rules (a Power Card run is
+  // NOT RANKED and earns neither a best nor FLAWLESS)
+  const pills=[];if(r.usedCard)pills.push(['NOT RANKED','#ffb35c']);else{if(r.bestT)pills.push(['NEW BEST TIME','#7bdc3b']);else if(r.time<=r.par)pills.push(['BEAT THE TARGET','#7bdc3b']);if(r.deaths==0)pills.push(['FLAWLESS','#7bdc3b'])}
+  const cTip=story&&r.first&&r.i==0,gotG=story?r.gems.filter(Boolean).length:0;
+  const tiles=[['TIME',fmtT(r.time),null,'target '+fmtT(r.par)],['FALLS',''+r.deaths],['JUMPS',''+r.jumps]];
+  if(story)tiles.push(['GEMS',gotG+' / '+r.gt,'#5ff4ff',r.newGems?'+'+r.newGems+' new':null,'#7bdc3b']);
+  const rew=[['coin',r.coins,'coins','#ffd45e']];if(r.bonus)rew.push(['gem',r.bonus,'bonus gems','#5ff4ff']);
+  const rows=[{h:88,draw:y=>{
+    if(story){const labs=['Finish','All Gems','Fast Finish'];this.sp=[];
+     for(let s=0;s<3;s++){const x=VW/2+(s-1)*112,sy=y+35,on=r.stars[s]&&(rmc||this.pl[s]);this.sp.push([x,sy+(rmc?0:(1-eob(T/0.42))*-36)]);
+      if(on&&!rmc)clearStar(x,sy,T-0.55-s*0.38,!!r.newStars[s]);else star5(x,sy,26,on?'#ffd45e':'rgba(255,255,255,.1)',on?'#b8860b':'rgba(255,255,255,.18)',3);
+      txt(labs[s],x,sy+44,14,on?'#ffffff':'#8a87a0','center',false);
+      if(on&&r.newStars[s]){const a=rmc?1:resA(T,0.68+s*0.38,0.2);if(a>0){ctx.save();ctx.globalAlpha*=a;resPill('NEW',x+50,sy-24,'#7bdc3b',13);ctx.restore()}}}}
+    else skull(VW/2,y+42,54,'#ff5c6c')}},
+   {h:14,draw:y=>resRule(y+5)},
+   {h:80,draw:y=>resTiles(tiles,y+38,t,1.3)}];
+  if(pills.length)rows.push({h:36,draw:y=>resPills(pills,y+17,t,1.65)});
+  rows.push({h:40,draw:y=>resRewards(rew,y+20,t,1.85,0.45)});
   // the very first clear is the only time the game explains what the coins it just handed you are for
-  const cTip=r.mode=='story'&&r.first&&r.i==0,cY=cTip?394:404;
-  if(t>1.9){const cs='+'+r.coins+' coins',gs2=r.bonus?'     +'+r.bonus+' bonus gems':'';ctx.font=`bold 18px ${FONT}`;const w1=ctx.measureText(cs).width,w2=gs2?ctx.measureText(gs2).width:0,x0=VW/2-(w1+w2+22)/2;
-   // the coins count up over 0.45s (laid out by the final figure, so nothing shifts as it climbs). Not with Reduce Motion
-   const cu=RM()?1:ease((t-1.9)/0.45),cn=Math.round(r.coins*cu);
-   coinIcon(x0+9,cY-1,9,gtime*3);txt(cu<1?'+'+cn+' coins':cs,x0+22,cY,18,'#ffd45e','left',false);if(gs2)txt(gs2,x0+22+w1,cY,18,'#5ff4ff','left',false);
-   if(cTip)txt('Coins buy skins in the Shop.',VW/2,cY+22,14,'#d8d5ea',undefined,false)} // the one line a first clear earns
-  ctx.restore();
+  if(cTip)rows.push({h:20,draw:y=>{ctx.save();ctx.globalAlpha*=resA(t,2.2);txt('Coins buy skins in the Shop.',VW/2,y+8,14,'#d8d5ea','center',false);ctx.restore()}});
+  const ky=resBoard({head:hard?'HARD CLEAR!':'LEVEL CLEAR!',hc:hard?'#ff5c6c':'#ffd45e',sub:lvTitle(r.i,'  ·  '),acc:hard?'#ff5c6c':themeOf().acc,t:T,rows});
   // "Next >" only when there really is a next level in this run's own chain - the last level of a bonus world (and
   // THE TOP) says "Levels" instead of promising a level it cannot deliver. Same nextOf() the button itself uses.
-  const isLast=r.mode=='story'?nextOf(r.i)<0:r.i+1>=NL;button('next',VW/2+70,426,170,50,r.finaleFirst?'The End >':r.worldClear>=0?'Continue >':isLast?'Levels':'Next >');button('retry',VW/2-85,426,150,50,'Retry',{ic:'restart'});button('levels',VW/2-240,426,150,50,'Levels');
+  // Next is drawn first, so it is the key focused on arrival, as before.
+  const isLast=story?nextOf(r.i)<0:r.i+1>=NL;
+  resKeys(ky,[['levels','Levels',150],['retry','Retry',150,{ic:'restart'}],['next',r.finaleFirst?'The End >':r.worldClear>=0?'Continue >':isLast?'Levels':'Next >',190,{bg:UIC.green,col:'#a6f06a'}]],'next');
   drawParts(FX)},
  onBtn(id){const r=this.r;if(id=='next'){if(r.finaleFirst)return go('ending');if(r.worldClear>=0)return go('wclear',r);const n=r.mode=='story'?nextOf(r.i):(r.i+1<NL?r.i+1:-1);if(n>=0&&unlocked(n,r.mode))return startLevel(n,r.mode);return go('levels',{hard:r.mode=='hard',tab:tabOf(r.i,r.mode=='hard')})}
   if(id=='retry')return startLevel(r.i,r.mode);go('levels',{hard:r.mode=='hard',tab:tabOf(r.i,r.mode=='hard')})}};
@@ -9012,29 +9415,44 @@ SCREENS.ending={enter(){this.t=0;this.fw=0;this.cards=0;FX.length=0;musicPlay(7)
     ctx.restore()}
    if(this.cards>=this.unl.length&&Math.sin(gtime*4)>-0.3)txt(touchOn()?'Thanks for playing!   Tap to continue':'Thanks for playing!   Press ENTER',VW/2,VH-24,20,'#fff')}}};
 
-SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h>0)confetti(80);if(r.best&&r.h>=60)askReview()},
- update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
- draw(){drawBG(WORLDS[4],gtime*20,this.t*40,gtime);{const r=this.r,n=(r.tix?1:0)+(r.daily&&r.gemsRaw>r.gems?1:0)+(r.rollover?1:0);uiPanel(VW/2-300,66,600,(n>1?432:410)-76,{r:24,rim:'#ffd45e'})}drawParts(FX);const r=this.r,k=ease(this.t/0.5); // the panel starts at y66 (was 40), under the reminder lane (REM_RC: y8..56, its shadow to 60); its bottom edge did not move
-  txt(r.daily?'WEEKLY CLIMB':'ENDLESS',VW/2,93,26,'#ffffff');txt('YOU CLIMBED',VW/2,130,30,'#fff');ctx.save();ctx.translate(VW/2,220);ctx.scale(k,k);txt(Math.round(r.h*clamp(this.t,0,1))+'m',0,0,110,'#ffd45e');ctx.restore();
-  if(r.best&&r.h>0&&this.t>1)txt('NEW BEST!',VW/2,300,28,'#7bdc3b');else txt('Best: '+r.bestV+'m',VW/2,300,22,'#fff');
-  gemShape(VW/2-150,350,11,'#5ff4ff');txt('+'+r.gems+' gems',VW/2-132,351,24,'#fff','left');coinIcon(VW/2+40,350,11,gtime*3);txt('+'+(r.coins||0)+' coins',VW/2+58,351,24,'#ffd45e','left');
-  const oLines=[];if(r.tix)oLines.push({t:'+'+r.tix+' spin ticket'+(r.tix>1?'s':''),c:'#ff8fd8'});
+SCREENS.over={enter(r){this.r=r;this.t=0;this.sf={};FX.length=0;musicPlay(0);if(r.best&&r.h>0)confetti(80);if(r.best&&r.h>=60)askReview()},
+ update(dt){this.t+=dt;updParts(FX,dt);const r=this.r;if(r.best&&r.h>0)resSfx(this,'pb',1.15,'check');if(r.coins||r.gems)resSfx(this,'c',1.95,'coin');
+  if(this.t>0.5)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
+ // ENDLESS / WEEKLY: the height is the hero and counts up over a second; then NEW BEST (or the best to beat), then what
+ // the run paid - gems, coins and the weekly spin ticket, which is a reward like the others now instead of a line of
+ // text squeezed onto the panel's rim (audit U11) - and any note about why it paid what it did.
+ draw(){drawBG(WORLDS[4],gtime*20,this.t*40,gtime);const r=this.r,t=resNow(this),hs=fmtN(r.h|0)+'m';
+  const rew=[['gem',r.gems|0,'gems','#5ff4ff'],['coin',r.coins||0,'coins','#ffd45e']];if(r.tix)rew.push(['tix',r.tix,'spin ticket'+(r.tix>1?'s':''),'#ff8fd8']);
+  const notes=[];
   // say WHY a replay paid fewer gems than it picked up, so a 0 never looks like a bug
-  if(r.daily&&r.gemsRaw>r.gems)oLines.push({t:"You already got this week’s gems - climb higher for more",c:'#a9a3c4'});
-  if(r.rollover)oLines.push({t:'New Weekly tower ready!',c:'#ffd45e'});
-  oLines.forEach((l,i)=>txt(l.t,VW/2,377+i*21,16,l.c,undefined,false));
-  const oMy=410+(oLines.length>1?22:0);
-  button('again',VW/2-300,oMy,190,54,r.rollover?'New Tower':'Climb Again',{ic:'restart'});button('lbd',VW/2-95,oMy,190,54,'Leaderboard',{bg:'#ffe9a8',ic:'podium'});button('menu',VW/2+110,oMy,190,54,'Back')},
+  if(r.daily&&r.gemsRaw>r.gems)notes.push(["You already got this week’s gems - climb higher for more",'#b9b4d2']);
+  if(r.rollover)notes.push(['New Weekly tower ready!','#ffd45e']);
+  const rows=[{h:122,draw:y=>{txt('YOU CLIMBED',VW/2,y+12,15,'#a9a4c4','center',false);
+     const fs=dFit(hs,92,RES_W-80),cu=RM()?1:ease(clamp(t/1,0,1)),k=RM()?1:0.6+0.4*eob(t/0.5),w=dW(hs,fs);
+     ctx.save();ctx.translate(VW/2,y+70);ctx.scale(k,k);dtxt(fmtN(Math.round((r.h|0)*cu))+'m',-w/2,0,fs,'#ffd45e','left');ctx.restore()}},
+   {h:40,draw:y=>{if(r.best&&r.h>0)resPills([['NEW BEST','#7bdc3b']],y+18,t,1.15);else{ctx.save();ctx.globalAlpha*=resA(t,1.0);txt((r.daily?'Best this week  ':'Your best  ')+fmtN(r.bestV|0)+'m',VW/2,y+18,17,'#c9c5dc','center',false);ctx.restore()}}},
+   {h:14,draw:y=>resRule(y+4)},
+   {h:48,draw:y=>resRewards(rew,y+24,t,1.4,0.5)}];
+  if(notes.length)rows.push({h:notes.length*22+4,draw:y=>{ctx.save();ctx.globalAlpha*=resA(t,1.7);notes.forEach((l,i)=>txt(l[0],VW/2,y+10+i*22,15,l[1],'center',false));ctx.restore()}});
+  const ky=resBoard({head:r.daily?'WEEKLY CLIMB':'ENDLESS CLIMB',hc:'#ffffff',acc:'#ffd45e',t:this.t,rows,hs:46});
+  resKeys(ky,[['again',r.rollover?'New Tower':'Climb Again',190,{ic:'restart'}],['lbd','Leaderboard',190,{bg:'#ffe9a8',ic:'podium'}],['menu','Back',190]],'again');
+  drawParts(FX)},
  // back out to MODES, where Daily Climb and Endless Climb are now their own cards - the old Climbs sub-menu is gone -
  // or to the main menu, for a run started from its Weekly Climb key (endHome)
  onBtn(id){if(id=='again')startEndless(this.r.daily);else if(id=='lbd')openBoard(this.r.daily?'daily':'endless','over');else go(endHome=='menu'?'menu':'modes')}};
 
+
 SCREENS.sdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(100)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
- draw(){drawBG(WORLDS[4],gtime*20,0,gtime);uiPanel(VW/2-330,34,660,364,{r:24,rim:this.r.hard?'#ff5c6c':'#ffd45e'});drawParts(FX);const r=this.r;txt(r.hard?'HARD MARATHON COMPLETE':'MARATHON COMPLETE',VW/2,84,38,r.hard?'#ff5c6c':'#ffd45e');txt(fmtT(r.t),VW/2,188,90,'#fff');txt('Falls: '+r.d,VW/2,264,22,'#fff');
-  txt(r.best?'NEW RECORD!':'Record: '+fmtT(r.hard?S.hspeedBest:S.speedBest),VW/2,300,24,r.best?'#7bdc3b':'#b9b6c6');if(!r.hard&&r.t<720)txt('SPEED DEMON!',VW/2,332,18,'#ff5c6c');
-  if(r.coins){coinIcon(VW/2-70,362,10,gtime*3);txt('+'+r.coins+' coins',VW/2-54,363,20,'#ffd45e','left')}
-  button('again',VW/2-300,410,190,54,'Run Again',{ic:'restart'});button('lbd',VW/2-95,410,190,54,'Leaderboard',{bg:'#ffe9a8',ic:'podium'});button('menu',VW/2+110,410,190,54,'Back')},
+ draw(){drawBG(WORLDS[4],gtime*20,0,gtime);const r=this.r,t=resNow(this),pills=[];
+  if(r.best)pills.push(['NEW RECORD','#7bdc3b']);if(!r.hard&&r.t<720)pills.push(['SPEED DEMON','#ff8a7a']);
+  const rows=[{h:82,draw:y=>resTime(r.t,y+40,t,0.35,68)}];
+  if(pills.length)rows.push({h:40,draw:y=>resPills(pills,y+18,t,1.05)});
+  rows.push({h:14,draw:y=>resRule(y+4)},
+   {h:80,draw:y=>resTiles([['FALLS',''+r.d],['COINS','+'+(r.coins|0),'#ffd45e']].concat(r.best?[]:[['RECORD',fmtT(r.hard?S.hspeedBest:S.speedBest)]]),y+38,t,1.35)});
+  const ky=resBoard({head:r.hard?'HARD MARATHON COMPLETE':'MARATHON COMPLETE',hc:r.hard?'#ff5c6c':'#ffd45e',acc:r.hard?'#ff5c6c':'#ffd45e',t:this.t,rows,hs:44});
+  resKeys(ky,[['again','Run Again',190,{ic:'restart'}],['lbd','Leaderboard',190,{bg:'#ffe9a8',ic:'podium'}],['menu','Back',190]],'again');
+  drawParts(FX)},
  onBtn(id){if(id=='again'){this.r.hard?startHSpeed():startSpeed()}else if(id=='lbd')openBoard(this.r.hard?'hmarathon':'marathon','sdone');else go('sub',MARAS)}};
 
 // ================= MODES =================
@@ -9324,8 +9742,8 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
   // clips; where it does not fit, the colour band and a corner watermark carry the identity instead.
   const tfs=tw<88?16:17,tIc=TB.every(c=>txtW(c[1],tfs)+23<=tw-5);
   TB.forEach((c,i)=>{const k=c[0],on=this.cat==k,tc=SHOP_TABC[k]||'#ffd45e';
-   button('tab_'+k,Math.round(GX+i*tp),86,tw,42,'',{acc:tc,bg:on?mixh('#ffffff',tc,0.46):'#ffffff',col:on?mixh('#ffffff',tc,0.6):mixh('#ffffff',tc,0.22),
-    draw:(bw,bh)=>{if(tIc){shopTabArt(k,-bw/2+12,-1,7.5,shade(tc,0.6));txt(c[1],8,1,tfs,'#1d1a2e','center',false)}
+   button('tab_'+k,Math.round(GX+i*tp),80,tw,42,'',{acc:tc,bg:on?mixh('#ffffff',tc,0.46):'#ffffff',col:on?mixh('#ffffff',tc,0.6):mixh('#ffffff',tc,0.22),
+    draw:(bw,bh)=>{if(tIc){shopTabArt(k,-bw/2+15,-1,7.5,shade(tc,0.6));txt(c[1],10,1,tfs,'#1d1a2e','center',false)}
      else{ctx.save();rr(-bw/2,-bh/2,bw,bh,12);ctx.clip();ctx.globalAlpha=0.16;shopTabArt(k,bw/2-11,bh/2-11,11,shade(tc,0.6));ctx.restore();txt(c[1],0,1,tfs,'#1d1a2e','center',false)}}})});
   uiPanel(560,88,360,420,{r:22});
   if(this.cat=='p')return this.drawPacks();
@@ -9339,7 +9757,7 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
   // selects (a grid, a tick, the wheel, a star, a pack), which is faster to spot than its word.
   FILTERS.forEach((f,i)=>{const on=this.sub==f[0],x=GX+i*GCP;
    button('sub_'+f[0],x,134,GCW,38,'',{acc:on?null:'#3f8fd8',bg:on?'#1f5fa8':'#ffffff',col:on?'#2f7fd0':'#dbeeff',
-    draw:(bw,bh,sel)=>{const c=on?'#ffffff':'#26456b';fltIcon(f[0],-bw/2+15,-1,8,c);txt(f[1],9,1,15,c,'center',false)}})});
+    draw:(bw,bh,sel)=>{const c=on?'#ffffff':'#26456b';fltIcon(f[0],-bw/2+17,-1,8,c);txt(f[1],10,1,15,c,'center',false)}})});
   uiPanel(GX,GY0-6,GW,GH+12,{r:18,lip:4});
   // sections -> rows -> pages, all from one engine (shopFlow). The paging row only costs height when there IS one.
   let F=shopFlow(this.cat,this.sub,GH);if(F.pages.length>1)F=shopFlow(this.cat,this.sub,GH-42);
@@ -9364,19 +9782,21 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
     ctx.save();if(lock)ctx.globalAlpha=0.55;ctx.translate(0,-h*0.12);
     if(it.cat=='t')drawItemPreview(it,-6,-3,17);
     else{BLINKO=shopBlink(this,ci,ri,GCOLS,nr,ri*GCOLS+ci,nr*GCOLS);
-     if(NONE_IDS[it.id])noneIcon(0,-2,13);else if(it.cat=='h')drawSq(0,h*0.58-22,22,gtime,{c:S.eq.c,h:it.id});else drawItemPreview(it,0,-14,24);BLINKO=null} // hats sit lower so tall ones stay inside the card
+     if(NONE_IDS[it.id])noneIcon(0,-2,13);else if(it.cat=='h')drawSq(0,h*0.58-22,22,gtime,{c:S.eq.c,h:it.id});else drawItemPreview(it,0,8,24);BLINKO=null} // hats sit lower so tall ones stay inside the card
     ctx.restore();priceTag(it,0,h/2-13);
+    // (audit U2) a skin used to stand with its top ON the card's top border; it now sits in the middle of its disc, and
+    // the PICK badge sits inside the card's corner, above the skin instead of on top of it
     // badge shortened to PICK so the label can sit at the 14px floor instead of a 10px sliver
-    if(it.id==pickId){ctx.fillStyle='#ffd45e';rr(-w/2+3,-h/2+3,48,19,7);ctx.fill();txt('PICK',-w/2+27,-h/2+13,14,'#3a1470','center',false)}}})};
+    if(it.id==pickId){ctx.fillStyle='#ffd45e';rr(-w/2+5,-h/2+6,42,17,6);ctx.fill();txt('PICK',-w/2+26,-h/2+15,14,'#3a1470','center',false)}}})};
   {let y=GY0,ri=0;for(const r of pg){
    if(r.h){const hd=grpHead(r.s.k),ow=r.s.its.filter(i=>!!S.own[i.id]).length;
     // a shelf label now has a colour chip in front of it and its rule tinted to match, so the eye can count the
     // sections on a page without reading them. "N / M owned" is a tick and a fraction - the word was on every shelf.
-    ctx.fillStyle=hd[1];rr(GX+6,y+5,4,15,2);ctx.fill();
-    txt(fitStr(hd[0]+(r.c?'  (continued)':''),306,14),GX+17,y+12,14,hd[1],'left',false);
+    ctx.fillStyle=hd[1];rr(GX+6,y+3,4,15,2);ctx.fill();
+    txt(fitStr(hd[0]+(r.c?'  (continued)':''),306,14),GX+17,y+10,14,hd[1],'left',false);
     {const fr=ow+'/'+r.s.its.length,fw=txtW(fr,14),done=ow>=r.s.its.length;
-     txt(fr,GX+GW-6,y+12,14,done?'#8ef0a8':'#cfccdd','right',false);tickIcon(GX+GW-14-fw,y+11,6.5,done?'#8ef0a8':'#8b88a0')}
-    ctx.fillStyle=hxa(hd[1],0.32);ctx.fillRect(GX+6,y+21,GW-12,1);y+=GHH;continue}
+     txt(fr,GX+GW-6,y+10,14,done?'#8ef0a8':'#cfccdd','right',false);tickIcon(GX+GW-14-fw,y+9,6.5,done?'#8ef0a8':'#8b88a0')}
+    ctx.fillStyle=hxa(hd[1],0.32);ctx.fillRect(GX+6,y+18,GW-12,1);y+=GHH;continue}
    r.its.forEach((it,k)=>card(it,GX+k*GCP,y,ri,k));
    // the jump-out the owner asked for: card-sized, last column, so it reads as one more thing in this pack
    if(r.tail){const p=packProduct(r.s.k.slice(3));if(p)button('vp_'+PRODUCTS.indexOf(p),GX+(GCOLS-1)*GCP,y,GCW,GCH,'',{bg:'#ffd9b0',draw:(w,h,sel)=>{
@@ -9384,9 +9804,9 @@ SCREENS.shop={enter(){this.pSel=null;// Ask the App Store for the catalogue the 
     ctx.fillStyle=sel?'#3a1470':'#9c4a00';rr(-28,8,56,21,10);ctx.fill();txt('OPEN',0,19,14,'#fff','center',false)}})}
    ri++;y+=GRH}}
   // the page number sits in the MIDDLE of the rail; it used to be drawn straight on top of the > button
-  if(multi){const py=GY0+GH-36;button('pg_prev',GX,py,86,36,'<',{fs:18,disabled:this.pg==0});
-   txt('Page '+(this.pg+1)+' / '+pgs.length,GX+GW/2,py+18,15,'#fff');
-   button('pg_next',GX+GW-86,py,86,36,'>',{fs:18,disabled:this.pg>=pgs.length-1})}
+  if(multi){const py=GY0+GH-40;button('pg_prev',GX+6,py,80,34,'<',{fs:18,disabled:this.pg==0});
+   txt('Page '+(this.pg+1)+' / '+pgs.length,GX+GW/2,py+17,15,'#fff');
+   button('pg_next',GX+GW-86,py,80,34,'>',{fs:18,disabled:this.pg>=pgs.length-1})}
   const s=UI.selId||'';const it=s.startsWith('it_')?ITEMS.find(i=>i.id==s.slice(3)):null;
   const pv=it||ITEMS.find(i=>i.id==S.eq[this.cat])||ITEMS.find(i=>i.id==defSave().eq[this.cat])||ITEMS[0];const pc=pv.cat=='c'?pv.id:S.eq.c,ph=pv.cat=='h'?pv.id:S.eq.h;
   if(pv.cat=='t'){const a=gtime*1.6,px=740+Math.cos(a)*90,py=250+Math.sin(a*2)*40;const tr=pv.id;const c={t_dust:'#fff',t_spark:'#fff6a8',t_bubble:'#aeefff',t_fire:['#ffd23f','#ff8c1a','#ff3d2e'][Math.random()*3|0],t_hearts:'#ff5c8a',t_stars:'#ffe066'}[tr];
@@ -9875,22 +10295,24 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
   else{ghostBtn(20,18,110,42,'< Back','rgba(255,255,255,.55)','#5d5c6b',18);if(pwOn()){ghostBtn(590,20,160,44,'Prize Wheel',!prem?'#ffd45e':'rgba(255,255,255,.55)','#1d1a2e',18);ghostBtn(758,20,172,44,'★ PREMIUM',prem?'#ffd45e':'#2a1450',prem?'#3a1470':'#ffd45e',19)}}
   uiPanel(590,76,340,446,{r:22,fill:prem?'#2e1250':UIC.plate,rim:prem?'rgba(255,212,94,.75)':null});
   const last=this.last[m];
-  if(!prem){txt('PRIZE WHEEL',760,110,30,'#fff');txt('Coins, gems and wheel-only skins',760,140,14,'#d8d5ea',undefined,false); // what is in it, in four words
+  if(!prem){hudPill(146,18,156,42);coinIcon(170,39,10,gtime*2);txt(curTxt(S.coins),188,40,22,'#fff','left'); // coins: what the ticket swap spends
+   txt('PRIZE WHEEL',760,110,30,'#fff');txt('Coins, gems and wheel-only skins',760,140,14,'#d8d5ea',undefined,false); // what is in it, in four words
    tixIcon(700,190,20);txt(tixTxt(),728,192,28,'#fff','left');
    if(!busy&&!drState().can)txt('Next daily reward in '+cdStr(),760,212,14,'#d8d5ea',undefined,false);
    txt(busy?'Good luck...':last?'Last win: '+last.txt:'1 ticket = 1 spin',760,232,16,busy?'#fff':last?'#ffd45e':'#d8d5ea',undefined,false);
    if(!blocked){if(S.dev||S.tix>0){ctx.globalAlpha=0.3+0.25*Math.sin(gtime*4);ctx.fillStyle='#b6ff7a';rr(612,250,296,86,18);ctx.fill();ctx.globalAlpha=1}
     button('spin',620,258,280,70,(S.dev||S.tix>0)?'SPIN!':'No tickets',{fs:32,disabled:!S.dev&&S.tix<=0,bg:'#7bdc3b',col:'#b6ff7a'});
     // Odds + Premium share this row (pwOn() is always true now - see above).
-    if(pwOn()){button('odds',620,342,136,40,'Odds',{fs:17});button('gopremium',764,342,136,40,'',{bg:'#2a1450',draw:(w,h,sel)=>{const c=sel?'#3a1470':'#ffd45e';star5(-44,0,8,c);txt('Premium',6,1,17,c,'center',false)}})}
+    if(pwOn()){button('odds',620,342,134,40,'Odds',{fs:17});button('gopremium',766,342,134,40,'',{bg:'#2a1450',draw:(w,h,sel)=>{const c=sel?'#3a1470':'#ffd45e';star5(-44,0,8,c);txt('Premium',6,1,17,c,'center',false)}})}
     else button('odds',620,342,280,40,'Odds',{fs:17});
     // coin sink: TIX_COST coins -> 1 ticket, TIX_BUY_MAX a day (see buyTix). Under the wheel so it can't be missed.
-    // Only enabled when it will actually work; the line under it says which of the two reasons is blocking it.
+    // Only enabled when it will actually work; its right-hand words say which of the two reasons is blocking it.
+    // (audit U9) It used to sit ON the wheel's bottom rim, with "You have N coins" as pale text on the pale sky at the
+    // very bottom edge. The bar now clears the rim, and the coin balance is a pill up top, the way the Shop shows it.
     {const left=tixBuyLeft(),poor=!S.dev&&S.coins<TIX_COST,can=canBuyTix();
-     button('buytix',140,484,320,36,'',{disabled:!can,bg:can?'#ffe9a8':'#ffffff',draw:()=>{const c=can?'#1d1a2e':'#6d6982';
+     button('buytix',140,490,320,34,'',{disabled:!can,bg:can?'#ffe9a8':'#ffffff',draw:()=>{const c=can?'#1d1a2e':'#6d6982';
       coinIcon(-136,0,10,gtime*2);txt(fmtN(TIX_COST),-120,1,17,c,'left',false);txt('->',-62,1,15,c,'center',false);tixIcon(-36,0,10);txt('1 ticket',-20,1,17,c,'left',false);
-      txt(left>0?left+' left today':'none left today',150,1,14,left>0?'#6d6982':'#c2185b','right',false)}});
-     txt(left<=0?'Resets tomorrow':poor?fmtN(TIX_COST-S.coins)+' more coins for a ticket':'You have '+curTxt(S.coins)+' coins',300,529,14,(left<=0||poor)?'#ffb3c1':'#d8d5ea',undefined,false)}}
+      txt(left<=0?'none left today':poor?'need '+fmtN(TIX_COST-S.coins)+' more':left+' left today',150,1,14,left>0&&!poor?'#6d6982':'#c2185b','right',false)}})}}
    else ghostBtn(620,258,280,70,busy?'SPINNING...':'SPIN!','rgba(255,255,255,.6)','#5d5c6b',28);
    // five small sentences down the panel was a block nobody read. Two paired lines, and the coin swap is gone from
    // here entirely - the swap button sits right under the wheel saying the same thing with a coin on it.
@@ -9904,7 +10326,7 @@ SCREENS.wheel={rot:{r:0,p:0},last:{r:null,p:null},prem:false,pa:0,pv:0,
    txt(busy?'Good luck...':free?'Club: 1 free spin this week!':last?'Last win: '+last.txt:clubOn()?'Club spin used - back next week':'Club members get a free spin a week',760,232,15,busy?'#fff':free||last?'#ffd45e':'#d8c8f0',undefined,false);
    if(!blocked){ctx.globalAlpha=0.3+0.25*Math.sin(gtime*4);ctx.fillStyle='#ffe08a';rr(612,250,296,86,18);ctx.fill();ctx.globalAlpha=1;
     button('spin',620,258,280,70,'',{bg:'#ffc93c',col:'#fff1a8',draw:()=>{if(free)txt('FREE SPIN',0,1,30,'#3a1470','center',false);else{txt('SPIN',-40,1,32,'#3a1470','center',false);gemShape(28,0,13,'#20b8c9');txt(''+PWHEEL_COST,46,1,26,'#3a1470','left',false)}}});
-    button('odds',620,342,136,40,'Odds',{fs:17});if(storeOn())button('getgems',764,342,136,40,'Get Gems',{fs:17,bg:'#c8f5cf'});else{txt('Earn gems by',832,353,14,'#f0dcff',undefined,false);txt('clearing levels',832,371,14,'#f0dcff',undefined,false)}}
+    button('odds',620,342,134,40,'Odds',{fs:17});if(storeOn())button('getgems',766,342,134,40,'Get Gems',{fs:17,bg:'#c8f5cf'});else{txt('Earn gems by',832,353,14,'#f0dcff',undefined,false);txt('clearing levels',832,371,14,'#f0dcff',undefined,false)}}
    else ghostBtn(620,258,280,70,busy?'SPINNING...':'SPIN','rgba(255,255,255,.6)','#5d5c6b',28);
    txt("WHAT'S INSIDE",760,396,14,'#ffd45e',undefined,false);
    // Odds are a required disclosure, so the whole list always fits inside the panel (bottom edge 522): the row pitch is
@@ -10295,8 +10717,9 @@ SCREENS.news={enter(a){this.from=(a&&a.from)||'menu';this.atp=-1;this.P=newsPage
    ctx.save();ctx.translate(NEWS_TX-24,y);ctx.rotate(-.14-(ia<1?(1-Math.min(1,ia*1.4))*2.2:0));ctx.fillStyle=INK;rr(-9,-9,17,17,4.5);ctx.fill();
    ctx.fillStyle=NEWS_DOT[q.i%NEWS_DOT.length];rr(-7,-7,13,13,3);ctx.fill();ctx.restore();
    q.l.forEach((s,k)=>txt(s,NEWS_TX,y+k*NEWS_LH,NEWS_FS,'#ffffff','left',false));ctx.restore();y+=q.l.length*NEWS_LH+NEWS_GAP}
-  // where you are: one dot per page, the current one a gold pill
-  if(P.length>1){const sp=18,x0=VW/2-(P.length-1)*sp/2,dy=NEWS_BY-13;
+  // where you are: one dot per page, the current one a gold pill - inside the card, clear of its rim (audit U8: the row
+  // used to sit right on the rim line)
+  if(P.length>1){const sp=18,x0=VW/2-(P.length-1)*sp/2,dy=NEWS_BY-24;
    P.forEach((q,i)=>{ctx.fillStyle=i==pg?'#ffd45e':'rgba(255,255,255,.3)';if(i==pg)rr(x0+i*sp-9,dy-4,18,8,4);else{ctx.beginPath();ctx.arc(x0+i*sp,dy,4,0,7)}ctx.fill()})}
   if(P.length>1){button('wnp',NEWS_X,474,150,42,'< Newer',{fs:17,disabled:pg<=0});button('wnn',VW-NEWS_X-150,474,150,42,'Older >',{fs:17,disabled:pg>=P.length-1})}},
  onBtn(id){if(id=='wnp'){this.turn(-1);return}if(id=='wnn'){this.turn(1);return}go(this.from)}};
@@ -10307,7 +10730,7 @@ SCREENS.news={enter(a){this.from=(a&&a.from)||'menu';this.atp=-1;this.P=newsPage
 // accumulates - and both of those are the EXISTING screens, opened with {from:'inv'} rather than rebuilt, so their
 // layouts, their behaviour and their save keys are untouched.
 const INV_TABS=[['c','Skins'],['h','Hats'],['t','Trails'],['n','Notes'],['a','Trophies']];
-const INV_CW=164,INV_CH=156,INV_CX=[40,219,398,577,756],INV_CY=[150,322],INV_PER=10;
+const INV_CW=164,INV_CH=152,INV_CX=[40,219,398,577,756],INV_CY=[148,316],INV_PER=10;
 function invOwned(cat){return ITEMS.filter(it=>it.cat==cat&&(S.own[it.id]||S.dev))}
 SCREENS.inv={enter(){if(!INV_TABS.some(t=>t[0]==this.tab))this.tab='c';this.pg=0;this.msg='';this.mt=0;musicPlay(0)},
  update(dt){uiNav(this);if(this.mt>0)this.mt-=dt;if(pressed.ESC)go('menu')},
@@ -10327,9 +10750,9 @@ SCREENS.inv={enter(){if(!INV_TABS.some(t=>t[0]==this.tab))this.tab='c';this.pg=0
     if(eq){chip(-42,bh/2-36,84,22,{fill:'#17703f'});txt('WORN',0,bh/2-25,13,'#ffffff','center',false)}
     else if(sel)txt('Tap to wear',0,bh/2-23,13,'#6d6982','center',false)}})});
   // the foot line sits on the raw sky, so it gets a plate - white on the palest one is only 3:1 bare
-  if(pgs>1){button('ivp',40,492,64,38,'<',{fs:20,disabled:pg<=0});button('ivn',VW-104,492,64,38,'>',{fs:20,disabled:pg>=pgs-1});
-   textPlate('Page '+(pg+1)+' of '+pgs+'   ·   '+own.length+' owned',VW/2,511,15,'#ffffff')}
-  else textPlate(own.length+' owned',VW/2,505,15,'#ffffff');
+  if(pgs>1){button('ivp',40,484,64,34,'<',{fs:20,disabled:pg<=0});button('ivn',VW-104,484,64,34,'>',{fs:20,disabled:pg>=pgs-1});
+   textPlate('Page '+(pg+1)+' of '+pgs+'   ·   '+own.length+' owned',VW/2,501,15,'#ffffff')}
+  else textPlate(own.length+' owned',VW/2,501,15,'#ffffff');
   if(this.mt>0)txt(this.msg,VW/2,138,16,'#7bdc3b',undefined,false)},
  // Notes: how far you are, per world, then the door to the existing gallery.
  drawNotes(){const G=noteGroups(),f=notesFound();
@@ -10462,23 +10885,25 @@ SCREENS.settings={enter(){this.conf=0},
  update(dt){sldUpd();sldKeys(dt||0);uiNav(this);if(this.conf&&gtime-this.confT>3)this.conf=0;if(pressed.ESC)go('menu')},
  draw(){menuBG();backBtn();header('SETTINGS');const on=v=>v?'ON':'OFF';
   panel(44,84,418,350);sectTitle('AUDIO',66,110);txt('drag, or ← →',440,110,13,'rgba(255,255,255,.55)','right',false);
-  AUDROWS.forEach((r,i)=>slider('v_'+r[1],58,128+i*58,390,52,r[0],()=>audGet(r[1],r[2]),v=>audSet(r[1],r[2],v)));
+  // (audit U7) the rows, and the keys on the right, keep 12-14px between them - with 6px the focused row's ring ran
+  // over the next one, and the side-by-side pairs (4px apart) touched even with nothing focused
+  AUDROWS.forEach((r,i)=>slider('v_'+r[1],58,128+i*64,390,50,r[0],()=>audGet(r[1],r[2]),v=>audSet(r[1],r[2],v)));
   {const sel=AUDROWS.find(r=>UI.selId=='v_'+r[1]);
-   if(sel)wrapText(sel[3],384,13).slice(0,3).forEach((l,k)=>txt(l,66,374+k*19,13,'#d8d5ea','left',false))}
+   if(sel)wrapText(sel[3],384,13).slice(0,3).forEach((l,k)=>txt(l,66,382+k*19,13,'#d8d5ea','left',false))}
   panel(498,84,418,150);sectTitle('DISPLAY & MOTION',520,110);
   button('gfx',514,124,386,42,'Graphics: '+SET_GN[S.set.gfx||'auto'],{fs:19});
-  button('shake',514,176,188,42,'Shake: '+on(S.set.shake),{fs:17});button('rm',706,176,188,42,'Less Motion: '+on(S.set.rm),{fs:15});
+  button('shake',514,178,187,42,'Shake: '+on(S.set.shake),{fs:17});button('rm',713,178,187,42,'Less Motion: '+on(S.set.rm),{fs:15});
   // GAME rows, 48 apart from 284: Vibration | Feedback, New-thing tips | Field Guide, (web only) the play trace, then
   // Dev Mode (dev builds) and Reset Save. The panel and the footer below it follow however many rows there are.
   const web=!window.HopNative,RW=[284,332,380,428,476],rTr=2,rDev=web?3:2,rRes=rDev+(DEV_OK?1:0),gh=RW[rRes]+54-246;
   panel(498,246,418,gh);sectTitle('GAME',520,272);
   // Vibration (the iPhone haptics, see haptic()) shares the top row with Feedback, the same half-width pair as
   // Shake / Less Motion. It shows on the web too, where it simply has nothing to switch.
-  button('vib',514,284,188,40,'Vibration: '+on(S.set.vib),{fs:17});
-  button('feedback',706,284,188,40,'Send Feedback',{fs:16});
+  button('vib',514,284,187,36,'Vibration: '+on(S.set.vib),{fs:17});
+  button('feedback',713,284,187,36,'Send Feedback',{fs:16});
   // the first-encounter cards (see FIRST-ENCOUNTER TIPS): switch them off, or open the guide that lists them all
-  button('meet',514,332,188,40,'New-thing tips: '+on(meetOn()),{fs:meetOn()?15:14});
-  button('field',706,332,188,40,'Field Guide',{fs:17});
+  button('meet',514,332,187,36,'New-thing tips: '+on(meetOn()),{fs:meetOn()?15:14});
+  button('field',713,332,187,36,'Field Guide',{fs:17});
   // Play trace: lets a real run be recorded and handed over, so levels can be built
   // around how the player actually moves instead of around what a solver can reach.
   // Half-width pair on ONE row: the footer hint line starts at y452, so this panel
@@ -10488,12 +10913,12 @@ SCREENS.settings={enter(){this.conf=0},
    * the shipped iOS app, where a 'Record My Play' button in Settings would just
    * puzzle players and invite questions from App Review. */
   if(web){
-   button('trace',514,RW[rTr],188,40,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
+   button('trace',514,RW[rTr],187,36,TRACE.on?('Rec  '+TRACE.buf.length):'Record Play',
     {fs:TRACE.on?15:16,bg:TRACE.on?'#c8f5cf':'#ffffff'});
-   button('tracesave',706,RW[rTr],188,40,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
+   button('tracesave',713,RW[rTr],187,36,'Save Data',{fs:16,bg:TRACE.buf.length?'#ffffff':'#e8e6f0'});
   }
-  if(DEV_OK)button('dev',514,RW[rDev],386,40,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
-  button('reset',514,RW[rRes],386,40,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
+  if(DEV_OK)button('dev',514,RW[rDev],386,36,S.dev?'Dev Mode: ON  (tap to turn off)':'Dev Mode …',{fs:16,bg:S.dev?'#c8f5cf':'#ffffff'});
+  button('reset',514,RW[rRes],386,36,this.conf?'Tap again: erase progress (purchases kept)':'Reset Save',{bg:this.conf?'#ff8a8a':'#ffffff',col:this.conf?'#ff5c6c':'#ffd45e',fs:this.conf?14:19});
   // How to Play lives HERE - it is where people look for it, and it is also the way to replay the tutorial once the
   // first run has forced it. Credits is NOT here any more: it is the byline in the main menu's bottom-left corner.
   // Pushed LAST so the first Audio slider keeps the default keyboard selection.
@@ -11059,25 +11484,41 @@ SCREENS.race={enter(a){this.T=raceTracks();if(!this.sel||this.T.indexOf(this.sel
   if(id[0]=='t'){const k=id.slice(1);if(this.sel===k&&UI.wasSel)return startRace(k,this.lu&&this.lu.key==k?this.lu:null);this.sel=k;this.lu=null}}};
 
 // ---- RESULTS ---------------------------------------------------------------------------------------------------------
-SCREENS.rdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);if(r.place==1)confetti(60)},
+SCREENS.rdone={enter(r){this.r=r;this.t=0;this.sf={};FX.length=0;musicPlay(7);if(r.place==1)confetti(60)},
  update(dt){this.t+=dt;updParts(FX,dt);if(G&&G.rc)G.rc.t+=dt; // the rest of the field keeps running behind the board
+  if(this.r.pb)resSfx(this,'pb',0.4+this.r.rows.length*0.07+0.3,'check');
   if(this.t>0.4)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.4)this.onBtn('list')},
- draw(){drawWorld();ctx.fillStyle='rgba(12,10,26,.55)';ctx.fillRect(0,0,VW,VH);drawParts(FX);const r=this.r,x0=VW/2-300,w=600;
-  racePlate(x0,28,w,388,{fill:'rgba(22,17,44,.94)',r:14,line:r.place==1?'rgba(255,212,94,.55)':'rgba(255,255,255,.16)'});
-  txt(raceOrd(r.place)+' PLACE',VW/2,72,40,r.place==1?'#ffd45e':'#ffffff','center',false);
-  txt(raceName(r.key),VW/2,106,15,'#b9b4cf','center',false);
-  const best=r.rows[0].t;
-  r.rows.forEach((q,i)=>{const y=150+i*50,me=q.r.me;if(me){ctx.fillStyle='rgba(255,212,94,.12)';rr(x0+16,y-22,w-32,44,8);ctx.fill()}
-   txt(String(i+1),x0+44,y,22,me?'#ffd45e':'#d8d4ea','center',false);
-   drawSq(x0+86,y+12,24,gtime,{c:q.r.c,h:q.r.h,face:1,lx:0.4});
-   txt(q.r.name,x0+112,y-7,18,me?'#ffd45e':'#ffffff','left',false);
-   txt(q.r.id=='rival'?'matches your pace':q.r.id=='best'?'your fastest run':me?'this run':'bot',x0+112,y+12,11,'#9f9abb','left',false);
-   txt(q.t!=null?fmtT(q.t):'DNF',x0+w-120,y,19,'#ffffff','right',false);
-   if(i>0&&q.t!=null&&best!=null)txt('+'+(q.t-best).toFixed(2),x0+w-30,y,14,'#9f9abb','right',false)});
-  let foot=[];if(r.coins)foot.push('+'+r.coins+' coins');if(r.pb)foot.push(r.prev?'New best run: '+fmtT(r.t)+' (was '+fmtT(r.prev)+')':'Saved as your ghost');
-  if(foot.length)txt(foot.join('     '),VW/2,362,16,r.pb?'#9cf26a':'#ffd45e','center',false);
-  txt(r.pace!=null?'Rival pace now '+fmtT(r.pace)+' (your last '+Math.min(5,raceRuns(r.key))+')':'',VW/2,390,12,'#9f9abb','center',false);
-  button('again',VW/2-250,432,240,54,'Race Again',{bg:UIC.green,col:UIC.green,ic:'restart',r:12});button('list',VW/2+10,432,240,54,'Tracks',{r:12})},
+ // the RESULTS BOARD family (see RESULTS BOARDS), over the race that is still running: the place as the headline, the
+ // finishing order as the hero - each racer sliding in, top to bottom - then what the run paid and what it changed
+ draw(){drawWorld();ctx.fillStyle='rgba(12,10,26,.55)';ctx.fillRect(0,0,VW,VH);const r=this.r,t=resNow(this),x0=VW/2-RES_W/2,w=RES_W,n=r.rows.length;
+  const best=r.rows[0].t,pills=[];
+  if(r.pb)pills.push([r.prev?'NEW BEST RUN':'SAVED AS YOUR GHOST','#7bdc3b']);
+  const notes=[];if(r.pb&&r.prev)notes.push('Was '+fmtT(r.prev));if(r.pace!=null)notes.push('Rival pace now '+fmtT(r.pace)+' (your last '+Math.min(5,raceRuns(r.key))+')');
+  const tList=0.35,tFoot=tList+n*0.07+0.3,
+   // row height: as roomy as the screen allows for this many racers (THE TOP has six), so the keys never leave the screen
+   foot=(r.coins||pills.length?44:0)+(notes.length?notes.length*20+4:0),rh=Math.max(30,Math.min(46,Math.floor((474-92-RES_KG-RES_KH-20-4-14-foot)/n)));
+  const rows=[{h:n*rh+4,draw:y=>r.rows.forEach((q,i)=>{const a=resA(t,tList+i*0.07,0.26);if(a<=0)return;const cy=y+i*rh+rh/2,me=q.r.me;
+     ctx.save();ctx.globalAlpha*=a;if(!RM())ctx.translate((1-eob(a))*-24,0);
+     if(me){ctx.fillStyle='rgba(255,212,94,.14)';rr(x0+14,cy-rh/2+3,w-28,rh-6,10);ctx.fill();ctx.fillStyle='#ffd45e';rr(x0+14,cy-rh/2+3,5,rh-6,2.5);ctx.fill()}
+     dtxt(String(i+1),x0+46,cy,rh>40?24:20,me?'#ffd45e':'#d8d4ea');
+     const sq=rh>40?26:22;drawSq(x0+88,cy+sq/2,sq,gtime,{c:q.r.c,h:q.r.h,face:1,lx:0.4});
+     const sub=q.r.id=='rival'?'matches your pace':q.r.id=='best'?'your fastest run':me?'this run':'bot';
+     if(rh>=40){dtxt(q.r.name,x0+116,cy-8,19,me?'#ffd45e':'#ffffff','left');txt(sub,x0+116,cy+12,12,'#a9a4c4','left',false)}
+     else{dtxt(q.r.name,x0+116,cy,18,me?'#ffd45e':'#ffffff','left');txt(sub,x0+116+dW(q.r.name,18)+10,cy+1,12,'#a9a4c4','left',false)}
+     dtxt(q.t!=null?fmtT(q.t):'DNF',x0+w-118,cy,21,'#ffffff','right');
+     if(i>0&&q.t!=null&&best!=null)txt('+'+(q.t-best).toFixed(2),x0+w-30,cy+1,14,'#a9a4c4','right',false);
+     ctx.restore()})},
+   {h:14,draw:y=>resRule(y+5)}];
+  if(r.coins||pills.length)rows.push({h:44,draw:y=>{
+    // the coins and the best-run pill share one centred line when there are both
+    if(r.coins&&pills.length){const pw=pillW(pills[0][0]),rw=24+dW('+'+r.coins,26)+7+txtW('coins',15),W=rw+28+pw,x=VW/2-W/2;
+     ctx.save();ctx.translate(x+rw/2-VW/2,0);resRewards([['coin',r.coins,'coins','#ffd45e']],y+21,t,tFoot,0.4);ctx.restore();
+     ctx.save();ctx.translate(x+rw+28+pw/2-VW/2,0);resPills(pills,y+21,t,tFoot+0.15);ctx.restore()}
+    else if(r.coins)resRewards([['coin',r.coins,'coins','#ffd45e']],y+21,t,tFoot,0.4);else resPills(pills,y+21,t,tFoot)}});
+  if(notes.length)rows.push({h:notes.length*20+4,draw:y=>{ctx.save();ctx.globalAlpha*=resA(t,tFoot+0.2);notes.forEach((s,i)=>txt(s,VW/2,y+9+i*20,14,'#b9b4d2','center',false));ctx.restore()}});
+  const ky=resBoard({head:raceOrd(r.place)+' PLACE',hc:r.place==1?'#ffd45e':'#ffffff',sub:raceName(r.key),acc:r.place==1?'#ffd45e':'#8f88b8',fill:'rgba(37,30,66,.97)',t:this.t,rows,hs:46});
+  resKeys(ky,[['again','Race Again',240,{bg:UIC.green,col:UIC.green,ic:'restart'}],['list','Tracks',240]],'again');
+  drawParts(FX)},
  onBtn(id){if(id=='again')return startRace(this.r.key);go('race')}};
 
 // ---- SPEED COURSE GHOST ----------------------------------------------------------------------------------------------
@@ -11115,9 +11556,7 @@ SCREENS.pause.onBtn=(f=>function(id){if(id=='pbg')return cgToggle();if(id=='quit
 SCREENS.courses.draw=(f=>function(){f.apply(this,arguments);button('pbg',VW/2-110,450,220,44,cgLabel(),{fs:18,r:10});
  txt(S.set.pbg===0?'Your fastest run stays hidden':'Your fastest run races alongside you',VW/2,512,13,'#ffffff','center')})(SCREENS.courses.draw);
 SCREENS.courses.onBtn=(f=>function(id){if(id=='pbg')return cgToggle();return f.apply(this,arguments)})(SCREENS.courses.onBtn);
-// the finish screen: how the run compared with the ghost it was chasing
-SCREENS.cdone.draw=(f=>function(){f.apply(this,arguments);const C=G&&G.cg;if(!C||C.split==null||S.set.pbg===0)return;
- const d=C.split,s=(d<0?'-':'+')+Math.abs(d).toFixed(2)+'s';txt(s,VW/2+238,190,24,d<0?'#7bdc3b':'#ff8a7a','center',false);txt('vs ghost',VW/2+238,214,12,'#b9b6c6','center',false)})(SCREENS.cdone.draw);
+// the finish screen shows how the run compared with the ghost it was chasing: SCREENS.cdone.draw reads G.cg.split
 // More Modes: the Race card sits right after Speed Courses
 modeCards=(f=>function(){const a=f.apply(this,arguments),n=raceTracks().length,k=a.findIndex(m=>m.k=='speed');
  a.splice(k+1,0,{k:'race',ic:'race',c:'#ff5f6d',n:'RACE',d:'You vs three ghost racers.',ok:n>0,lock:'No tracks',stat:n+' track'+(n==1?'':'s'),go:()=>go('race')});return a})(modeCards);
@@ -11238,7 +11677,7 @@ function frame(now){const raw=Math.max(0,(now-last)/1000),dt=Math.min(0.05,raw);
  else if((S.set.gfx||'auto')=='auto'&&AUTOLV<2&&SCR===SCREENS.play&&!rot){if(fpsEma>Math.max(0.027,minDt*1.4)){slowT+=dt;if(slowT>2.5){AUTOLV++;applyGfx();toast('Graphics lowered','Change it in Settings','info')}}else slowT=Math.max(0,slowT-dt*0.5)}
  try{
  // M un-mutes to an audible level: if the Music slider itself was dragged to 0, "Music on" has to actually mean on
- if(pressed.MUTE){S.set.music=S.set.music?0:1;if(S.set.music&&!vnum('vmus',0.8))S.set.vmus=defSave().set.vmus;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info')}
+ if(pressed.MUTE){S.set.music=S.set.music?0:1;if(S.set.music&&!vnum('vmus',0.8))S.set.vmus=defSave().set.vmus;applyVol();save();toast(S.set.music?'Music on':'Music off','Press M to toggle','info',S.set.music?'note':'mute')}
  const updOn=UPD&&(SCR===SCREENS.menu||SCR===SCREENS.title||SCR===SCREENS.levels),UR=SCR===SCREENS.menu?{x:300,y:392,w:330,h:36}:SCR===SCREENS.levels?{x:VW-300,y:20,w:280,h:38}:{x:VW/2-160,y:20,w:320,h:38};
  if(updOn&&mouse.click&&inR(mouse,UR)){mouse.click=false;try{location.reload()}catch(e){}}
  // remTap runs BEFORE the screen's own update so a tap that landed on the reminder isn't also read as a menu press -

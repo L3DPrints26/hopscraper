@@ -74,7 +74,10 @@ window.ART = (() => {
   }
   const world = ti => (A.on && WP[ti]) ? pack(WP[ti].dir, WP[ti].names) : null;
   const hz = () => A.on ? pack('hz', HZ) : null;
-  A.load = key => new Promise(res => { const k = typeof key === 'number' ? WP[key] && WP[key].dir : key; if (!k) return res(); (k === 'hz' ? hz() : world(WP.findIndex(w => w.dir === k)));
+  // is world ti's whole backdrop in? (asking starts the download.) The level map bakes a world's scene once, so it
+  // waits for the real pictures instead of baking the code stand-in for good.
+  A.bgReady = ti => { const p = world(ti); return !!p && BG.every(n => ok(p.im[n])); };
+  A.load =key => new Promise(res => { const k = typeof key === 'number' ? WP[key] && WP[key].dir : key; if (!k) return res(); (k === 'hz' ? hz() : world(WP.findIndex(w => w.dir === k)));
     const chk = () => (!PK[k] || PK[k].done) ? res() : setTimeout(chk, 30); chk(); });
   // Blocks are baked into the level's chunk canvases once, so a world's blocks that were baked as code art before its
   // pack arrived are thrown away here and re-baked with the pictures on the next frame (the lava in them, for 'hz').
