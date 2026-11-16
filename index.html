@@ -71,6 +71,7 @@ const CHANGELOG=[
   'Endless never ends now. There’s no top, and the higher you climb, the weirder it gets.',
   'Endless and the Weekly Climb open right after the tutorial. No need to beat World 2 first.',
   'A Button Guide on the main menu shows what every button does, one at a time.',
+  'The Weekly Climb is one tap away now, right next to PLAY.',
   'Meet something new and the game tells you what it is: friendly or dangerous. Every card is in the new Field Guide.',
   'Speed Courses show your fastest run as a ghost to race against. Turn it off on the course list or in Pause.',
   'Locked doors got fixed up: grab the key and the door slides into the wall, and it stays open even if you die.',
@@ -3347,7 +3348,11 @@ const TUT={wd:0,n:'Tutorial',W:112,H:22,t:60,s:[3,18],e:[108,18],k:[[33,18]],key
   [55,61,'Saws: touch one and you’re out. Wait for it to pass, then go.',null],[62,66,'Bounce pads launch you way up, higher than any jump. Try it!',null],[67,79,'Lava: touch it and you’re out. Crumbling blocks drop out a moment after you land, so keep moving.',null],
   [80,91,'Grab the key and its locked door slides open.',null],[92,99,'Lasers switch on and off. Their ends glow right before they fire, so go while they’re off.',null],[100,105,'Conveyor belts carry you the way the arrows point.',null],[106,111,"That's it! Touch the door to finish.",null]]};
 function startTutorial(){const L=buildLevel(TUT);G=newG({mode:'tut',idx:-1,L,intro:0,tipT:0});spawn();updCam(0,true);enterPlay(0)}
-function startEndless(daily){TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?climbWeek()*7919+20261:(Math.random()*1e9|0);const L=endLevel(seed);
+// endHome: where the run-over screen's Back goes - MODES, as always, unless the run was started from the main menu's
+// Weekly Climb key, which comes back to the menu. Callers that start a fresh run say which; a retry (Climb Again, R)
+// passes nothing and keeps it.
+let endHome='modes';
+function startEndless(daily,home){if(home)endHome=home;TRACE.lvl=daily?'daily':'endless';traceEv('start',{mode:daily?'daily':'endless'});const seed=daily?climbWeek()*7919+20261:(Math.random()*1e9|0);const L=endLevel(seed);
  G=newG({mode:daily?'daily':'endless',idx:-1,L,lavaY:(L.start.y+7)*TS,tipT:6,dailyDay:daily?weekStr():''});
  if(devOn()&&DEVW.god){G.god=true;G.devRun=true} // DEV god mode carries over to the next run (see devJump)
  wzReset(0);spawn();updCam(0,true);enterPlay(SONG_CLIMB)}
@@ -7841,7 +7846,8 @@ function sldKeys(dt){const b=UI.prev.find(q=>q.id==UI.selId&&q.o.sld);if(!b){SLD
 function sldClick(b){if(!b||!b.o.sld)return false;const t=sldTrack(b);SLD.lv=b.o.get();sldSet(b,(mouse.x-t.x)/t.w);return true}
 function navDir(L,c,dx,dy){const cx=c.x+c.w/2,cy=c.y+c.h/2;let best=null,bd=1e9;for(const b of L){if(b===c)continue;const ddx=b.x+b.w/2-cx,ddy=b.y+b.h/2-cy,along=ddx*dx+ddy*dy;if(along<=4)continue;const perp=Math.abs(ddx*dy)+Math.abs(ddy*dx),d=along+perp*2.2;if(d<bd){bd=d;best=b}}return best}
 function uiNav(scr){const L=UI.prev;if(!L.length)return;let cur=L.find(b=>b.id==UI.selId);if(!cur){UI.selId=L[0].id;cur=L[0]}
- function act(b){if(b.o.disabled){sfx('no');return}UI.hit={id:b.id,t:gtime};sfx('click');scr.onBtn(b.id,b)}
+ // o.why: a locked key that says why on a tap ([title, line] as a toast) instead of only buzzing
+ function act(b){if(b.o.disabled){sfx('no');if(b.o.why)whyToast(b.o.why);return}UI.hit={id:b.id,t:gtime};sfx('click');scr.onBtn(b.id,b)}
  // UI.kb: selection came from the keyboard (hover never switches tabs). UI.wasSel: this activation hit a button that was
  // already chosen by an earlier click/tap or by the keyboard - shops use it for "first tap selects, second tap buys".
  if(mouse.moved){for(const b of L)if(inR(mouse,b)&&UI.selId!=b.id){UI.selId=b.id;cur=b;UI.kb=false;sfx('move')}mouse.moved=false}
@@ -7852,6 +7858,9 @@ function uiNav(scr){const L=UI.prev;if(!L.length)return;let cur=L.find(b=>b.id==
 
 const toasts=[],FX=[];
 function toast(a,b,ty){toasts.push({a,b,ty,t:0})}
+// the reason a locked key gives when tapped - once: tapping it five times queues one toast, not five
+function whyToast(w){if(!toasts.some(q=>q.a==w[0]))toast(w[0],w[1],'info')}
+const TUT_WHY=['Finish the tutorial first','It takes about a minute'];
 // TOAST_LIFE was 3.6s, of which 0.3 fades in and the last 0.4 fades out - so under three seconds fully readable,
 // for two lines. The owner's note: they do not stay long enough. 5.4 gives four and a half seconds of solid text,
 // which is roughly twice as long as it takes to read one, without the lane filling up on a busy screen.
@@ -7871,89 +7880,118 @@ function updToasts(dt){for(let i=Math.min(toastSlots(),toasts.length)-1;i>=0;i--
 // under the first toast row, so a second toast lands on the subscription's price and the Terms of Use / Privacy
 // links. Subscribing fires three at once (welcome, Club skin, daily gems) - owner saw them buried the panel.
 // Extra toasts are not dropped, they wait: updToasts only ages the visible ones.
-function toastSlots(){return SCR===SCREENS.shop?1:SCR===SCREENS.menu?3:4}
-function drawToasts(){const bot=SCR===SCREENS.worlds,men=SCR===SCREENS.menu,W=men?232:316;
- toasts.slice(0,toastSlots()).forEach((o,i)=>{const k=o.t<TOAST_IN?ease(o.t/TOAST_IN):o.t>TOAST_LIFE-TOAST_OUT?1-(o.t-(TOAST_LIFE-TOAST_OUT))/TOAST_OUT:1;
-  const x=men?20-(1-k)*300:bot?VW/2-158:VW-330+(1-k)*360,y=men?204+i*62:bot?VH-62-i*62+(1-k)*26:64+i*64;ctx.globalAlpha=clamp(k,0,1);chip(x,y,W,56,{r:14,rim:o.ty=='ach'?'#ffd45e':'#8dd3ff',fill:'#28214a'});
- if(o.ty=='ach')uiIcon('star',x+30,y+28,13);else{ctx.fillStyle=INK;ctx.beginPath();ctx.arc(x+30,y+28,11.5,0,7);ctx.fill();ctx.fillStyle='#8dd3ff';ctx.beginPath();ctx.arc(x+30,y+28,9,0,7);ctx.fill()}
- txt(fitStr(o.a,W-64,16),x+54,y+19,16,o.ty=='ach'?'#ffd45e':'#fff','left',false);{const bl=wrapText(o.b||'',W-64,14).slice(0,2);bl.forEach((l,k)=>txt(l,x+54,(bl.length>1?y+32:y+38)+k*15,14,'#d8d5ea','left',false))}ctx.globalAlpha=1})} // subtitle wraps to 2 lines instead of being cut
+// THE 2.0 LOOK: the reminder banner's little sibling - the same flat card (ONE ink outline, a flat navy face, no inner
+// rim) with a round badge that says what kind of news it is (gold star = you earned something, blue i = information).
+// It is as tall as its words: the title, then the line under it on one row or wrapped to two - the old fixed 56px card
+// let a two-row line run out of its bottom edge on the menu, where toasts are narrower. Menu toasts are 256 wide now
+// (x20..276, still clear of PLAY's focus ring at ~x286) and stop at y362, clear of Leaderboards' focus ring (~y369): toastSlots()
+// counts how many fit there, and the rest wait their turn exactly as before.
+const TOAST_MEN={x:20,y:196,w:256,bot:362},TOAST_GAP=8;
+function toastW(){return SCR===SCREENS.menu?TOAST_MEN.w:316}
+// the line, wrapped to the card (two rows at most, the second ellipsised if it still runs over); cached per width.
+// A "word" wider than the card (the store link in Share's fallback toast) is broken after its last / or - that fits.
+function toastLines(o,W){if(o.lw!==W){o.lw=W;const w=W-66,L=[];
+  for(let l of wrapText(String(o.b||''),w,14)){while(l.length>1&&txtW(l,14)>w){let k=l.length-1;while(k>1&&txtW(l.slice(0,k),14)>w)k--;
+    const c=Math.max(l.lastIndexOf('/',k-1),l.lastIndexOf('-',k-1))+1;if(c>k*0.5)k=c;L.push(l.slice(0,k));l=l.slice(k)}L.push(l)}
+  o.ln=L.length>2?[L[0],fitStr(L.slice(1).join(' '),w,14)]:L}return o.ln}
+function toastH(o,W){const n=toastLines(o,W).length;return n>1?70:n?54:40}
+function toastSlots(){if(SCR===SCREENS.shop)return 1;if(SCR!==SCREENS.menu)return 4;
+ let y=TOAST_MEN.y,n=0;for(const o of toasts){y+=toastH(o,TOAST_MEN.w);if(y>TOAST_MEN.bot&&n)break;n++;y+=TOAST_GAP;if(n>=3)break}return Math.max(1,n)}
+function drawToasts(){const bot=SCR===SCREENS.worlds,men=SCR===SCREENS.menu,W=toastW();let yy=men?TOAST_MEN.y:bot?VH-14:64;
+ toasts.slice(0,toastSlots()).forEach(o=>{const k=o.t<TOAST_IN?ease(o.t/TOAST_IN):o.t>TOAST_LIFE-TOAST_OUT?1-(o.t-(TOAST_LIFE-TOAST_OUT))/TOAST_OUT:1,h=toastH(o,W),L=toastLines(o,W);
+  const rm=RM(),x=men?TOAST_MEN.x-(rm?0:(1-k)*300):bot?VW/2-158:VW-330+(rm?0:(1-k)*360),y=bot?yy-h+(rm?0:(1-k)*26):yy;yy=bot?yy-h-TOAST_GAP:yy+h+TOAST_GAP;
+  ctx.save();ctx.globalAlpha=clamp(k,0,1);
+  ctx.fillStyle='rgba(10,6,26,.24)';rr(x,y+4,W,h,14);ctx.fill();ctx.fillStyle=INK;rr(x-2.5,y-2.5,W+5,h+5,16.5);ctx.fill();ctx.fillStyle='#272046';rr(x,y,W,h,14);ctx.fill();
+  const ach=o.ty=='ach',bc=ach?'#ffd45e':o.ty=='good'?'#7bdc3b':o.ty=='bad'?'#ff6b81':'#8dd3ff',bx=x+27,by=y+(L.length>1?27:h/2);
+  ctx.fillStyle=bc;ctx.beginPath();ctx.arc(bx,by,15,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
+  if(ach){ctx.fillStyle=INK;star5(bx,by+0.5,9.5,'#ffffff',INK,2)}
+  else{ctx.font=`bold 19px ${DFONT}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=INK;ctx.fillText(o.ty=='bad'?'!':'i',bx,by+1.5)}
+  const tx=x+52,ty=L.length?y+18:y+h/2;
+  ctx.font='bold 16px '+DFONT;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=ach?'#ffd45e':'#ffffff';
+  {let s=String(o.a);if(ctx.measureText(s).width>W-66){while(s.length>1&&ctx.measureText(s+'…').width>W-66)s=s.slice(0,-1);s+='…'}ctx.fillText(s,tx,ty)}
+  L.forEach((l,i)=>txt(l,tx,y+37+i*17,14,'#cfc9e6','left',false));
+  ctx.restore()})}
 function firework(x,y){const hue=rnd(0,360);for(let i=0;i<46;i++){const a=i/46*Math.PI*2,sp=rnd(120,260),l=rnd(0.8,1.4);FX.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l,ml:l,c:`hsl(${hue+rnd(-20,20)},95%,65%)`,s:rnd(2,4),g:160,drag:1.2,sh:'sq'})}sfx('boom')}
 function confetti(n){for(let i=0;i<n;i++){const l=rnd(2,4);FX.push({x:rnd(0,VW),y:rnd(-60,-10),vx:rnd(-40,40),vy:rnd(60,200),l,ml:l,c:`hsl(${rnd(0,360)},90%,62%)`,s:rnd(4,8),g:40,sh:'sq'})}}
 
 // ================= GENTLE REMINDERS =================
 // IN-GAME ONLY. No push notifications, no permission prompts, nothing that can reach the player with the game closed.
-// A reminder is a banner in the strip along the bottom of the MAIN MENU - a lane nothing else draws in, so it never
-// covers a button and never has to swallow a tap meant for one (remTap only consumes a click that actually landed
-// inside its own rect, and it never takes keyboard focus at all). It is never shown during play or on a results
-// screen, so it cannot block play or steal a jump.
+// A reminder is a slim banner in the top lane (REM_R, below) of the MAIN MENU and of the two "your run is over"
+// screens - a lane nothing else draws in, so it never covers a button and never has to swallow a tap meant for one
+// (remTap only consumes a click that actually landed inside its own rect, and it never takes keyboard focus at all).
+// It is never shown during play, so it cannot block play or steal a jump.
 // NEVER NAG, three ways over:
 //   - `when` is re-checked every frame, so one that stops being true (you spent the ticket) removes itself;
 //   - acting on it, dismissing it with the x, letting it time out, or even just having read it for 3s retires it;
 //   - a retired rule is done for the whole session (REM.done is only cleared by reloading the game).
 // Stays REM_HOLD seconds, which is long enough to read two lines twice over, and fades rather than popping away.
+// THE 2.0 PASS (owner: "the notifications that pop up need major reworking, they look kinda stupid and some are really
+// old"). Every line was checked against the code. Gone: the Weekly Climb one (the menu has its own Weekly Climb key
+// now), and every gameplay tip that the tutorial, the first-encounter cards or the Field Guide already teach - thin
+// platforms, purple zones and bounce pads, wall jumps, the hidden notes - plus the toy square's, which he teaches
+// himself ("Drag me."). Every one left says one thing in a title and one short line, and a tap opens what it is about.
+// A rule: k key, c badge colour, ic(x,y) its icon, a() title, b() the line, when() still true?, go() what a tap opens.
+// No go = there is nothing to open (a controls tip): no arrow is drawn and a tap anywhere just closes it.
 const REM_HOLD=9,REM_IN=0.5,REM_OUT=0.7,REM_DELAY=1.3,REM_READ=3;
 const REM_RULES=[
- {k:'tix',c:'#ff8fd8',ic:(x,y)=>tixIcon(x,y,14),
-  a:()=>'You have '+S.tix+' free spin'+(S.tix==1?'':'s')+' waiting',
-  b:()=>'Tap here to open the Prize Wheel and use them.',
+ {k:'tix',c:'#ff8fd8',ic:(x,y)=>tixIcon(x,y,9.5),
+  a:()=>S.tix==1?'You have a free spin':'You have '+fmtN(S.tix)+' free spins',
+  b:()=>'Tap to spin the Prize Wheel.',
   when:()=>!S.dev&&S.tix>0,go:()=>go('wheel')},
- {k:'daily',c:'#ff77c8',ic:(x,y)=>{ctx.save();ctx.translate(x,y);modeIcon('daily',13,'#14102a','#ffffff');ctx.restore()},
-  a:()=>'Have you tried this week’s Weekly Climb?',
-  b:()=>'Everyone gets the same tower all week. A new one in '+wkStr()+'.',
-  when:()=>endOpen()&&S.daily.d!=weekStr(),go:()=>go('modes')},
 ];
 // ---- TIPS -------------------------------------------------------------------------------------------------------
-// The reminders above are TIME-SENSITIVE (a ticket is waiting, today's tower is unplayed) and always win. Tips are
-// the opposite: they never expire, so they are only shown once the reminder queue has nothing true to say, and they
-// come with a long gap between them so the strip stays a strip and not a feed.
+// The reminders above are TIME-SENSITIVE (a ticket is waiting) and always win. Tips are the opposite: they never
+// expire, so they are only shown once the reminder queue has nothing true to say, and they come with a long gap
+// between them so the strip stays a strip and not a feed.
 // Written for a player who has never opened a menu in their life: one plain fact per tip, no jargon, and every tip
-// takes you to the thing it just told you about. A tip whose fact the player cannot use yet (Hard Mode before THE
-// TOP, the coin exchange with no coins) simply does not come up.
+// but one takes you to the thing it just told you about. A tip whose fact the player cannot use yet (the modes before
+// the tutorial, Hard Mode before THE TOP, the coin swap with too few coins or no swaps left today) does not come up.
 // S.tips counts how many times each one has been shown, ACROSS sessions, and the least-seen eligible tip goes next.
 // That is what stops a returning player getting tip 1 and tip 2 forever and never hearing about the shop.
+// Every title and line fits the banner at its size with no "..." - art/weekly.js measures each one.
 const TIP_FIRST=7,TIP_GAP=26;
-const tipIc=k=>(x,y)=>uiIcon({shop:'cart'}[k]||k,x,y,12);
-const tipMode=k=>(x,y)=>{ctx.save();ctx.translate(x,y);modeIcon(k,13,'#14102a','#ffffff');ctx.restore()};
-const tipGuy=(x,y)=>drawSq(x,y+9,19,gtime,{c:S.eq.c,h:'h_none'});
+const tipIc=k=>(x,y)=>uiIcon(k,x,y,9.5);
+const tipMode=k=>(x,y)=>{ctx.save();ctx.translate(x,y);modeIcon(k,9.5,INK,'#ffffff');ctx.restore()};
+const tipGuy=(x,y)=>drawSq(x,y+8.5,17,gtime,{c:S.eq.c,h:'h_none'});
+const tipQ=(x,y)=>{ctx.font=`bold 22px ${DFONT}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=INK;ctx.fillText('?',x,y+1.5)};
 const TIP_RULES=[
- {k:'t_shop',c:'#8ff0c0',ic:tipIc('shop'),a:()=>'There’s a whole shop of skins, hats and trails',
-  b:()=>'Tap the cart at the top right. Spend the coins and gems you earn.',when:()=>true,go:()=>go('shop')},
- {k:'t_bag',c:'#ffd9a8',ic:tipIc('bag'),a:()=>'Your Backpack holds everything you own',
-  b:()=>'Skins, hats, trails, the notes you’ve found and your trophies.',when:()=>true,go:()=>go('inv')},
- {k:'t_wall',c:'#8dd3ff',ic:tipGuy,a:()=>'A wall jump kicks you higher than a normal jump',
-  b:()=>'So you can bounce between two walls and climb a gap with no platforms.',when:()=>true,go:()=>go('menu')},
- {k:'t_hold',c:'#8dd3ff',ic:tipGuy,a:()=>'Hold the jump button for a higher jump',
-  b:()=>'A quick tap is a small hop. Holding it is the full one.',when:()=>true,go:()=>go('menu')},
- {k:'t_thin',c:'#8dd3ff',ic:tipGuy,a:()=>'You can jump up through thin platforms',
-  b:()=>touchOn()?'And hold down on the stick to drop back through one.':'And hold Down to drop back through one.',when:()=>true,go:()=>go('menu')},
- {k:'t_notes',c:'#fff3d2',ic:tipIc('bag'),a:()=>'Every story level hides one note',
-  b:()=>'They’re off the main path on purpose. Read the ones you’ve found in the Backpack.',when:()=>true,go:()=>go('inv')},
- {k:'t_tix',c:'#ff8fd8',ic:(x,y)=>tixIcon(x,y,14),a:()=>'Spare coins can be traded for wheel tickets',
-  b:()=>fmtN(TIX_COST)+' coins for one spin, under the Prize Wheel.',when:()=>S.coins>=TIX_COST,go:()=>go('wheel')},
- {k:'t_audio',c:'#e3e0f5',ic:tipIc('gear'),a:()=>'Music and sound have separate volume sliders',
-  b:()=>'Settings, in the Audio section. Turn one down without losing the other.',when:()=>true,go:()=>go('settings')},
- {k:'t_speed',c:'#f0b323',ic:tipMode('speed'),a:()=>'Speed Courses are pure time attack',
-  b:()=>'Four short courses, three medals each. No checkpoints, just the clock.',when:()=>true,go:()=>go('courses')},
- {k:'t_endless',c:'#ff7043',ic:tipMode('endless'),a:()=>'Endless Climb builds a brand new tower every run',
-  b:()=>'The lava never stops rising. Your only job is to stay above it.',when:()=>endOpen(),go:()=>go('modes')},
- {k:'t_cards',c:'#ffe9a8',ic:tipIc('card'),a:()=>'Power Cards give you a shield or an extra jump',
-  b:()=>'Story Mode only. When you have some, they show up next to PLAY.',when:()=>cardCount()>0,go:()=>go('cards',{from:'menu'})},
- {k:'t_hard',c:'#ec4e63',ic:tipMode('hard'),a:()=>'Hard Mode runs every level again, harder',
-  b:()=>'One air jump, no checkpoints, and a twist on every level. Reach THE TOP to unlock it.',when:()=>!S.finale&&!!S.tut,go:()=>go('modes')},
- {k:'t_toy',c:'#ffd45e',ic:tipGuy,a:()=>'You can pick up the little square down here',
-  b:()=>'Drag him, fling him, spin him. He’s not a button, he just lives here.',when:()=>SCR===SCREENS.menu,go:()=>go('menu')},
- {k:'t_purple',c:'#b58cff',ic:tipGuy,a:()=>'Purple zones cancel your air jumps',
-  b:()=>'Bounce pads are the opposite - they throw you far higher than a jump can.',when:()=>true,go:()=>go('menu')},
+ {k:'t_shop',c:'#8dd3ff',ic:tipIc('cart'),a:()=>'Dress up your square',
+  b:()=>'Skins, hats and trails are in the Shop.',when:()=>true,go:()=>go('shop')},
+ {k:'t_bag',c:'#ffb35c',ic:tipIc('bag'),a:()=>'Open your Backpack',
+  b:()=>'Your skins, hats, notes and trophies.',when:()=>true,go:()=>go('inv')},
+ {k:'t_hold',c:'#8dd3ff',ic:tipGuy,a:()=>'Hold jump to go higher',
+  b:()=>'A quick tap is just a small hop.',when:()=>true},
+ {k:'t_tix',c:'#ff8fd8',ic:(x,y)=>tixIcon(x,y,9.5),a:()=>'Trade coins for spins',
+  b:()=>fmtN(TIX_COST)+' coins buys a spin, up to '+TIX_BUY_MAX+' a day.',when:()=>S.coins>=TIX_COST&&tixBuyLeft()>0,go:()=>go('wheel')},
+ {k:'t_audio',c:'#cbc6da',ic:tipIc('gear'),a:()=>'Music too loud?',
+  b:()=>'Music has its own volume slider.',when:()=>true,go:()=>go('settings')},
+ {k:'t_speed',c:'#f0b323',ic:tipMode('speed'),a:()=>'Try the Speed Courses',
+  b:()=>'Race the clock for a gold medal.',when:()=>endOpen(),go:()=>go('courses')},
+ {k:'t_endless',c:'#ff7043',ic:tipMode('endless'),a:()=>'Endless Climb has no top',
+  b:()=>'It gets weirder the higher you go.',when:()=>endOpen(),go:()=>go('modes')},
+ {k:'t_race',c:'#ff5f6d',ic:tipMode('race'),a:()=>'Race the ghost squares',
+  b:()=>S.finale?'You can even race them up THE TOP.':'Set the Bots from Easy to Perfect.',when:()=>endOpen()&&raceTracks().length>0,go:()=>go('race')},
+ {k:'t_climbed',c:'#ffd45e',ic:tipIc('podium'),a:()=>'Every meter counts',
+  b:()=>'It all adds up to Total Climbed.',when:()=>endOpen(),go:()=>go('boards',{from:'menu',focus:'climbed'})},
+ {k:'t_cards',c:'#c9b8ff',ic:tipIc('card'),a:()=>{const n=cardCount();return'You have '+n+' Power Card'+(n==1?'':'s')},
+  b:()=>'Play one from Pause in a Story level.',when:()=>cardCount()>0,go:()=>go('cards',{from:'menu'})},
+ {k:'t_field',c:'#7bdc3b',ic:tipQ,a:()=>'What was that thing?',
+  b:()=>'Look it up in the Field Guide.',when:()=>Object.keys(S.meet||{}).length>=4,go:()=>go('field',{from:'menu'})},
+ {k:'t_hard',c:'#ec4e63',ic:tipMode('hard'),a:()=>'Reach THE TOP',
+  b:()=>'It unlocks Hard Mode and Marathon.',when:()=>!S.finale&&!!S.tut,go:()=>go('modes')},
 ];
 const REM={done:{},cur:null,t:0,wait:REM_DELAY,tw:TIP_FIRST};
 // THE BANNER LANE, AT THE TOP OF THE SCREEN (the owner's call - the bottom strip read as cut off on a phone).
-// Two rects, because the two families of screen have different things in their top corners:
-//   MENU        the three corner circles (backpack/cart/gear) own x726..920, so the lane stops at 712. The Club badge
-//               normally sits at (34,22) and is pushed below the lane while a banner is up - see SCREENS.menu.draw.
-//   CLEAR/OVER  nothing above y=57 on either (the clear panel starts at y70, "ENDLESS" is drawn at y70), so the lane
-//               is centred and full width there.
-// 692 wide either way, which leaves 582px of text column - wider than the longest line any rule or tip produces (507).
-const REM_R={x:152,y:10,w:560,h:44},REM_RC={x:VW/2-346,y:8,w:692,h:44};
+// One banner size everywhere, REM_W x REM_H, in one of two places:
+//   MENU        the gap between Button Guide (ends x326) and the three corner keys (start x726). With a focused key's
+//               white ring and its breathe counted those reach about x337 and x718, so the lane is x340..712 and
+//               touches neither. (The old lane started at x152 and sat right on top of Button Guide.)
+//   CLEAR/OVER  centred; nothing above y=63 on either (the clear panel starts at y70, the over panel at y66).
+// The canvas is always 960x540, letterboxed (see fit), so these are the same pixels on a phone and on an iPad.
+const REM_W=372,REM_H=48,REM_R={x:340,y:8,w:REM_W,h:REM_H},REM_RC={x:VW/2-REM_W/2,y:8,w:REM_W,h:REM_H};
+// inside it: the badge's centre, where the words start, the dismiss zone (the right end, behind a hairline), and how
+// wide the words may run - with the open arrow (REM_TW) or without one (REM_TWI)
+const REM_BX=28,REM_TX=54,REM_XW=46,REM_TW=REM_W-REM_TX-REM_XW-24,REM_TWI=REM_W-REM_TX-REM_XW-12;
 function remRect(){return SCR===SCREENS.menu?REM_R:REM_RC}
 // The main menu plus the two "your run is over" screens. Those two are where the owner wanted tips to turn up as well
 // ("sometimes after completing a game"), and neither of them draws anything in the top lane.
@@ -7974,20 +8012,39 @@ function pickTip(){const T=S.tips||{};let best=1e9,pool=[];
   if(n<best){best=n;pool=[q]}else if(n==best)pool.push(q)}
  return pool.length?pool[Math.floor(Math.random()*pool.length)]:null}
 function remA(){const t=REM.t;return t<REM_IN?ease(t/REM_IN):t>REM_HOLD?1-clamp((t-REM_HOLD)/REM_OUT,0,1):1}
-// returns true only when it actually swallowed the tap, so the menu underneath keeps every click that wasn't for it
+// returns true only when it actually swallowed the tap, so the menu underneath keeps every click that wasn't for it.
+// The right end (behind the hairline) only ever closes it; anywhere else opens what it is about (or, for a tip with
+// nothing to open, just closes it).
 function remTap(){if(!REM.cur||!remOn()||remA()<0.5||!mouse.click)return false;
  const g=remRect();if(mouse.x<g.x||mouse.x>g.x+g.w||mouse.y<g.y||mouse.y>g.y+g.h)return false;
- const r=REM.cur,close=mouse.x>g.x+g.w-54;remRetire();sfx('click');if(!close)r.go();return true}
+ const r=REM.cur,close=mouse.x>g.x+g.w-REM_XW;remRetire();sfx('click');if(!close&&r.go)r.go();return true}
+// the banner's two type faces: the title in Lilita One (the labels' face), the line in Fredoka (the reading face)
+const REM_FA='bold 17px '+DFONT,REM_FB=14;
+function remFitA(s,w){ctx.font=REM_FA;if(ctx.measureText(s).width<=w)return s;let q=String(s);while(q.length>1&&ctx.measureText(q+'…').width>w)q=q.slice(0,-1);return q+'…'}
+// THE BANNER (2.0). One flat card in the UI KIT's family: a soft shadow, ONE ink outline, a flat navy face - no inner
+// rim, no sheen, no lip, so it reads as a notice and never as one more key. On the left a round badge in the
+// reminder's own colour carries its icon; the title and one plain line sit beside it; a small arrow in the badge colour
+// says "tap to open"; the right end, behind a hairline, is the x. A thin bar along the bottom runs down the time it has
+// left (not under Reduce Motion, where it also just fades in and out instead of sliding down from the top edge).
 function remDraw(){if(!REM.cur||!remOn())return;const r=REM.cur,a=remA(),g=remRect();if(a<=0.01)return;
- ctx.save();ctx.globalAlpha=a;ctx.translate(0,-(1-a)*14); // slides DOWN out of the top edge as it fades in, so it reads as arriving
- chip(g.x,g.y,g.w,g.h,{rim:r.c,fill:'#28214a'});
- ctx.fillStyle=r.c;ctx.globalAlpha=a*0.22;ctx.beginPath();ctx.arc(g.x+34,g.y+g.h/2,17,0,7);ctx.fill();ctx.globalAlpha=a;
- r.ic(g.x+34,g.y+g.h/2);
- txt(fitStr(r.a(),g.w-180,17),g.x+64,g.y+15,17,'#ffffff','left',false);
- txt(fitStr(r.b(),g.w-180,13),g.x+64,g.y+33,13,'#cfcbe4','left',false);
- // dismiss target: its own corner of the same rect, so "not now" never costs a screen change
- ctx.strokeStyle='rgba(255,255,255,.65)';ctx.lineWidth=2.5;ctx.lineCap='round';const cx=g.x+g.w-30,cy=g.y+g.h/2;
- ctx.beginPath();ctx.moveTo(cx-6,cy-6);ctx.lineTo(cx+6,cy+6);ctx.moveTo(cx+6,cy-6);ctx.lineTo(cx-6,cy+6);ctx.stroke();ctx.lineCap='butt';
+ const {x,y,w,h}=g,cy=y+h/2,rm=RM(),go=!!r.go,P=(uiTouch&&!uiTouch.moved)?{x:uiTouch.px,y:uiTouch.py}:PTR.down?PTR:null,
+  dn=!!P&&a>=0.5&&inR(P,g),dx=dn&&P.x>x+w-REM_XW;
+ ctx.save();ctx.globalAlpha=a;if(!rm)ctx.translate(0,-(1-a)*12);
+ ctx.fillStyle='rgba(10,6,26,.24)';rr(x,y+4,w,h,14);ctx.fill();
+ ctx.fillStyle=INK;rr(x-2.5,y-2.5,w+5,h+5,16.5);ctx.fill();
+ ctx.fillStyle=dn&&!dx?'#342b5e':'#272046';rr(x,y,w,h,14);ctx.fill();
+ ctx.fillStyle=r.c;ctx.beginPath();ctx.arc(x+REM_BX,cy,17,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
+ r.ic(x+REM_BX,cy);
+ const tw=go?REM_TW:REM_TWI;
+ ctx.font=REM_FA;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle='#ffffff';ctx.fillText(remFitA(r.a(),tw),x+REM_TX,y+16);
+ txt(fitStr(r.b(),tw,REM_FB),x+REM_TX,y+33,REM_FB,'#cfc9e6','left',false);
+ ctx.lineCap='round';ctx.lineJoin='round';
+ if(go){const ax=x+w-REM_XW-14;ctx.strokeStyle=r.c;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(ax-3.5,cy-7);ctx.lineTo(ax+3.5,cy);ctx.lineTo(ax-3.5,cy+7);ctx.stroke()}
+ ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(x+w-REM_XW,y+10,1.5,h-20);
+ const cx=x+w-REM_XW/2+1;if(dx){ctx.fillStyle='rgba(255,255,255,.14)';ctx.beginPath();ctx.arc(cx,cy,15,0,7);ctx.fill()}
+ ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(cx-5.5,cy-5.5);ctx.lineTo(cx+5.5,cy+5.5);ctx.moveTo(cx+5.5,cy-5.5);ctx.lineTo(cx-5.5,cy+5.5);ctx.stroke();
+ ctx.lineCap='butt';ctx.lineJoin='miter';
+ if(!rm){const k=1-clamp((REM.t-REM_IN)/(REM_HOLD-REM_IN),0,1);if(k>0){ctx.save();rr(x,y,w,h,14);ctx.clip();ctx.globalAlpha=a*0.5;ctx.fillStyle=r.c;ctx.fillRect(x,y+h-3,w*k,3);ctx.restore()}}
  ctx.restore()}
 
 // ================= FIRST-ENCOUNTER TIPS =================
@@ -8283,7 +8340,12 @@ const PEN={x:0,y:0,w:VW,h:VH},
  // Leaderboards and Share are labelled pills by the byline, not more circles in the corner (owner: 'we don't wanna
  // cram more buttons into the top, they should look different')
  LBD_R={x:34,y:380,w:186,h:44},SHARE_R={x:20,y:12,w:120,h:42},
- WHL_R={x:834,y:360,w:116,h:128},DOT=58,DOTY=18;
+ WHL_R={x:834,y:360,w:116,h:128},DOT=58,DOTY=18,
+ // WEEKLY CLIMB: beside PLAY, in the band right of it that nothing else uses - the wordmark's ink ends above y195,
+ // the corner keys' name chip at y110, the Prize Wheel's pulse ring starts at y363, and PLAY's focus ring and breathe
+ // reach x~668. Same height band as PLAY (centred on it), right edge level with the gear's. The left band is the
+ // toasts' lane (TOAST_MEN), so the two never meet either.
+ WEEK_R={x:34,y:326,w:186,h:44}; // (owner: the big card beside PLAY was "so big and random" - it lives in the left stack now, sized like Leaderboards)
 // ---- THE PRIZE WHEEL, AS CORNER FURNITURE ----------------------------------------------------------------------
 // A real wheel standing in the bottom-right of the scene, deliberately running off the right edge of the screen so it
 // reads as an OBJECT in the world rather than a widget floating on top of it. Its wedges come from the shared
@@ -8319,9 +8381,10 @@ function drawMiniWheel(bw,bh,sel){const r=MWR,TAU=Math.PI*2,sp=S.dev||S.tix>0,cx
 // the screen underneath gets no input at all, so a tap can never press the button behind the dim.
 const GUIDE_STEPS=[
  ['menu','play','PLAY','The story. It starts with a quick tutorial, then you climb world by world.'],
+ ['menu','weekly','WEEKLY CLIMB',()=>'One tower for everybody, new every Monday. Climb the highest to top the leaderboard.'+(endOpen()?' Tap here to jump straight in.':' It opens after the tutorial.')],
  ['menu','modes','MORE MODES',()=>endOpen()?'Endless, the Weekly Climb, Race and more. Let’s look inside.':'Endless, the Weekly Climb, Race and more. They open after the tutorial.'],
  ['modes','endless','ENDLESS CLIMB','A new tower every run. There’s no top, and the lava never stops.'],
- ['modes','daily','WEEKLY CLIMB','One tower for everybody, new every Monday. Climb the highest to top the leaderboard.'],
+ ['modes','daily','WEEKLY CLIMB',()=>'The same tower as the key on the main menu. Your first climb each week pays '+WEEK_TIX+' spin tickets.'],
  ['modes','race','RACE','Race three ghost squares to the door. Slide the bots from Easy to Perfect.'],
  ['modes','speed','SPEED COURSES','Four courses. Race the clock.'],
  ['modes','marathon','MARATHON',()=>'Every level in a row, on one timer.'+(S.finale||S.dev?'':' Unlocks later in the story.')],
@@ -8479,9 +8542,9 @@ SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:
   // under it is gone from here; at this size it had nowhere to sit without crowding either the wordmark or PLAY, and
   // the title screen already says it at 22px a few seconds earlier.
   drawTitleWord(gtime,WORD_Y);
-  // Club badge moved to the top-left corner the wordmark vacated.
-  // the badge drops below the notification lane while a banner is up, and sits back in the corner when it is not
-  if(clubOn()){const cy=(REM.cur&&remOn()&&remA()>0.02)?66:22;chip(34,cy,104,32,{fill:UIC.gold,rim:'rgba(255,255,255,.55)'});uiIcon('crown',55,cy+16,10);txt('CLUB',72,cy+17,16,'#3a1470','left',false)}
+  // Club badge: under Share, where it stays put. (It used to sit at (34,22) - which Share has covered since Share moved
+  // to the top-left - and only showed while a reminder pushed it down. The reminder lane is clear of this corner now.)
+  if(clubOn()){const cy=68;chip(22,cy,104,30,{fill:UIC.gold,rim:'rgba(255,255,255,.55)'});uiIcon('crown',43,cy+15,10);txt('CLUB',60,cy+16,16,'#3a1470','left',false)}
   if(!STORE_OK)textPlate('Saving is blocked in this browser - progress won’t be saved',VW/2,VH-44,14,'#ffb3b3');
   // NO stars/gems/coins here any more: they live in the Shop, which already shows all three, and the home screen is
   // not a dashboard. One fewer plate is one fewer thing competing with PLAY.
@@ -8501,8 +8564,18 @@ SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:
   // chevron, no mode glyphs (the owner did not like the little previews it carried for a while). Locked, it is the
   // kit's disabled key with a padlock - its ink measures 4.9:1 on the lilac face (the old grey-on-grey was 2.3:1) - and
   // the reason is a toast on tap rather than a second line of type, so the bar stays a bar.
-  {const M=MODE_R,ok=!!S.tut||!!S.dev;
-   button('modes',M.x,M.y,M.w,M.h,ok?'More Modes >':'More Modes',{disabled:!ok,fs:21,ic:ok?null:'lock'});}
+  {const M=MODE_R,ok=endOpen();
+   button('modes',M.x,M.y,M.w,M.h,ok?'More Modes >':'More Modes',{disabled:!ok,why:TUT_WHY,fs:21,ic:ok?null:'lock'});}
+  // WEEKLY CLIMB, ONE TAP FROM HOME (owner: "something always on the main page ... that takes you straight to the
+  // Weekly Climb" - it was More Modes > Weekly Climb). A pink key (the Weekly's colour everywhere) that says what this
+  // week's tower is to YOU: your height on it, or that you haven't climbed it yet - with a dot, the way an app icon says
+  // something is new - and when the next one comes. A tap starts this week's tower. Before the tutorial it is the kit's
+  // locked key and a tap says why, the same as More Modes.
+  {const R=WEEK_R,ok=endOpen(),dn=S.daily.d==weekStr();
+   button('weekly',R.x,R.y,R.w,R.h,'',{disabled:!ok,why:TUT_WHY,draw:(bw,bh,sel)=>{const l=-bw/2+14;
+    if(ok){ctx.save();ctx.translate(l+11,0);modeIcon('daily',9.5,INK,'#ff77c8');ctx.restore()}else lockIcon(l+11,0,22);
+    txt('Weekly Climb',l+28,1,18,ok?INK:UIC.dis,'left',false);
+    if(ok&&!dn){const dx=bw/2-4,dy=-bh/2+4;ctx.fillStyle=INK;ctx.beginPath();ctx.arc(dx,dy,7,0,7);ctx.fill();ctx.fillStyle='#ff3d9a';ctx.beginPath();ctx.arc(dx,dy,5,0,7);ctx.fill()}}});}
   // THE CORNER: backpack (everything you own), cart (the shop), gear - three icon keys of one size. The gear stays
   // cornermost. The focused one says its name on a chip under the row, so no destination is only a glyph.
   {const D=[['inv','bag','Backpack'],['shop','cart','Shop'],['settings','gear','Settings']],n=D.length;
@@ -8527,7 +8600,8 @@ SCREENS.menu={enter(){musicPlay(0);lbSync();if(!this.b)this.b={x:480,y:VH-28,vx:
  // then. Once it is beaten PLAY opens the level select on the world you are up to ({cur:1}).
  onBtn(id){if(id=='guide')return guideStart();if(id=='tutorial')return startTutorial();if(id=='share')return shareGame();if(id=='boards')return go('boards',{from:'menu'});
   if(id=='play')return(S.tut||S.dev)?go('levels',{cur:1}):startTutorial();
-  if(id=='modes'&&!S.tut&&!S.dev)return toast('Finish the tutorial first','It takes about a minute','info');
+  if((id=='modes'||id=='weekly')&&!endOpen())return whyToast(TUT_WHY); // (the locked keys say this themselves - see o.why)
+  if(id=='weekly')return startEndless(true,'menu');
   go(id)}};
 
 // Optional PAID bonus worlds beyond World 5 (which is free, just progression-gated): each is fully HIDDEN from the tab
@@ -8940,8 +9014,8 @@ SCREENS.ending={enter(){this.t=0;this.fw=0;this.cards=0;FX.length=0;musicPlay(7)
 
 SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h>0)confetti(80);if(r.best&&r.h>=60)askReview()},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.RST)this.onBtn('again');else if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
- draw(){drawBG(WORLDS[4],gtime*20,this.t*40,gtime);{const r=this.r,n=(r.tix?1:0)+(r.daily&&r.gemsRaw>r.gems?1:0)+(r.rollover?1:0);uiPanel(VW/2-300,40,600,(n>1?432:410)-50,{r:24,rim:'#ffd45e'})}drawParts(FX);const r=this.r,k=ease(this.t/0.5);
-  txt(r.daily?'WEEKLY CLIMB':'ENDLESS',VW/2,70,26,'#ffffff');txt('YOU CLIMBED',VW/2,130,30,'#fff');ctx.save();ctx.translate(VW/2,220);ctx.scale(k,k);txt(Math.round(r.h*clamp(this.t,0,1))+'m',0,0,110,'#ffd45e');ctx.restore();
+ draw(){drawBG(WORLDS[4],gtime*20,this.t*40,gtime);{const r=this.r,n=(r.tix?1:0)+(r.daily&&r.gemsRaw>r.gems?1:0)+(r.rollover?1:0);uiPanel(VW/2-300,66,600,(n>1?432:410)-76,{r:24,rim:'#ffd45e'})}drawParts(FX);const r=this.r,k=ease(this.t/0.5); // the panel starts at y66 (was 40), under the reminder lane (REM_RC: y8..56, its shadow to 60); its bottom edge did not move
+  txt(r.daily?'WEEKLY CLIMB':'ENDLESS',VW/2,93,26,'#ffffff');txt('YOU CLIMBED',VW/2,130,30,'#fff');ctx.save();ctx.translate(VW/2,220);ctx.scale(k,k);txt(Math.round(r.h*clamp(this.t,0,1))+'m',0,0,110,'#ffd45e');ctx.restore();
   if(r.best&&r.h>0&&this.t>1)txt('NEW BEST!',VW/2,300,28,'#7bdc3b');else txt('Best: '+r.bestV+'m',VW/2,300,22,'#fff');
   gemShape(VW/2-150,350,11,'#5ff4ff');txt('+'+r.gems+' gems',VW/2-132,351,24,'#fff','left');coinIcon(VW/2+40,350,11,gtime*3);txt('+'+(r.coins||0)+' coins',VW/2+58,351,24,'#ffd45e','left');
   const oLines=[];if(r.tix)oLines.push({t:'+'+r.tix+' spin ticket'+(r.tix>1?'s':''),c:'#ff8fd8'});
@@ -8951,8 +9025,9 @@ SCREENS.over={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(0);if(r.best&&r.h
   oLines.forEach((l,i)=>txt(l.t,VW/2,377+i*21,16,l.c,undefined,false));
   const oMy=410+(oLines.length>1?22:0);
   button('again',VW/2-300,oMy,190,54,r.rollover?'New Tower':'Climb Again',{ic:'restart'});button('lbd',VW/2-95,oMy,190,54,'Leaderboard',{bg:'#ffe9a8',ic:'podium'});button('menu',VW/2+110,oMy,190,54,'Back')},
- // back out to MODES, where Daily Climb and Endless Climb are now their own cards - the old Climbs sub-menu is gone
- onBtn(id){if(id=='again')startEndless(this.r.daily);else if(id=='lbd')openBoard(this.r.daily?'daily':'endless','over');else go('modes')}};
+ // back out to MODES, where Daily Climb and Endless Climb are now their own cards - the old Climbs sub-menu is gone -
+ // or to the main menu, for a run started from its Weekly Climb key (endHome)
+ onBtn(id){if(id=='again')startEndless(this.r.daily);else if(id=='lbd')openBoard(this.r.daily?'daily':'endless','over');else go(endHome=='menu'?'menu':'modes')}};
 
 SCREENS.sdone={enter(r){this.r=r;this.t=0;FX.length=0;musicPlay(7);confetti(100)},
  update(dt){this.t+=dt;updParts(FX,dt);if(this.t>0.5)uiNav(this);if(pressed.ESC&&this.t>0.5)this.onBtn('menu')},
@@ -9004,8 +9079,8 @@ function modeCards(){const obw=ownedBonusWorlds(),nbl=obw.reduce((a,b)=>a+LEVELS
  const sb=bonusStars();
  return[
   {k:'story',ic:'story',c:'#5fc93a',n:'STORY',d:STORY_ORDER.length+' levels, '+Math.round((STORY_ORDER.length-1)/8)+' worlds'+(nbl?' (+'+nbl+' bonus)':''),ok:true,stat:'★ '+totalStars()+'/'+STAR_MAX+(sb?'  +'+sb:''),go:()=>go('levels',{from:'modes'})},
-  {k:'daily',ic:'daily',c:'#ff77c8',n:'WEEKLY CLIMB',d:'One tower a week, same for everyone.',ok:e,lock:'Finish the tutorial to unlock',stat:dn?'This week '+S.daily.h+'m':'Not played this week',hot:e&&!dn,go:()=>startEndless(true)},
-  {k:'endless',ic:'endless',c:'#ff7043',n:'ENDLESS CLIMB',d:'A new tower every run.',ok:e,lock:'Finish the tutorial to unlock',stat:'Best '+S.endBest+'m',go:()=>startEndless(false)},
+  {k:'daily',ic:'daily',c:'#ff77c8',n:'WEEKLY CLIMB',d:'One tower a week, same for everyone.',ok:e,lock:'Finish the tutorial to unlock',stat:dn?'This week '+S.daily.h+'m':'Not played this week',hot:e&&!dn,go:()=>startEndless(true,'modes')},
+  {k:'endless',ic:'endless',c:'#ff7043',n:'ENDLESS CLIMB',d:'A new tower every run.',ok:e,lock:'Finish the tutorial to unlock',stat:'Best '+S.endBest+'m',go:()=>startEndless(false,'modes')},
   {k:'speed',ic:'speed',c:'#f0b323',n:'SPEED COURSES',d:'4 courses. Race the clock.',ok:true,stat:med+'/4 medals',go:()=>go('courses')},
   {k:'marathon',ic:'mara',c:'#4aa8e8',n:'MARATHON',d:'Every level, one timer.',ok:f,lock:'Reach THE TOP to unlock',stat:'Best '+fmtT(S.speedBest),go:()=>go('sub',MARAS)},
   {k:'hard',ic:'hard',c:'#ec4e63',n:'HARD MODE',d:'One air jump. No checkpoints.',ok:f,lock:'Reach THE TOP to unlock',stat:hd+'/'+NL+' cleared',go:()=>go('levels',{hard:true,from:'modes'})}]}
@@ -9986,7 +10061,7 @@ SCREENS.boards={enter(a){if(a&&a.from)this.from=a.from;else if(!this.from)this.f
  update(){uiNav(this);if(pressed.ESC)go(this.from||'trophies')},
  onBtn(id){if(id=='back')return go(this.from||'trophies');
   if(id.startsWith('tb_')){this.cat=id.slice(3);return}
-  if(id=='wk_play')return startEndless(true);
+  if(id=='wk_play')return startEndless(true,'modes');
   if(id=='wk_lb')return openBoard('daily','boards');
   if(id.startsWith('lb_')&&gcOn())openBoard(id.slice(3),'boards')},
  draw(){drawBG(WORLDS[4],gtime*20,0,gtime);backBtn();header('LEADERBOARDS');
@@ -10059,7 +10134,7 @@ SCREENS.board={enter(a){a=a||{};if(a.id)this.id=a.id;if(a.from)this.from=a.from;
   if(showMine){const y=y0+E.length*rh+12;ctx.fillStyle='rgba(255,255,255,.18)';for(let k=0;k<3;k++){ctx.beginPath();ctx.arc(X+W/2-12+k*12,y-8,2,0,7);ctx.fill()}row(mine,y+10,true)}
   if(HopNative.showBoard)button('gc',X+W-196,Y+H+10,196,34,'Open in Game Center',{fs:13})}};
 // "Play this week" from an empty weekly board
-SCREENS.board.onBtn=(f=>function(id){if(id=='wk_go')return startEndless(true);return f.call(this,id)})(SCREENS.board.onBtn);
+SCREENS.board.onBtn=(f=>function(id){if(id=='wk_go')return startEndless(true,'modes');return f.call(this,id)})(SCREENS.board.onBtn);
 
 SCREENS.pin={enter(){typedDigit=null;typedDel=false;this.buf='';this.bad=0;this.ok=0;musicPlay(0)},
  update(dt){if(this.ok>0){this.ok-=dt;if(this.ok<=0){S.dev=1;save();toast('DEV MODE ON','Every level unlocked','ach');go('menu')}return}
